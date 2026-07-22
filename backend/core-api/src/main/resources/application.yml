@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: core-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orchestrator_db
+    username: orchestrix_app
+    password: app_secret_password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/public   # ← Public schema migrations only
+    schemas: public
+    baseline-on-migrate: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # ← NEVER use create/update in production
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public  # Overridden per-request by TenantSchemaResolver
+
+multitenancy:
+  tenant-migrations-path: classpath:db/tenant
