@@ -1,8 +1,22 @@
-@Service
-@RequiredArgsConstructor
+package com.example.core_api.multitenancy;
+
+import lombok.RequiredArgsConstructor;
+import org.flywaydb.core.Flyway;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+//here the ultimate goal is to create a new schema when a new team comes up and run all the migration files inside the tenant folder
+
+
+@Service //service annotation is used to mark this class as a service and should be managed by the spring container
+@RequiredArgsConstructor //This annotation is used to create a constructor with all the final variables. final variables mean objects who are initialised once and cannot be changed
 public class TenantMigrationService {
 
-    @Value("${spring.datasource.url}")
+    @Value("${spring.datasource.url}") //This annotation is used to get the value from the application.properties file
     private String datasourceUrl;
 
     @Value("${spring.datasource.username}")
@@ -24,7 +38,7 @@ public class TenantMigrationService {
                 .execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
 
             // 2. Grant app role access to new schema
-            conn.createStatement()
+            conn.createStatement() // general authorization to run sql statements in the schema
                 .execute("GRANT ALL ON SCHEMA " + schemaName + " TO orchestrix_app");
 
         } catch (SQLException e) {
@@ -42,3 +56,5 @@ public class TenantMigrationService {
         flyway.migrate();
     }
 }
+
+// where these functions are called in core-api/src/main/java/com/example/core_api/service/TenantProvisionService.java
