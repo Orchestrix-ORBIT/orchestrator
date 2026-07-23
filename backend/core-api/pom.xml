@@ -72,6 +72,29 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+
+
+		<!-- database Migration (Flyway) 
+		This tool is used to create schemas when a new user signs up.
+		This migration tools has its unique file name format it should be V1__hello.sql 
+	    We don't have to run those queries in our database management system (workbench or supabase or wherever) since this migration tool runs them automatically
+		 -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+
+		<!-- Lombok — Reduces boilerplate (getters, setters, builders) -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
 	</dependencies>
 
 	<build>
