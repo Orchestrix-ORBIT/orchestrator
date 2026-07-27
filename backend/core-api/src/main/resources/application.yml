@@ -12,9 +12,9 @@ spring:
       minimum-idle: 5
 
   flyway:
-    enabled: true
-    locations: classpath:db/migration/public   # ← Public schema migrations only
-    schemas: public
+    enabled: false                             # ← Managed manually in FlywayConfig.java
+    locations: classpath:db/migration/public   # ← Read by FlywayConfig via @Value
+    schemas: public                            # ← Read by FlywayConfig via @Value
     baseline-on-migrate: true
 
   jpa:

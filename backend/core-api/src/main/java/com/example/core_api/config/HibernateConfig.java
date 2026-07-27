@@ -6,6 +6,7 @@ import org.hibernate.cfg.AvailableSettings;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.flywaydb.core.Flyway;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -29,7 +30,10 @@ public class HibernateConfig {
     private TenantIdentifierResolver tenantResolver; // Resolves which tenant is active for Hibernate
 
     @Bean
-    public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+    // Flyway is injected as a parameter so Spring knows it must be created (and run migrations)
+    // BEFORE this EntityManagerFactory bean. This ensures public.tenants exists when
+    // Hibernate runs its schema validation — without hardcoding any internal bean names.
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource, Flyway flyway) {
         HibernateJpaVendorAdapter adapter = new HibernateJpaVendorAdapter();
         LocalContainerEntityManagerFactoryBean factory = new LocalContainerEntityManagerFactoryBean();
 
