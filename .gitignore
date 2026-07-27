@@ -24,3 +24,10 @@ env/
 
 # Docker
 .docker/
+
+# Node & Frontend Build Artifacts
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
