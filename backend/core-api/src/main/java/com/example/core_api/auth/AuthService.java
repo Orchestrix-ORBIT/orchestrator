@@ -1,6 +1,7 @@
 package com.example.core_api.auth;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Service;
 // Spring sees that constructor and automatically injects the matching beans.
 // This is called "Constructor Injection" — the recommended way in Spring.
 @Service
-@RequiredArgsConstructor
 public class AuthService implements UserDetailsService {
     // ─────────────────────────────────────────────────────────────────────────
     // Why implement UserDetailsService?
@@ -26,6 +26,18 @@ public class AuthService implements UserDetailsService {
     private final PasswordEncoder passwordEncoder;     // BCryptPasswordEncoder bean (defined in SecurityConfig)
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager; // Spring Security bean (defined in SecurityConfig)
+
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            @Lazy AuthenticationManager authenticationManager
+    ) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.authenticationManager = authenticationManager;
+    }
 
 
     // ═══════════════════════════════════════════════════════════

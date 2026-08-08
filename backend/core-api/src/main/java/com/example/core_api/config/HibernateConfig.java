@@ -46,8 +46,10 @@ public class HibernateConfig {
         // Register the two multi-tenancy components with Hibernate
         props.put(AvailableSettings.MULTI_TENANT_CONNECTION_PROVIDER, connectionProvider);
         props.put(AvailableSettings.MULTI_TENANT_IDENTIFIER_RESOLVER, tenantResolver);
-        // validate: Hibernate checks that entity fields match DB columns — never auto-creates/drops
-        props.put(AvailableSettings.HBM2DDL_AUTO, "validate");
+        // 'none': Flyway manages schema creation (both public and per-tenant schemas).
+        // Validation is disabled at startup because tenant-specific tables (like 'users')
+        // live in dynamic tenant schemas (e.g. org_acme), not in the startup default 'public' schema.
+        props.put(AvailableSettings.HBM2DDL_AUTO, "none");
         props.put(AvailableSettings.DIALECT, "org.hibernate.dialect.PostgreSQLDialect");
 
         factory.setJpaProperties(props);

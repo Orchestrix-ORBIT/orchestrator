@@ -37,9 +37,8 @@ public class TenantMigrationService {
             conn.createStatement()
                 .execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
 
-            // 2. Grant app role access to new schema
-            conn.createStatement() // general authorization to run sql statements in the schema
-                .execute("GRANT ALL ON SCHEMA " + schemaName + " TO orchestrix_app");
+            // Note: On Supabase, the 'postgres' role owns the schema and has full access.
+            // A separate GRANT is not required.
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to create schema: " + schemaName, e);
