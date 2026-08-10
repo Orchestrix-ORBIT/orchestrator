@@ -6,5 +6,6 @@ public enum UserStatus {
 
     ACTIVE,     // Normal — user can log in
     INACTIVE,   // Account deactivated by admin
+    SUSPENDED,  // Account suspended (soft-deleted from team)
     BANNED      // Permanently blocked
 }
