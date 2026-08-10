@@ -3,6 +3,7 @@ package com.example.core_api.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -26,6 +27,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints — no token needed
                 .requestMatchers("/api/auth/**", "/api/admin/tenants/**", "/error").permitAll()
+                // Team management — role updates and member removal require ADMIN
+                .requestMatchers(HttpMethod.PATCH, "/api/team/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/team/**").hasRole("ADMIN")
                 // Everything else requires a valid JWT
                 .anyRequest().authenticated()
             )

@@ -78,13 +78,15 @@ public class AuthService implements UserDetailsService {
         // The original password is NEVER stored anywhere.
         String hashedPassword = passwordEncoder.encode(request.password());
 
+        UserRole role = userRepository.count() == 0 ? UserRole.ADMIN : UserRole.MEMBER;
+
         // Step 3: Build the User entity using the builder pattern (from Lombok @Builder).
         // Notice we store 'hashedPassword', not 'request.password()'.
         User user = User.builder()
                 .email(request.email())
                 .passwordHash(hashedPassword)
                 .displayName(request.displayName())
-                .role(UserRole.MEMBER)        // Everyone starts as MEMBER on self-registration
+                .role(role)                   // First registered user gets ADMIN, subsequent get MEMBER
                 .status(UserStatus.ACTIVE)    // Account is immediately active
                 .emailVerified(false)         // Email verification can be added later
                 .build();
