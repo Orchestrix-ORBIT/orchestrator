@@ -252,9 +252,7 @@ export default function LoginPage() {
     //     email,
     //     password,
     //   });
-    //   localStorage.setItem("authToken", data.token);
-    //   setTenantSlug(tenantSlug.trim());
-    //   router.push("/dashboard");
+    //   router.push("/projects");
     // } catch (err) {
     //   setError(err instanceof Error ? err.message : "Login failed.");
     //   setLoading(false);
@@ -269,8 +267,7 @@ export default function LoginPage() {
     // Persist a mock token so api.ts sends Authorization headers immediately
     localStorage.setItem("authToken", "mock-jwt-token");
 
-    router.push("/dashboard");
-    /* ── END MOCK ── */
+    router.push("/projects");
   };
 
   return (
