@@ -121,13 +121,13 @@ const S = {
   }
 };
 
-const NAV_LINKS = [
-  { href: "/projects", label: "Projects", icon: "📁" },
-  { href: "/tasks", label: "Tasks", icon: "✅" },
-  { href: "/resources", label: "Resources", icon: "🗓️" },
-  { href: "/team", label: "Team", icon: "👥" },
-  { href: "/documents", label: "Documents", icon: "📄" },
-];
+const BASE_LINK = { href: "/dashboard", label: "Overview", icon: "📊" };
+const PROJECTS_LINK = { href: "/projects", label: "Projects", icon: "📁" };
+const TASKS_LINK = { href: "/tasks", label: "Tasks", icon: "✅" };
+const RESOURCES_LINK = { href: "/resources", label: "Resources", icon: "🗓️" };
+const TEAM_LINK = { href: "/team", label: "Team", icon: "👥" };
+const DOCS_LINK = { href: "/documents", label: "Documents", icon: "📄" };
+const ADMIN_LINK = { href: "/admin", label: "Workspace Settings", icon: "⚙️" };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -135,8 +135,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { tenantSlug } = useTenant();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [userRole, setUserRole] = useState<string>("MEMBER");
 
   useEffect(() => {
+    // Read role from local storage for mock RBAC
+    const storedRole = localStorage.getItem("userRole");
+    if (storedRole) {
+      setUserRole(storedRole);
+    }
+
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
@@ -152,6 +159,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     localStorage.removeItem("tenantSlug");
+    localStorage.removeItem("userRole");
     router.push("/");
   };
 
@@ -164,6 +172,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (isMobile) setIsSidebarOpen(false);
   }, [pathname, isMobile]);
+
+  // Dynamically wire links based on role
+  let visibleLinks = [];
+  if (userRole === "Institute Admin") {
+    visibleLinks = [BASE_LINK, PROJECTS_LINK, TEAM_LINK, DOCS_LINK, ADMIN_LINK];
+  } else if (userRole === "Team Lead") {
+    visibleLinks = [BASE_LINK, PROJECTS_LINK, TASKS_LINK, TEAM_LINK, DOCS_LINK];
+  } else if (userRole === "Resource Manager") {
+    visibleLinks = [BASE_LINK, PROJECTS_LINK, RESOURCES_LINK, DOCS_LINK];
+  } else {
+    // Researcher
+    visibleLinks = [BASE_LINK, PROJECTS_LINK, TASKS_LINK, RESOURCES_LINK, DOCS_LINK];
+  }
 
   return (
     <div style={S.layout}>
@@ -179,7 +200,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
         
         <div style={S.nav}>
-          {NAV_LINKS.map(link => {
+          {visibleLinks.map(link => {
             const isActive = pathname.startsWith(link.href);
             return (
               <Link key={link.href} href={link.href} style={S.navItem(isActive)}>

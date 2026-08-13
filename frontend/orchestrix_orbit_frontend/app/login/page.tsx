@@ -207,13 +207,14 @@ function Spinner() {
 /* ── Login Page ──────────────────────────────────────────────────────────── */
 export default function LoginPage() {
   const router = useRouter();
-  const { setTenantSlug } = useTenant();
+  const { setTenantSlug: setContextSlug } = useTenant();
 
-  const [tenantSlug, setTenantSlugField] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  // Simple demo credentials pre-filled for testing
+  const [tenantSlug, setTenantSlug] = useState("demo");
+  const [email, setEmail] = useState("admin@demo.com");
+  const [password, setPassword] = useState("123");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   /* Focus styles applied via JS (avoids :focus pseudo-class in inline styles) */
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -261,13 +262,19 @@ export default function LoginPage() {
     /* ── MOCK: simulate network delay, then navigate ── */
     await new Promise((resolve) => setTimeout(resolve, 900));
 
-    // Persist slug in context + localStorage (TenantContext handles localStorage write)
-    setTenantSlug(tenantSlug.trim());
-
-    // Persist a mock token so api.ts sends Authorization headers immediately
+    // Persist slug in context + localStorage
+    setContextSlug(tenantSlug.trim());
     localStorage.setItem("authToken", "mock-jwt-token");
 
-    router.push("/projects");
+    // Mock RBAC logic
+    let role = "Researcher";
+    const emailLower = email.toLowerCase();
+    if (emailLower.includes("admin")) role = "Institute Admin";
+    else if (emailLower.includes("lead")) role = "Team Lead";
+    else if (emailLower.includes("resource")) role = "Resource Manager";
+    localStorage.setItem("userRole", role);
+
+    router.push("/dashboard");
   };
 
   return (
@@ -304,6 +311,37 @@ export default function LoginPage() {
 
           {/* ── Error Banner ── */}
           {error && <div style={S.error} role="alert">{error}</div>}
+
+          {/* ── Demo Quick Select ── */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {['Institute Admin', 'Team Lead', 'Researcher', 'Resource Manager'].map(role => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => {
+                  setTenantSlug("demo");
+                  // Generate a simple email based on the role name (e.g. "team lead" -> "lead@demo.com")
+                  const prefix = role.includes("Admin") ? "admin" : 
+                                 role.includes("Lead") ? "lead" : 
+                                 role.includes("Resource") ? "resource" : "researcher";
+                  setEmail(`${prefix}@demo.com`);
+                  setPassword("123");
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--off-white)',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  color: 'var(--navy-900)'
+                }}
+              >
+                {role}
+              </button>
+            ))}
+          </div>
 
           {/* ── Form ── */}
           <form onSubmit={handleSubmit} noValidate>
