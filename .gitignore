@@ -31,3 +31,5 @@ dist/
 .vite/
 *.tsbuildinfo
 
+# Personal Notes (Ignored from version control)
+.project_notes/

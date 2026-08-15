@@ -2,6 +2,8 @@ package com.example.core_api.task;
 
 import com.example.core_api.exception.ResourceNotFoundException;
 import com.example.core_api.project.ProjectRepository;
+import com.example.core_api.project.Project;
+import com.example.core_api.researchteam.TeamMemberRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,15 +17,23 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
-    public TaskService(TaskRepository taskRepository, ProjectRepository projectRepository) {
+    public TaskService(TaskRepository taskRepository, ProjectRepository projectRepository, TeamMemberRepository teamMemberRepository) {
         this.taskRepository = taskRepository;
         this.projectRepository = projectRepository;
+        this.teamMemberRepository = teamMemberRepository;
     }
 
     public TaskResponse createTask(UUID projectId, CreateTaskRequest request) {
-        if (!projectRepository.existsById(projectId)) {
-            throw new ResourceNotFoundException("Project not found with id: " + projectId);
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + projectId));
+
+        if (request.getAssigneeId() != null && project.getTeamId() != null) {
+            boolean isMember = teamMemberRepository.existsByTeamIdAndUserId(project.getTeamId(), request.getAssigneeId());
+            if (!isMember) {
+                throw new IllegalArgumentException("Assignee is not a member of the project's research team.");
+            }
         }
 
         Task task = Task.builder()
@@ -48,6 +58,20 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true)
+    public List<TaskResponse> getTasksByProjectAndStatus(UUID projectId, TaskStatus status) {
+        return taskRepository.findAllByProjectIdAndStatus(projectId, status).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TaskResponse> getTasksByProjectAndAssignee(UUID projectId, UUID assigneeId) {
+        return taskRepository.findAllByProjectIdAndAssigneeId(projectId, assigneeId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public TaskResponse getTaskById(UUID taskId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + taskId));
@@ -57,6 +81,19 @@ public class TaskService {
     public TaskResponse updateTask(UUID taskId, UpdateTaskRequest request) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + taskId));
+
+        if (request.getAssigneeId() != null && !request.getAssigneeId().equals(task.getAssigneeId())) {
+            final UUID projectIdForQuery = task.getProjectId();
+            Project project = projectRepository.findById(projectIdForQuery)
+                    .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + projectIdForQuery));
+            if (project.getTeamId() != null) {
+                boolean isMember = teamMemberRepository.existsByTeamIdAndUserId(project.getTeamId(), request.getAssigneeId());
+                if (!isMember) {
+                    throw new IllegalArgumentException("Assignee is not a member of the project's research team.");
+                }
+            }
+            task.setAssigneeId(request.getAssigneeId());
+        }
 
         if (request.getTitle() != null) {
             task.setTitle(request.getTitle());
@@ -69,9 +106,6 @@ public class TaskService {
         }
         if (request.getPriority() != null) {
             task.setPriority(request.getPriority());
-        }
-        if (request.getAssigneeId() != null) {
-            task.setAssigneeId(request.getAssigneeId());
         }
         if (request.getDueDate() != null) {
             task.setDueDate(request.getDueDate());

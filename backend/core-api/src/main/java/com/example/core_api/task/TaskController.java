@@ -26,7 +26,16 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<TaskResponse> getTasksByProject(@PathVariable UUID projectId) {
+    public List<TaskResponse> getTasksByProject(
+            @PathVariable UUID projectId,
+            @RequestParam(required = false) TaskStatus status,
+            @RequestParam(required = false) UUID assigneeId) {
+        
+        if (status != null) {
+            return taskService.getTasksByProjectAndStatus(projectId, status);
+        } else if (assigneeId != null) {
+            return taskService.getTasksByProjectAndAssignee(projectId, assigneeId);
+        }
         return taskService.getTasksByProject(projectId);
     }
 

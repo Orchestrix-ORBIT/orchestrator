@@ -3,6 +3,7 @@ package com.example.core_api.project;
 import com.example.core_api.auth.User;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,9 +22,10 @@ public class ProjectController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ProjectResponse createProject(@Valid @RequestBody CreateProjectRequest request) {
-        UUID ownerId = getAuthenticatedUserId();
-        return projectService.createProject(request, ownerId);
+    public ProjectResponse createProject(
+            @AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody CreateProjectRequest request) {
+        return projectService.createProject(request, currentUser.getId());
     }
 
     @GetMapping
@@ -42,8 +44,8 @@ public class ProjectController {
         projectService.deleteProject(id);
     }
 
-    private UUID getAuthenticatedUserId() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return user.getId();
+    @GetMapping("/{id}/summary")
+    public ProjectSummaryResponse getProjectSummary(@PathVariable UUID id) {
+        return projectService.getProjectSummary(id);
     }
 }
