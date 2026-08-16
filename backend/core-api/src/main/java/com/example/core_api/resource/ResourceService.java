@@ -1,6 +1,7 @@
 package com.example.core_api.resource;
 
 import com.example.core_api.exception.ResourceNotFoundException;
+import com.example.core_api.exception.ResourceBookingConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,11 +65,11 @@ public class ResourceService {
             throw new ResourceNotFoundException("Resource not found with id: " + resourceId);
         }
 
-        List<ResourceBooking> overlappingBookings = bookingRepository.findOverlappingBookings(
+        long overlappingCount = bookingRepository.countOverlappingBookings(
                 resourceId, request.getStartTime(), request.getEndTime());
 
-        if (!overlappingBookings.isEmpty()) {
-            throw new IllegalStateException("Resource is already booked during the requested time period");
+        if (overlappingCount > 0) {
+            throw new ResourceBookingConflictException("Resource is already booked during the requested time period");
         }
 
         ResourceBooking booking = ResourceBooking.builder()
