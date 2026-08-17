@@ -7,4 +7,5 @@ import java.util.UUID;
 public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findAllByProjectId(UUID projectId);
     List<Task> findAllByProjectIdAndStatus(UUID projectId, TaskStatus status);
+    List<Task> findAllByProjectIdAndAssigneeId(UUID projectId, UUID assigneeId);
 }

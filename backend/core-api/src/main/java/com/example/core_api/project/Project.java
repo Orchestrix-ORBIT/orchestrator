@@ -31,6 +31,9 @@ public class Project {
     @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
 
+    @Column(name = "team_id")
+    private UUID teamId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

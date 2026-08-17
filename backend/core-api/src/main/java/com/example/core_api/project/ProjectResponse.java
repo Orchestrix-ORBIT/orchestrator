@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -13,5 +14,6 @@ public class ProjectResponse {
     private String description;
     private ProjectStatus status;
     private UUID ownerId;
+    private UUID teamId;
     private OffsetDateTime createdAt;
 }
