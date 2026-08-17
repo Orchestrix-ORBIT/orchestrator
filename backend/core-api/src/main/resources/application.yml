@@ -34,3 +34,7 @@ multitenancy:
 jwt:
   secret: ${JWT_SECRET:b1a04bc7-496f-46fd-9372-352a16b9c473}
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # Default: 24 hours if not set
+
+# AES-256 Encryption Configuration
+encryption:
+  secret-key: ${ENCRYPTION_SECRET_KEY:My32ByteSuperSecretKeyForAES256!}

@@ -1,11 +1,14 @@
 package com.example.core_api.document;
 
+import com.example.core_api.auth.User;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+
 
 /**
  * REST controller that exposes HTTP endpoints for document management.
@@ -56,13 +59,13 @@ public class DocumentController {
     @ResponseStatus(HttpStatus.CREATED)
     public DocumentResponse createDocument(
             @PathVariable UUID projectId,
+            @AuthenticationPrincipal User currentUser,
             @Valid @RequestBody CreateDocumentRequest request) {
 
         // STUB: hardcoded author ID until auth is implemented.
         // In production this will be: SecurityContextHolder → JWT claims → user UUID
-        UUID stubAuthorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-        return documentService.createDocument(projectId, stubAuthorId, request);
+        UUID authorId = currentUser.getId();
+        return documentService.createDocument(projectId, authorId, request);
     }
 
     // ── GET /api/projects/{projectId}/documents ───────────────────────────────
