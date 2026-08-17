@@ -31,3 +31,5 @@ dist/
 .vite/
 *.tsbuildinfo
 
+# Local Notes
+.project_notes/
