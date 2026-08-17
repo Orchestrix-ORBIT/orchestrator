@@ -12,9 +12,9 @@ public interface ResourceBookingRepository extends JpaRepository<ResourceBooking
     List<ResourceBooking> findAllByResourceId(UUID resourceId);
     List<ResourceBooking> findAllByUserId(UUID userId);
 
-    @Query("SELECT rb FROM ResourceBooking rb WHERE rb.resourceId = :resourceId AND rb.status = 'APPROVED' " +
+    @Query("SELECT COUNT(rb) FROM ResourceBooking rb WHERE rb.resourceId = :resourceId AND rb.status = 'APPROVED' " +
            "AND rb.startTime < :endTime AND rb.endTime > :startTime")
-    List<ResourceBooking> findOverlappingBookings(
+    long countOverlappingBookings(
             @Param("resourceId") UUID resourceId,
             @Param("startTime") OffsetDateTime startTime,
             @Param("endTime") OffsetDateTime endTime);
