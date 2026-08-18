@@ -30,7 +30,7 @@ Add the configuration mapping under root:
 
 ```yaml
 encryption:
-  secret-key: ${ENCRYPTION_SECRET_KEY:My32ByteSuperSecretKeyForAES256!}
+  secret-key: ${ENCRYPTION_SECRET_KEY}
 ```
 
 ---
