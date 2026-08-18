@@ -1,17 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-});
-
 export const metadata: Metadata = {
-  title: "Orchestrix ORBIT — Privacy-Preserving Research Collaboration",
-  description:
-    "A secure, multi-tenant platform for research teams. Manage projects, tasks, resources, and AI-powered document summaries — all in one place.",
+  title: "Orchestrix - Research Workspace",
+  description: "Privacy Preserving Collaborative Resource and Task Orchestrator",
 };
 
 export default function RootLayout({
@@ -20,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <html lang="en">
+      <body className="bg-[#f8f9fa] text-black font-sans antialiased">
         {children}
       </body>
     </html>
