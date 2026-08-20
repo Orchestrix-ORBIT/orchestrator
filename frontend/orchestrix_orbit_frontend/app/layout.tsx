@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { TenantProvider } from "@/context/TenantContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -10,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Orchestrix ORBIT — Privacy-Preserving Research Collaboration",
+  title: "Orchestrix ORBIT — Research Collaboration Platform",
   description:
-    "A secure, multi-tenant platform for research teams. Manage projects, tasks, resources, and AI-powered document summaries — all in one place.",
+    "A secure, multi-tenant platform for research teams. Manage projects, tasks, resources, and AI-powered document summaries.",
 };
 
 export default function RootLayout({
@@ -22,11 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-        <TenantProvider>
-          {children}
-        </TenantProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
