@@ -147,23 +147,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top bar */}
         <header style={s.topbar}>
           <div style={s.topbarLeft}>
-            {/* Search — shown on projects page */}
-            {pathname === "/dashboard/projects" && (
+            {/* Search — context-aware placeholder per page */}
+            {(pathname === "/dashboard/projects" ||
+              pathname === "/dashboard/resources" ||
+              pathname === "/dashboard/documents") && (
               <div style={s.searchWrap}>
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#9e9e9e" strokeWidth="1.4" strokeLinecap="round" style={{ flexShrink: 0 }}>
                   <circle cx="5.5" cy="5.5" r="4" />
                   <line x1="9" y1="9" x2="12" y2="12" />
                 </svg>
                 <input
-                  id="input-search-projects"
+                  id="input-search-topbar"
                   type="text"
-                  placeholder="Search projects..."
+                  placeholder={
+                    pathname === "/dashboard/resources"
+                      ? "Search across workspace..."
+                      : pathname === "/dashboard/documents"
+                      ? "Search documents..."
+                      : "Search projects..."
+                  }
                   style={s.searchInput}
                 />
               </div>
             )}
           </div>
           <div style={s.topbarRight}>
+            {/* Upload Document button — only on documents page */}
+            {pathname === "/dashboard/documents" && (
+              <button id="btn-upload-document" style={s.uploadDocBtn}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ marginRight: 6 }}>
+                  <path d="M6.5 9V2M4 4.5L6.5 2 9 4.5" strokeLinejoin="round" />
+                  <path d="M1 10.5v1a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1" />
+                </svg>
+                Upload Document
+              </button>
+            )}
             {/* Lock icon */}
             <button id="btn-lock" style={s.iconBtn} title="Encryption">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -323,7 +341,20 @@ const s: Record<string, React.CSSProperties> = {
   topbarRight: {
     display: "flex",
     alignItems: "center",
-    gap: 4,
+    gap: 8,
+  },
+  uploadDocBtn: {
+    display: "flex",
+    alignItems: "center",
+    padding: "7px 14px",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#ffffff",
+    background: "#161616",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
   },
   iconBtn: {
     background: "none",
