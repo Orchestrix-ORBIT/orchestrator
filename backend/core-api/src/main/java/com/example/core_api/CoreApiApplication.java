@@ -11,7 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 // This is the ENTRY POINT of the app. The JVM starts here.
 @SpringBootApplication
 public class CoreApiApplication {
-
+    
     public static void main(String[] args) {
         SpringApplication.run(CoreApiApplication.class, args);
     }
