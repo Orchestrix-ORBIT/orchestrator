@@ -244,8 +244,8 @@ export default function ChatPage() {
 const s: Record<string, React.CSSProperties> = {
   root: {
     display: "flex",
-    height: "calc(100vh - 48px)", /* subtract topbar height */
-    margin: "-32px -32px -48px", /* bleed to edges of content area */
+    height: "calc(100vh - 48px)", /* full height minus topbar */
+    width: "100%",
     overflow: "hidden" as const,
   },
 
