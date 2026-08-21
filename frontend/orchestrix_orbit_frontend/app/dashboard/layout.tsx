@@ -119,12 +119,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
+
+        {/* ── Sidebar bottom ───────────────────────────────────────────── */}
+        <div style={s.sidebarBottom}>
+          <div style={s.sidebarDivider} />
+          <button id="btn-encrypted-session" style={s.encryptedSession}>
+            <span style={{ fontSize: 13 }}>🔒</span>
+            Encrypted Session
+          </button>
+          <Link
+            id="nav-settings"
+            href="/dashboard/settings"
+            style={s.settingsLink}
+          >
+            {/* gear icon */}
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <circle cx="7" cy="7" r="2" />
+              <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.93 2.93l1.06 1.06M10.01 10.01l1.06 1.06M2.93 11.07l1.06-1.06M10.01 3.99l1.06-1.06" strokeLinecap="round" />
+            </svg>
+            Settings
+          </Link>
+        </div>
       </aside>
 
       {/* ── Main area ────────────────────────────────────────────────────────── */}
       <div style={s.main}>
         {/* Top bar */}
         <header style={s.topbar}>
+          <div style={s.topbarLeft}>
+            {/* Search — shown on projects page */}
+            {pathname === "/dashboard/projects" && (
+              <div style={s.searchWrap}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#9e9e9e" strokeWidth="1.4" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                  <circle cx="5.5" cy="5.5" r="4" />
+                  <line x1="9" y1="9" x2="12" y2="12" />
+                </svg>
+                <input
+                  id="input-search-projects"
+                  type="text"
+                  placeholder="Search projects..."
+                  style={s.searchInput}
+                />
+              </div>
+            )}
+          </div>
           <div style={s.topbarRight}>
             {/* Lock icon */}
             <button id="btn-lock" style={s.iconBtn} title="Encryption">
@@ -198,6 +236,7 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 1,
     padding: "0 8px",
+    flex: 1,
   },
   navItem: {
     display: "flex",
@@ -253,11 +292,33 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #e0e0e0",
     display: "flex",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     padding: "0 24px",
     position: "sticky" as const,
     top: 0,
     zIndex: 5,
+  },
+  topbarLeft: {
+    display: "flex",
+    alignItems: "center",
+  },
+  searchWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#ffffff",
+    border: "1px solid #d8d8d8",
+    borderRadius: 6,
+    padding: "5px 10px",
+    width: 220,
+  },
+  searchInput: {
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    fontSize: 13,
+    color: "#161616",
+    width: "100%",
   },
   topbarRight: {
     display: "flex",
@@ -278,5 +339,45 @@ const s: Record<string, React.CSSProperties> = {
   content: {
     flex: 1,
     padding: "32px 32px 48px",
+  },
+
+  /* Sidebar bottom */
+  sidebarBottom: {
+    padding: "0 8px 8px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 2,
+  },
+  sidebarDivider: {
+    height: 1,
+    background: "#2a2a2a",
+    marginBottom: 8,
+  },
+  encryptedSession: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "9px 10px",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#e8c84f",
+    background: "#242420",
+    border: "none",
+    cursor: "default",
+    width: "100%",
+    textAlign: "left" as const,
+  },
+  settingsLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "9px 10px",
+    borderRadius: 6,
+    fontSize: 13,
+    color: "#888888",
+    fontWeight: 400,
+    cursor: "pointer",
+    textDecoration: "none",
   },
 };
