@@ -1,25 +1,27 @@
-// context/TenantContext.tsx
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 interface TenantContextType {
   tenantSlug: string;
+  tenantId?: string;
   setTenantSlug: (slug: string) => void;
 }
 
 const TenantContext = createContext<TenantContextType>({
-  tenantSlug: "",
+  tenantSlug: "orchestrix-mrt",
+  tenantId: "00000000-0000-0000-0000-000000000001",
   setTenantSlug: () => {},
 });
 
-export function TenantProvider({ children }: { children: React.ReactNode }) {
-  const [tenantSlug, setTenantSlugState] = useState<string>("");
+export function TenantProvider({ children }: { children: ReactNode }) {
+  const [tenantSlug, setTenantSlugState] = useState<string>("orchestrix-mrt");
 
-  // On mount: restore slug from localStorage (persists across page refreshes)
   useEffect(() => {
-    const stored = localStorage.getItem("tenantSlug") ?? "";
-    setTenantSlugState(stored);
+    const stored = localStorage.getItem("tenantSlug");
+    if (stored) {
+      setTenantSlugState(stored);
+    }
   }, []);
 
   const setTenantSlug = (slug: string) => {
@@ -28,11 +30,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <TenantContext.Provider value={{ tenantSlug, setTenantSlug }}>
+    <TenantContext.Provider
+      value={{
+        tenantSlug,
+        tenantId: "00000000-0000-0000-0000-000000000001",
+        setTenantSlug,
+      }}
+    >
       {children}
     </TenantContext.Provider>
   );
 }
 
-// Custom hook — use this in any page: const { tenantSlug } = useTenant();
 export const useTenant = () => useContext(TenantContext);

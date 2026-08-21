@@ -53,6 +53,10 @@ export const api = {
       body: JSON.stringify(body),
     }).then((r) => handleResponse<T>(r)),
 
+  delete: (path: string) =>
+    fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
+      .then((r) => handleResponse<void>(r)),
+
   del: (path: string) =>
     fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
       .then((r) => handleResponse<void>(r)),
