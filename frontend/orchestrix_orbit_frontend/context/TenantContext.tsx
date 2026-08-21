@@ -1,26 +1,45 @@
 "use client";
 
-import { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-interface TenantContextValue {
+interface TenantContextType {
   tenantSlug: string;
-  tenantId: string;
+  tenantId?: string;
+  setTenantSlug: (slug: string) => void;
 }
 
-const TenantContext = createContext<TenantContextValue>({
-  tenantSlug: "default",
-  tenantId: "00000000-0000-0000-0000-000000000000",
+const TenantContext = createContext<TenantContextType>({
+  tenantSlug: "orchestrix-mrt",
+  tenantId: "00000000-0000-0000-0000-000000000001",
+  setTenantSlug: () => {},
 });
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  // In production this would be derived from the JWT / subdomain
-  const value: TenantContextValue = {
-    tenantSlug: "orchestrix-mrt",
-    tenantId: "00000000-0000-0000-0000-000000000001",
+  const [tenantSlug, setTenantSlugState] = useState<string>("orchestrix-mrt");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("tenantSlug");
+    if (stored) {
+      setTenantSlugState(stored);
+    }
+  }, []);
+
+  const setTenantSlug = (slug: string) => {
+    localStorage.setItem("tenantSlug", slug);
+    setTenantSlugState(slug);
   };
-  return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
+
+  return (
+    <TenantContext.Provider
+      value={{
+        tenantSlug,
+        tenantId: "00000000-0000-0000-0000-000000000001",
+        setTenantSlug,
+      }}
+    >
+      {children}
+    </TenantContext.Provider>
+  );
 }
 
-export function useTenant() {
-  return useContext(TenantContext);
-}
+export const useTenant = () => useContext(TenantContext);

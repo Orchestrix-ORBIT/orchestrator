@@ -28,6 +28,7 @@ public class Document {
     private String title;
 
     // Stored encrypted; null if the document is a file-based upload
+    @Convert(converter = AttributeEncryptor.class)
     @Column(name = "content_encrypted", columnDefinition = "TEXT")
     private String contentEncrypted;
 

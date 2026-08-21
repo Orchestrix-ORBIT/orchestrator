@@ -10,9 +10,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Orchestrix ORBIT — Privacy-Preserving Research Collaboration",
+  title: "Orchestrix ORBIT — Research Collaboration Platform",
   description:
-    "A secure, multi-tenant platform for research teams.",
+    "A secure, multi-tenant platform for research teams. Manage projects, tasks, resources, and AI-powered document summaries.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

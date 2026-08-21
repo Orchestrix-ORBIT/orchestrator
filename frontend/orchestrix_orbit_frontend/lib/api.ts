@@ -1,20 +1,63 @@
-// Stub API helper — replace with real fetch calls when backend is live
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+// lib/api.ts
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+// Helper: build headers for every request
+function buildHeaders(): HeadersInit {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  // Read tenant slug from localStorage (set during login)
+  const tenantSlug = typeof window !== "undefined"
+    ? localStorage.getItem("tenantSlug") ?? ""
+    : "";
+  if (tenantSlug) headers["X-Tenant-ID"] = tenantSlug;
+
+  // Read JWT token from localStorage (set during login)
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("authToken")
+    : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  return headers;
+}
+
+// Helper: unwrap response — throw on non-2xx
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`API error ${res.status}: ${error}`);
+  }
+  // 204 No Content — return null
+  if (res.status === 204) return null as T;
   return res.json() as Promise<T>;
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string) =>
+    fetch(`${BASE_URL}${path}`, { method: "GET", headers: buildHeaders() })
+      .then((r) => handleResponse<T>(r)),
+
   post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+    fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+    }).then((r) => handleResponse<T>(r)),
+
   put: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+    fetch(`${BASE_URL}${path}`, {
+      method: "PUT",
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+    }).then((r) => handleResponse<T>(r)),
+
+  delete: (path: string) =>
+    fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
+      .then((r) => handleResponse<void>(r)),
+
+  del: (path: string) =>
+    fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
+      .then((r) => handleResponse<void>(r)),
 };
