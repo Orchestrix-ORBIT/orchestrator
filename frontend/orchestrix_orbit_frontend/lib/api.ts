@@ -57,6 +57,13 @@ export const api = {
     fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
       .then((r) => handleResponse<void>(r)),
 
+  patch: <T>(path: string, body: unknown) =>
+    fetch(`${BASE_URL}${path}`, {
+      method: "PATCH",
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+    }).then((r) => handleResponse<T>(r)),
+
   del: (path: string) =>
     fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
       .then((r) => handleResponse<void>(r)),

@@ -1,155 +1,167 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ProjectsService, type Project } from "@/lib/services/projects";
+import { ResourcesService, type Booking } from "@/lib/services/resources";
+import { TasksService, type Task } from "@/lib/services/tasks";
 
-/* ── Static data matching the reference image ───────────────────────────── */
-const STATS = [
-  { id: "stat-open-tasks",       label: "OPEN TASKS",       value: "12", sub: "across 3 projects" },
-  { id: "stat-due-today",        label: "DUE TODAY",        value: "3",  sub: "tasks need attention" },
-  { id: "stat-active-bookings",  label: "ACTIVE BOOKINGS",  value: "2",  sub: "next: GPU Lab, 3 PM" },
-  { id: "stat-notifications",    label: "NOTIFICATIONS",    value: "7",  sub: "unread alerts" },
-];
+/*
+ * HOW THIS PAGE FETCHES DATA (teaching note):
+ *
+ * useEffect(() => { ... }, []) is React's way of saying:
+ * "Run this code AFTER the component first appears on screen."
+ *
+ * Inside, we call our service functions (e.g. ProjectsService.getAll()).
+ * Those use fetch() under the hood to call the Spring Boot API.
+ * When the response comes back, we call setProjects(data) to update React state.
+ * React then re-renders the component with the real data.
+ *
+ * Loading state: We show a spinner while waiting for the API.
+ * Error state:   We show an error message if the API call fails.
+ */
 
-type StatusType = "In Progress" | "To Do" | "Blocked";
-
-const TASKS: {
-  id: string;
-  task: string;
-  project: string;
-  status: StatusType;
-  priority: string;
-  dueDate: string;
-}[] = [
-  { id: "task-1", task: "Data synthesis review",    project: "Alpha Centauri",              status: "In Progress", priority: "High",   dueDate: "Today"     },
-  { id: "task-2", task: "Calibrate sensors",         project: "Project Beta",                status: "To Do",       priority: "Medium", dueDate: "Tomorrow"  },
-  { id: "task-3", task: "Draft methodology section", project: "Thesis 2026",                 status: "Blocked",     priority: "High",   dueDate: "Aug 18"    },
-  { id: "task-4", task: "Peer review submission",    project: "Journal of Advanced Physics", status: "To Do",       priority: "Low",    dueDate: "Aug 20"    },
-  { id: "task-5", task: "Update cluster nodes",      project: "Infrastructure",              status: "In Progress", priority: "Medium", dueDate: "Aug 22"    },
-];
-
-type BookingStatus = "Confirmed" | "Pending";
-const BOOKINGS: {
-  id: string;
-  resource: string;
-  project: string;
-  datetime: string;
-  status: BookingStatus;
-}[] = [
-  { id: "booking-1", resource: "GPU Lab Workstation 3",    project: "Project Beta",      datetime: "Today, 15:00",      status: "Confirmed" },
-  { id: "booking-2", resource: "Electron Microscope Suite", project: "Material Sci Group", datetime: "Tomorrow, 09:00",  status: "Pending"   },
-  { id: "booking-3", resource: "Conference Room A",         project: "Weekly Sync",        datetime: "18 Aug, 11:00",    status: "Confirmed" },
-];
-
-/* ── Status badge styles ─────────────────────────────────────────────────── */
-const STATUS_STYLES: Record<StatusType, React.CSSProperties> = {
-  "In Progress": {
-    background: "#161616",
-    color: "#ffffff",
-    border: "none",
-  },
-  "To Do": {
-    background: "transparent",
-    color: "#424242",
-    border: "1px solid #d0d0d0",
-  },
-  "Blocked": {
-    background: "#fde8e8",
-    color: "#c62828",
-    border: "none",
-  },
-};
-
-const BOOKING_BADGE: Record<BookingStatus, React.CSSProperties> = {
-  Confirmed: { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" },
-  Pending:   { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" },
-};
-
-/* ── Today's date ────────────────────────────────────────────────────────── */
-function todayString() {
-  return new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+interface Stats {
+  openTasks: number;
+  dueToday: number;
+  activeBookings: number;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Overview Page
-═══════════════════════════════════════════════════════════════════════════ */
-export default function OverviewPage() {
+export default function ResearcherHomePage() {
+  const [projects, setProjects]     = useState<Project[]>([]);
+  const [allTasks, setAllTasks]     = useState<Task[]>([]);
+  const [bookings, setBookings]     = useState<Booking[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+
+        // Step 1: Fetch all projects for this tenant
+        const projectList = await ProjectsService.getAll();
+        setProjects(projectList);
+
+        // Step 2: Fetch tasks for all projects in parallel
+        // Promise.all() runs multiple API calls at the same time instead of one-by-one.
+        // This is faster — instead of waiting for each to finish before starting the next.
+        const taskResults = await Promise.all(
+          projectList.map((p) => TasksService.getByProject(p.id).catch(() => [] as Task[]))
+        );
+        const flatTasks = taskResults.flat();
+        setAllTasks(flatTasks);
+
+        // Step 3: Fetch this user's bookings
+        const myBookings = await ResourcesService.getMyBookings();
+        setBookings(myBookings);
+
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDashboard();
+  }, []); // [] means: run once on mount, never again
+
+  /* ── Derived stats ──────────────────────────────────────────────────── */
+  const today = new Date().toISOString().split("T")[0];
+  const stats: Stats = {
+    openTasks: allTasks.filter(t => t.status !== "DONE").length,
+    dueToday: allTasks.filter(t => t.dueDate?.startsWith(today) && t.status !== "DONE").length,
+    activeBookings: bookings.filter(b => b.status === "APPROVED").length,
+  };
+
+  /* ── Pending tasks shown in the table (max 5) ───────────────────────── */
+  const pendingTasks = allTasks
+    .filter(t => t.status !== "DONE")
+    .slice(0, 5);
+
+  /* ── Upcoming bookings (max 3) ──────────────────────────────────────── */
+  const upcomingBookings = bookings
+    .filter(b => b.status === "APPROVED" || b.status === "PENDING")
+    .slice(0, 3);
+
+  if (loading) return <LoadingState />;
+  if (error)   return <ErrorState message={error} />;
+
+  const STAT_ITEMS = [
+    { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(stats.openTasks),    sub: `across ${projects.length} project${projects.length !== 1 ? "s" : ""}` },
+    { id: "stat-due-today",       label: "DUE TODAY",       value: String(stats.dueToday),     sub: "tasks need attention" },
+    { id: "stat-active-bookings", label: "ACTIVE BOOKINGS", value: String(stats.activeBookings), sub: "approved this week" },
+    { id: "stat-notifications",   label: "PROJECTS",        value: String(projects.length),    sub: "active workspaces" },
+  ];
+
   return (
     <div>
-      {/* ── Page header ───────────────────────────────────────────────────── */}
-      <h1 style={s.pageTitle}>Overview</h1>
-      <p style={s.pageDate}>{todayString()}</p>
-
-      {/* ── Stat cards ────────────────────────────────────────────────────── */}
-      <div style={s.statGrid}>
-        {STATS.map((stat) => (
+      {/* ── Stats row ────────────────────────────────────────────────────── */}
+      <div style={s.statsRow}>
+        {STAT_ITEMS.map((stat) => (
           <div key={stat.id} id={stat.id} style={s.statCard}>
-            <span style={s.statLabel}>{stat.label}</span>
             <span style={s.statValue}>{stat.value}</span>
+            <span style={s.statLabel}>{stat.label}</span>
             <span style={s.statSub}>{stat.sub}</span>
           </div>
         ))}
       </div>
 
-      {/* ── Bottom row: Tasks + Bookings ──────────────────────────────────── */}
-      <div style={s.bottomRow}>
+      {/* ── Tasks + Bookings columns ─────────────────────────────────────── */}
+      <div style={s.cols}>
 
         {/* Tasks table */}
-        <div style={s.tableCard}>
-          <p style={s.sectionLabel}>MY TASKS</p>
-          <table id="tasks-table" style={s.table}>
+        <div style={s.card}>
+          <div style={s.cardHead}>
+            <span style={s.cardTitle}>My Tasks</span>
+            <Link id="link-all-tasks" href="/dashboard/researcher/tasks" style={s.cardLink}>
+              View all tasks →
+            </Link>
+          </div>
+          <table style={s.table}>
             <thead>
               <tr>
-                {["Task", "Project", "Status", "Priority", "Due Date"].map((col) => (
-                  <th key={col} style={s.th}>{col}</th>
+                {["Task", "Project", "Status", "Priority", "Due"].map((h) => (
+                  <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {TASKS.map((row) => (
-                <tr key={row.id} id={row.id} style={s.tr}>
-                  <td style={s.td}>{row.task}</td>
-                  <td style={{ ...s.td, color: "#9e9e9e" }}>{row.project}</td>
+              {pendingTasks.length === 0 ? (
+                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#888" }}>No open tasks 🎉</td></tr>
+              ) : pendingTasks.map((task) => (
+                <tr key={task.id}>
+                  <td style={s.td}>{task.title}</td>
+                  <td style={s.td}>{task.projectId}</td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, ...STATUS_STYLES[row.status] }}>
-                      {row.status}
-                    </span>
+                    <span style={{ ...s.badge, ...statusStyle(task.status) }}>{task.status.replace("_", " ")}</span>
                   </td>
-                  <td style={s.td}>{row.priority}</td>
-                  <td style={{ ...s.td, textAlign: "right" }}>{row.dueDate}</td>
+                  <td style={s.td}>{task.priority}</td>
+                  <td style={s.td}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div style={s.tableFooter}>
-            <Link id="link-view-all-tasks" href="/dashboard/researcher/tasks" style={s.viewAll}>
-              View all tasks →
-            </Link>
-          </div>
         </div>
 
         {/* Upcoming bookings */}
-        <div style={s.bookingsCol}>
-          <p style={s.sectionLabel}>UPCOMING BOOKINGS</p>
-          <div style={s.bookingsList}>
-            {BOOKINGS.map((b) => (
-              <div key={b.id} id={b.id} style={s.bookingCard}>
-                <div style={s.bookingTop}>
-                  <div>
-                    <p style={s.bookingResource}>{b.resource}</p>
-                    <p style={s.bookingProject}>{b.project}</p>
-                  </div>
-                  <div style={s.bookingRight}>
-                    <span style={s.bookingTime}>{b.datetime}</span>
-                    <span style={{ ...s.badge, ...BOOKING_BADGE[b.status], marginTop: 6 }}>
-                      {b.status}
-                    </span>
-                  </div>
+        <div style={s.card}>
+          <div style={s.cardHead}>
+            <span style={s.cardTitle}>Upcoming Bookings</span>
+            <Link id="link-all-resources" href="/dashboard/researcher/resources" style={s.cardLink}>
+              Manage →
+            </Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {upcomingBookings.length === 0 ? (
+              <p style={{ color: "#888", fontSize: 13 }}>No upcoming bookings</p>
+            ) : upcomingBookings.map((b) => (
+              <div key={b.id} style={s.bookingRow}>
+                <div>
+                  <div style={s.bookingName}>{b.resourceName}</div>
+                  <div style={s.bookingTime}>{new Date(b.startTime).toLocaleString()}</div>
                 </div>
+                <span style={{ ...s.badge, ...bookingStyle(b.status) }}>{b.status}</span>
               </div>
             ))}
           </div>
@@ -160,169 +172,143 @@ export default function OverviewPage() {
   );
 }
 
+/* ── Helper components ─────────────────────────────────────────────────────── */
+function LoadingState() {
+  return (
+    <div style={{ padding: 40, textAlign: "center", color: "#888", fontSize: 14 }}>
+      Loading your workspace…
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div style={{ padding: 24, background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 8, color: "#c62828", fontSize: 14 }}>
+      <strong>Error:</strong> {message}
+    </div>
+  );
+}
+
+function statusStyle(status: string): React.CSSProperties {
+  switch (status) {
+    case "IN_PROGRESS": return { background: "#161616", color: "#ffffff", border: "none" };
+    case "BLOCKED":     return { background: "#fde8e8", color: "#c62828", border: "none" };
+    default:            return { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" };
+  }
+}
+
+function bookingStyle(status: string): React.CSSProperties {
+  switch (status) {
+    case "APPROVED": return { background: "#e8f5e9", color: "#2e7d32", border: "none" };
+    case "PENDING":  return { background: "#fff8e1", color: "#f57f17", border: "none" };
+    default:         return { background: "#f5f5f5", color: "#616161", border: "none" };
+  }
+}
+
 /* ── Styles ─────────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
-  /* Header */
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-0.5px",
-    marginBottom: 4,
-  },
-  pageDate: {
-    fontSize: 13,
-    color: "#9e9e9e",
-    marginBottom: 28,
-  },
-
-  /* Stat cards */
-  statGrid: {
+  statsRow: {
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
     gap: 16,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   statCard: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
-    padding: "18px 20px 20px",
+    border: "1px solid #e8e8e8",
+    borderRadius: 8,
+    padding: "20px 24px",
     display: "flex",
     flexDirection: "column",
-    gap: 6,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#9e9e9e",
-    letterSpacing: "0.5px",
-    textTransform: "uppercase" as const,
+    gap: 4,
   },
   statValue: {
     fontSize: 32,
     fontWeight: 700,
     color: "#161616",
-    letterSpacing: "-1px",
-    lineHeight: 1.1,
+    lineHeight: 1,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#888888",
+    letterSpacing: "0.8px",
+    marginTop: 6,
   },
   statSub: {
     fontSize: 12,
-    color: "#9e9e9e",
+    color: "#aaaaaa",
   },
-
-  /* Bottom row */
-  bottomRow: {
-    display: "flex",
-    gap: 20,
-    alignItems: "flex-start",
+  cols: {
+    display: "grid",
+    gridTemplateColumns: "1fr 340px",
+    gap: 16,
   },
-
-  /* Tasks table card */
-  tableCard: {
-    flex: "1 1 0",
+  card: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
-    overflow: "hidden",
+    border: "1px solid #e8e8e8",
+    borderRadius: 8,
+    padding: 24,
   },
-  sectionLabel: {
-    fontSize: 11,
+  cardHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 14,
     fontWeight: 600,
-    color: "#9e9e9e",
-    letterSpacing: "0.6px",
-    textTransform: "uppercase" as const,
-    padding: "16px 20px 12px",
+    color: "#161616",
+  },
+  cardLink: {
+    fontSize: 12,
+    color: "#888888",
+    textDecoration: "none",
+    fontWeight: 500,
   },
   table: {
     width: "100%",
-    borderCollapse: "collapse" as const,
-    fontSize: 13,
+    borderCollapse: "collapse",
   },
   th: {
     textAlign: "left" as const,
-    padding: "8px 16px",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#9e9e9e",
-    borderBottom: "1px solid #eeeeee",
-    borderTop: "1px solid #eeeeee",
-    background: "#fafafa",
-    whiteSpace: "nowrap" as const,
-  },
-  tr: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#888888",
+    letterSpacing: "0.6px",
+    textTransform: "uppercase" as const,
+    paddingBottom: 10,
     borderBottom: "1px solid #f0f0f0",
   },
   td: {
-    padding: "12px 16px",
-    color: "#161616",
     fontSize: 13,
-    verticalAlign: "middle" as const,
+    color: "#424242",
+    padding: "10px 0",
+    borderBottom: "1px solid #f8f8f8",
   },
   badge: {
     display: "inline-block",
-    padding: "3px 9px",
+    padding: "3px 8px",
     borderRadius: 4,
-    fontSize: 12,
-    fontWeight: 500,
-    whiteSpace: "nowrap" as const,
+    fontSize: 11,
+    fontWeight: 600,
   },
-  tableFooter: {
-    padding: "14px 16px",
-    borderTop: "1px solid #eeeeee",
-    textAlign: "center" as const,
-  },
-  viewAll: {
-    fontSize: 13,
-    color: "#616161",
-    cursor: "pointer",
-    textDecoration: "none",
-  },
-
-  /* Bookings column */
-  bookingsCol: {
-    width: 300,
-    minWidth: 280,
-    flexShrink: 0,
-  },
-  bookingsList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0,
-  },
-  bookingCard: {
-    background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
-    padding: "14px 16px",
-    marginBottom: 10,
-  },
-  bookingTop: {
+  bookingRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
+    alignItems: "center",
+    padding: "12px 0",
+    borderBottom: "1px solid #f8f8f8",
   },
-  bookingResource: {
+  bookingName: {
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 500,
     color: "#161616",
     marginBottom: 2,
   },
-  bookingProject: {
-    fontSize: 12,
-    color: "#9e9e9e",
-  },
-  bookingRight: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    flexShrink: 0,
-  },
   bookingTime: {
-    fontSize: 11,
-    color: "#9e9e9e",
-    fontVariantNumeric: "tabular-nums",
-    whiteSpace: "nowrap" as const,
+    fontSize: 12,
+    color: "#888888",
   },
 };

@@ -34,8 +34,11 @@ public class SchemaMultiTenantConnectionProvider implements MultiTenantConnectio
     public Connection getConnection(String tenantIdentifier) throws SQLException {
         Connection connection = dataSource.getConnection();
         // SET search_path tells PostgreSQL: "look for tables in org_acme first, then public"
+        // IMPORTANT: The schema name MUST be double-quoted (\"...\") when passed as a SQL identifier.
+        // Without quotes, names like org_test-org fail with: syntax error at or near "-"
+        // Double-quoting makes any character safe as an identifier in PostgreSQL.
         connection.createStatement()
-                .execute("SET search_path TO " + tenantIdentifier + ", public");
+                .execute("SET search_path TO \"" + tenantIdentifier + "\", public");
         return connection;
     }
 

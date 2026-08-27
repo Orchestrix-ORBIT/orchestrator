@@ -35,6 +35,7 @@ public class Resource {
     @Builder.Default
     private ResourceStatus status = ResourceStatus.AVAILABLE;
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String metadata;
 

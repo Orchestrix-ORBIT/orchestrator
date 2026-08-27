@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/auth";
 
 const NAV = [
   {
@@ -91,6 +92,12 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  function handleLogout() {
+    logout();
+    router.push("/");
+  }
 
   return (
     <aside style={s.sidebar}>
@@ -124,12 +131,25 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer / Encryption Badge */}
+      {/* Footer / Encryption Badge & Logout */}
       <div style={s.footer}>
         <div style={s.encryptBox}>
           <span style={s.encryptLabel}>ENCRYPTED SESSION</span>
           <span style={s.encryptSub}>AES-256 GCM</span>
         </div>
+        <button
+          id="btn-lead-logout"
+          type="button"
+          onClick={handleLogout}
+          style={s.logoutBtn}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
+            <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12.5 7H4.5" strokeLinecap="round" />
+          </svg>
+          Sign Out
+        </button>
       </div>
     </aside>
   );
@@ -238,5 +258,21 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 10,
     color: "#666666",
     fontFamily: "monospace",
+  },
+  logoutBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 10px",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#f87171",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left" as const,
+    marginTop: 8,
   },
 };

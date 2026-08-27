@@ -1,371 +1,201 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ProjectsService, type Project, type CreateProjectBody } from "@/lib/services/projects";
 
-/* ── Types ───────────────────────────────────────────────────────────────── */
+/*
+ * PATTERN USED HERE (teaching note):
+ *
+ * This page has two states: "viewing the list" and "showing a create form".
+ * When the user clicks "New Project", we show a modal form.
+ * When they submit, we call ProjectsService.create() which does:
+ *   POST /api/projects → { name, description }
+ * Spring Boot creates the project in the DB and returns the new Project.
+ * We then prepend it to our local `projects` array so the UI updates instantly
+ * without needing to re-fetch the full list. This is called "optimistic update".
+ */
+
 type ProjectStatus = "ACTIVE" | "ARCHIVED";
 
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  status: ProjectStatus;
-  updatedLabel: string;
-  progress: number;
-  members: string[]; /* initials */
-  extraMembers?: number;
-  encrypted: boolean;
-}
+export default function ResearcherProjectsPage() {
+  const [projects, setProjects]         = useState<Project[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+  const [filter, setFilter]             = useState<"ALL" | ProjectStatus>("ALL");
+  const [showModal, setShowModal]       = useState(false);
+  const [newName, setNewName]           = useState("");
+  const [newDesc, setNewDesc]           = useState("");
+  const [creating, setCreating]         = useState(false);
+  const [createError, setCreateError]   = useState<string | null>(null);
 
-/* ── Static data ─────────────────────────────────────────────────────────── */
-const PROJECTS: Project[] = [
-  {
-    id: "proj-alpha-core",
-    name: "Project Alpha Core",
-    description:
-      "Analyzing the quantum decoherence patterns in deep-space communication arrays.",
-    status: "ACTIVE",
-    updatedLabel: "Updated: 2h ago",
-    progress: 78,
-    members: ["A", "B"],
-    extraMembers: 2,
-    encrypted: true,
-  },
-  {
-    id: "proj-nexus-protocol",
-    name: "Nexus Protocol",
-    description:
-      "Development of the new consensus algorithm for distributed mesh networks.",
-    status: "ACTIVE",
-    updatedLabel: "Updated: 1d ago",
-    progress: 34,
-    members: ["C"],
-    encrypted: true,
-  },
-  {
-    id: "proj-beta-synthesis",
-    name: "Beta Synthesis",
-    description:
-      "Historical data archival process for the 2023 beta testing phase.",
-    status: "ARCHIVED",
-    updatedLabel: "Updated: Oct 12, 2023",
-    progress: 100,
-    members: ["D", "E"],
-    encrypted: true,
-  },
-];
+  /* ── Fetch on mount ─────────────────────────────────────────────────── */
+  useEffect(() => {
+    ProjectsService.getAll()
+      .then(setProjects)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
 
-type FilterTab = "All Projects" | "Active" | "Archived";
+  /* ── Filtered list ──────────────────────────────────────────────────── */
+  const visible = filter === "ALL" ? projects : projects.filter(p => p.status === filter);
 
-/* ════════════════════════════════════════════════════════════════════════════
-   My Projects Page
-═══════════════════════════════════════════════════════════════════════════ */
-export default function MyProjectsPage() {
-  const [activeFilter, setActiveFilter] = useState<FilterTab>("All Projects");
+  /* ── Create project ─────────────────────────────────────────────────── */
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setCreating(true);
+    setCreateError(null);
 
-  const filtered = PROJECTS.filter((p) => {
-    if (activeFilter === "All Projects") return true;
-    if (activeFilter === "Active") return p.status === "ACTIVE";
-    if (activeFilter === "Archived") return p.status === "ARCHIVED";
-    return true;
-  });
+    try {
+      const body: CreateProjectBody = { name: newName.trim(), description: newDesc.trim() || undefined };
+      const created = await ProjectsService.create(body);
+      // Prepend so it appears at the top of the list
+      setProjects(prev => [created, ...prev]);
+      setShowModal(false);
+      setNewName("");
+      setNewDesc("");
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create project");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  /* ── Delete project ─────────────────────────────────────────────────── */
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this project? This cannot be undone.")) return;
+    try {
+      await ProjectsService.delete(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
+
+  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading projects…</p>;
+  if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
     <div>
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={s.pageHeader}>
-        <h1 style={s.pageTitle}>My Projects</h1>
-        <button id="btn-create-project" style={s.createBtn}>
-          <span style={{ marginRight: 6, fontSize: 16, lineHeight: 1 }}>+</span>
-          Create New Project
-        </button>
-      </div>
-
-      {/* ── Filter tabs + filter icon ─────────────────────────────────────── */}
-      <div style={s.filterRow}>
-        <div style={s.tabGroup}>
-          {(["All Projects", "Active", "Archived"] as FilterTab[]).map((tab) => (
-            <button
-              key={tab}
-              id={`tab-${tab.toLowerCase().replace(/\s/g, "-")}`}
-              style={activeFilter === tab ? s.tabActive : s.tab}
-              onClick={() => setActiveFilter(tab)}
-            >
-              {tab}
-            </button>
-          ))}
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>My Projects</h1>
+          <p style={s.sub}>{projects.length} project{projects.length !== 1 ? "s" : ""} in this workspace</p>
         </div>
-        <button id="btn-filter" style={s.filterBtn}>
-          {/* filter icon */}
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-            <line x1="1" y1="3.5" x2="12" y2="3.5" />
-            <line x1="3" y1="6.5" x2="10" y2="6.5" />
-            <line x1="5" y1="9.5" x2="8"  y2="9.5" />
-          </svg>
-          Filter
+        <button id="btn-new-project" onClick={() => setShowModal(true)} style={s.btnPrimary}>
+          + New Project
         </button>
       </div>
 
-      {/* ── Project cards grid ────────────────────────────────────────────── */}
-      <div style={s.grid}>
-        {filtered.map((p) => (
-          <ProjectCard key={p.id} project={p} />
+      {/* ── Filter tabs ─────────────────────────────────────────────────── */}
+      <div style={s.tabs}>
+        {(["ALL", "ACTIVE", "ARCHIVED"] as const).map(f => (
+          <button key={f} style={filter === f ? s.tabOn : s.tabOff} onClick={() => setFilter(f)}>
+            {f === "ALL" ? `All (${projects.length})` : f === "ACTIVE" ? `Active (${projects.filter(p => p.status === "ACTIVE").length})` : `Archived (${projects.filter(p => p.status === "ARCHIVED").length})`}
+          </button>
         ))}
       </div>
-    </div>
-  );
-}
 
-/* ── Project Card ────────────────────────────────────────────────────────── */
-function ProjectCard({ project: p }: { project: Project }) {
-  return (
-    <div id={p.id} style={s.card}>
-      {/* Top row: name + status badge */}
-      <div style={s.cardTop}>
-        <span style={s.cardName}>{p.name}</span>
-        <span
-          style={{
-            ...s.statusBadge,
-            ...(p.status === "ACTIVE" ? s.badgeActive : s.badgeArchived),
-          }}
-        >
-          {p.status}
-        </span>
-      </div>
-
-      {/* Description */}
-      <p style={s.cardDesc}>{p.description}</p>
-
-      {/* Progress row */}
-      <div style={s.progressRow}>
-        <span style={s.updatedLabel}>{p.updatedLabel}</span>
-        <span style={s.progressPct}>{p.progress}%</span>
-      </div>
-      <div style={s.progressTrack}>
-        <div style={{ ...s.progressFill, width: `${p.progress}%` }} />
-      </div>
-
-      {/* Bottom row: members + encrypted */}
-      <div style={s.cardBottom}>
-        <div style={s.avatarGroup}>
-          {p.members.map((initial, i) => (
-            <div key={i} style={{ ...s.avatar, marginLeft: i === 0 ? 0 : -8 }}>
-              {initial}
-            </div>
-          ))}
-          {p.extraMembers ? (
-            <div style={{ ...s.avatar, ...s.avatarExtra, marginLeft: -8 }}>
-              +{p.extraMembers}
-            </div>
-          ) : null}
-        </div>
-        {p.encrypted && (
-          <div style={s.encryptedBadge}>
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.3">
-              <rect x="1.5" y="4.5" width="8" height="5.5" rx="1" />
-              <path d="M3.5 4.5V3.5a2 2 0 0 1 4 0v1" strokeLinecap="round" />
-            </svg>
-            Encrypted
+      {/* ── Projects grid ───────────────────────────────────────────────── */}
+      <div style={s.grid}>
+        {visible.length === 0 ? (
+          <div style={s.empty}>
+            <p>No projects yet.</p>
+            <button style={s.btnPrimary} onClick={() => setShowModal(true)}>Create your first project</button>
           </div>
-        )}
+        ) : visible.map(p => (
+          <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
+            <div style={s.cardTop}>
+              <span style={{ ...s.statusBadge, ...(p.status === "ACTIVE" ? s.statusActive : s.statusArchived) }}>
+                {p.status}
+              </span>
+              <button
+                id={`btn-delete-project-${p.id}`}
+                onClick={() => handleDelete(p.id)}
+                style={s.deleteBtn}
+                title="Delete project"
+              >
+                ×
+              </button>
+            </div>
+            <h3 style={s.cardName}>{p.name}</h3>
+            <p style={s.cardDesc}>{p.description || "No description"}</p>
+            <p style={s.cardDate}>Created {new Date(p.createdAt).toLocaleDateString()}</p>
+          </div>
+        ))}
       </div>
+
+      {/* ── Create Modal ─────────────────────────────────────────────────── */}
+      {showModal && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalHead}>
+              <span style={s.modalTitle}>New Project</span>
+              <button style={s.closeBtn} onClick={() => { setShowModal(false); setCreateError(null); }}>×</button>
+            </div>
+            <form onSubmit={handleCreate} style={s.modalForm}>
+              {createError && (
+                <div style={s.errorBanner}>{createError}</div>
+              )}
+              <div style={s.field}>
+                <label style={s.label}>Project name *</label>
+                <input id="input-project-name" style={s.input} value={newName}
+                  onChange={e => setNewName(e.target.value)} placeholder="e.g. Quantum Analysis" required />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Description</label>
+                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 80, resize: "vertical" as const }}
+                  value={newDesc} onChange={e => setNewDesc(e.target.value)}
+                  placeholder="What is this project about?" />
+              </div>
+              <div style={s.modalActions}>
+                <button type="button" style={s.btnSecondary}
+                  onClick={() => { setShowModal(false); setCreateError(null); }}>
+                  Cancel
+                </button>
+                <button id="btn-create-project" type="submit" style={{ ...s.btnPrimary, opacity: creating ? 0.6 : 1 }} disabled={creating}>
+                  {creating ? "Creating…" : "Create Project"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ── Styles ─────────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
-  /* Header */
-  pageHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-0.5px",
-  },
-  createBtn: {
-    display: "flex",
-    alignItems: "center",
-    padding: "8px 16px",
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#161616",
-    background: "#ffffff",
-    border: "1px solid #d0d0d0",
-    borderRadius: 6,
-    cursor: "pointer",
-    letterSpacing: "0px",
-    whiteSpace: "nowrap" as const,
-  },
-
-  /* Filter row */
-  filterRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  tabGroup: {
-    display: "flex",
-    gap: 4,
-  },
-  tab: {
-    padding: "6px 14px",
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#616161",
-    background: "transparent",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  tabActive: {
-    padding: "6px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#ffffff",
-    background: "#161616",
-    border: "1px solid #161616",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  filterBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#616161",
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-  },
-
-  /* Grid */
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 16,
-  },
-
-  /* Card */
-  card: {
-    background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    padding: "18px 18px 16px",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 10,
-  },
-  cardTop: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  cardName: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: "#161616",
-    lineHeight: 1.3,
-  },
-  statusBadge: {
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: "0.6px",
-    padding: "3px 7px",
-    borderRadius: 3,
-    flexShrink: 0,
-    marginTop: 1,
-  },
-  badgeActive: {
-    background: "transparent",
-    color: "#616161",
-    border: "1px solid #d0d0d0",
-  },
-  badgeArchived: {
-    background: "transparent",
-    color: "#9e9e9e",
-    border: "1px solid #e0e0e0",
-  },
-
-  /* Description */
-  cardDesc: {
-    fontSize: 13,
-    color: "#616161",
-    lineHeight: 1.55,
-  },
-
-  /* Progress */
-  progressRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  updatedLabel: {
-    fontSize: 11,
-    color: "#9e9e9e",
-  },
-  progressPct: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#161616",
-  },
-  progressTrack: {
-    height: 3,
-    background: "#f0f0f0",
-    borderRadius: 2,
-    overflow: "hidden" as const,
-  },
-  progressFill: {
-    height: "100%",
-    background: "#161616",
-    borderRadius: 2,
-  },
-
-  /* Bottom row */
-  cardBottom: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 2,
-  },
-  avatarGroup: {
-    display: "flex",
-    alignItems: "center",
-  },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: "50%",
-    background: "#d0d0d0",
-    border: "2px solid #ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#616161",
-    flexShrink: 0,
-  },
-  avatarExtra: {
-    background: "#eeeeee",
-    color: "#9e9e9e",
-    fontSize: 9,
-  },
-  encryptedBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 11,
-    color: "#9e9e9e",
-  },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#888888" },
+  tabs: { display: "flex", gap: 4, marginBottom: 20 },
+  tabOn: { padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#161616", background: "#161616", border: "none", borderRadius: 5, cursor: "pointer", color2: "#fff" as unknown as string } as React.CSSProperties,
+  tabOff: { padding: "6px 14px", fontSize: 12, fontWeight: 500, color: "#888", background: "#f0f0f0", border: "none", borderRadius: 5, cursor: "pointer" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 },
+  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#888", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
+  card: { background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 20, display: "flex", flexDirection: "column", gap: 8 },
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  statusBadge: { fontSize: 10, fontWeight: 700, letterSpacing: "0.5px", padding: "3px 8px", borderRadius: 4 },
+  statusActive: { background: "#e8f5e9", color: "#2e7d32" },
+  statusArchived: { background: "#f5f5f5", color: "#757575" },
+  deleteBtn: { background: "none", border: "none", fontSize: 18, color: "#bbb", cursor: "pointer", padding: "0 4px" },
+  cardName: { fontSize: 15, fontWeight: 600, color: "#161616", margin: 0 },
+  cardDesc: { fontSize: 13, color: "#616161", lineHeight: 1.5, margin: 0 },
+  cardDate: { fontSize: 11, color: "#aaa", margin: 0, marginTop: 4 },
+  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnSecondary: { padding: "10px 18px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
+  modal: { background: "#ffffff", borderRadius: 10, padding: 28, width: "100%", maxWidth: 480 },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616" },
+  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" },
+  modalForm: { display: "flex", flexDirection: "column", gap: 16 },
+  modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
+  field: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
+  input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
+  errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
 };

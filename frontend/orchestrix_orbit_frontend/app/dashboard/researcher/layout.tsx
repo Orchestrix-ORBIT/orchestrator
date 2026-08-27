@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/auth";
 
 /* ── Researcher nav items ────────────────────────────────────────────────── */
 const NAV = [
@@ -93,6 +94,12 @@ const BASE = "/dashboard/researcher";
 
 export default function ResearcherLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  function handleLogout() {
+    logout();
+    router.push("/");
+  }
 
   return (
     <div style={s.root}>
@@ -140,6 +147,19 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
             </svg>
             Settings
           </Link>
+          <button
+            id="btn-logout-sidebar"
+            type="button"
+            onClick={handleLogout}
+            style={s.logoutBtn}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
+              <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M12.5 7H4.5" strokeLinecap="round" />
+            </svg>
+            Sign Out
+          </button>
         </div>
       </aside>
 
@@ -193,12 +213,20 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
                 <path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round" />
               </svg>
             </button>
-            {/* User icon */}
-            <button id="btn-user" style={s.iconBtn} title="Profile">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="8" cy="5" r="3" />
-                <path d="M2 14c0-3.31 2.69-6 6-6s6 2.69 6 6" strokeLinecap="round" />
+            {/* Sign out button */}
+            <button
+              id="btn-logout-topbar"
+              type="button"
+              onClick={handleLogout}
+              style={s.topbarLogoutBtn}
+              title="Sign Out"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
+                <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12.5 7H4.5" strokeLinecap="round" />
               </svg>
+              <span>Sign Out</span>
             </button>
           </div>
         </header>
@@ -420,5 +448,34 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 400,
     cursor: "pointer",
     textDecoration: "none",
+  },
+  logoutBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "9px 10px",
+    borderRadius: 6,
+    fontSize: 13,
+    color: "#f87171",
+    fontWeight: 500,
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left" as const,
+    marginTop: 4,
+  },
+  topbarLogoutBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 12px",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#c62828",
+    background: "#fff0f0",
+    border: "1px solid #f5c6cb",
+    cursor: "pointer",
   },
 };

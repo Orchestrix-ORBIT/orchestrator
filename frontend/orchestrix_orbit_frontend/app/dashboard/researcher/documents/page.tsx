@@ -1,434 +1,231 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ProjectsService, type Project } from "@/lib/services/projects";
+import { DocumentsService, type Document, type CreateDocumentBody, type DocumentAccess } from "@/lib/services/documents";
 
-/* ── Types ───────────────────────────────────────────────────────────────── */
-type DocStatus = "Encrypted" | "Shared" | "Archived";
-type FileType = "pdf" | "docx" | "csv" | "folder";
+export default function ResearcherDocumentsPage() {
+  const [projects, setProjects]         = useState<Project[]>([]);
+  const [documents, setDocuments]       = useState<Document[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("ALL");
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
 
-interface Document {
-  id: string;
-  name: string;
-  fileType: FileType;
-  project: string;
-  owner: string;
-  dateModified: string;
-  size: string;
-  status: DocStatus;
-}
+  // Create modal
+  const [showModal, setShowModal]       = useState(false);
+  const [modalProjectId, setModalProjectId] = useState("");
+  const [newTitle, setNewTitle]         = useState("");
+  const [newContent, setNewContent]     = useState("");
+  const [newAccess, setNewAccess]       = useState<DocumentAccess>("TEAM");
+  const [creating, setCreating]         = useState(false);
+  const [createError, setCreateError]   = useState<string | null>(null);
 
-interface RecentFile {
-  id: string;
-  name: string;
-  fileType: FileType;
-  editedLabel: string;
-}
+  /* ── Load ───────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    async function load() {
+      try {
+        const projectList = await ProjectsService.getAll();
+        setProjects(projectList);
+        if (projectList.length > 0) setModalProjectId(projectList[0].id);
 
-/* ── Static data ─────────────────────────────────────────────────────────── */
-const RECENT_FILES: RecentFile[] = [
-  { id: "recent-1", name: "Project_Alpha_Requirements.pdf", fileType: "pdf",    editedLabel: "Edited 2h ago"    },
-  { id: "recent-2", name: "Q3_Financial_Review.docx",       fileType: "docx",   editedLabel: "Edited 5h ago"    },
-  { id: "recent-3", name: "Dataset_V2_Cleaned.csv",         fileType: "csv",    editedLabel: "Edited Yesterday" },
-];
+        // Fetch documents for all projects in parallel
+        const docResults = await Promise.all(
+          projectList.map(p => DocumentsService.getByProject(p.id).catch(() => [] as Document[]))
+        );
+        setDocuments(docResults.flat());
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load documents");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
-const ALL_DOCUMENTS: Document[] = [
-  {
-    id: "doc-1",
-    name: "Project_Alpha_Requirements.pdf",
-    fileType: "pdf",
-    project: "Alpha Development",
-    owner: "Dr. E. Vance",
-    dateModified: "Oct 24, 2023",
-    size: "2.4 MB",
-    status: "Encrypted",
-  },
-  {
-    id: "doc-2",
-    name: "Q3_Financial_Review.docx",
-    fileType: "docx",
-    project: "Finance Ops",
-    owner: "A. Sterling",
-    dateModified: "Oct 23, 2023",
-    size: "1.1 MB",
-    status: "Shared",
-  },
-  {
-    id: "doc-3",
-    name: "Dataset_V2_Cleaned.csv",
-    fileType: "csv",
-    project: "ML Training",
-    owner: "S. Chen",
-    dateModified: "Oct 20, 2023",
-    size: "45.8 MB",
-    status: "Encrypted",
-  },
-  {
-    id: "doc-4",
-    name: "Archived_Research_2022",
-    fileType: "folder",
-    project: "General",
-    owner: "System",
-    dateModified: "Dec 31, 2022",
-    size: "--",
-    status: "Archived",
-  },
-];
+  const visible = selectedProject === "ALL"
+    ? documents
+    : documents.filter(d => d.projectId === selectedProject);
 
-/* ── Status badge styles ─────────────────────────────────────────────────── */
-const STATUS_BADGE: Record<DocStatus, React.CSSProperties> = {
-  Encrypted: { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" },
-  Shared:    { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" },
-  Archived:  { background: "transparent", color: "#9e9e9e", border: "1px solid #e8e8e8" },
-};
-
-const STATUS_ICON: Record<DocStatus, React.ReactNode> = {
-  Encrypted: (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ marginRight: 4 }}>
-      <rect x="1.5" y="4.5" width="8" height="5.5" rx="1" />
-      <path d="M3.5 4.5V3.5a2 2 0 0 1 4 0v1" strokeLinecap="round" />
-    </svg>
-  ),
-  Shared: (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ marginRight: 4 }}>
-      <circle cx="5.5" cy="3.5" r="2" />
-      <path d="M1 9.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" strokeLinecap="round" />
-    </svg>
-  ),
-  Archived: (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ marginRight: 4 }}>
-      <rect x="1" y="3" width="9" height="7" rx="1" />
-      <path d="M1 3l1.5-2h6L10 3" strokeLinejoin="round" />
-      <line x1="4" y1="6.5" x2="7" y2="6.5" strokeLinecap="round" />
-    </svg>
-  ),
-};
-
-/* ── File type icons ─────────────────────────────────────────────────────── */
-function FileIcon({ type, size = 16 }: { type: FileType; size?: number }) {
-  if (type === "folder") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
-        <path d="M1 4.5C1 3.67 1.67 3 2.5 3H6l1.5 1.5H13.5C14.33 4.5 15 5.17 15 6v7c0 .83-.67 1.5-1.5 1.5h-11C1.67 14.5 1 13.83 1 13V4.5z" />
-      </svg>
-    );
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newTitle.trim() || !modalProjectId) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const body: CreateDocumentBody = {
+        title: newTitle.trim(),
+        content: newContent.trim() || undefined,
+        accessLevel: newAccess,
+      };
+      const created = await DocumentsService.create(modalProjectId, body);
+      setDocuments(prev => [created, ...prev]);
+      setShowModal(false);
+      setNewTitle("");
+      setNewContent("");
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create document");
+    } finally {
+      setCreating(false);
+    }
   }
-  if (type === "pdf") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
-        <path d="M3 1h7l3 3v11H3V1z" />
-        <path d="M10 1v3h3" />
-        <rect x="4.5" y="8.5" width="7" height="1.5" rx="0.5" fill="currentColor" stroke="none" opacity="0.5" />
-        <rect x="4.5" y="11" width="5" height="1.5" rx="0.5" fill="currentColor" stroke="none" opacity="0.5" />
-      </svg>
-    );
-  }
-  if (type === "csv") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
-        <rect x="1" y="1" width="14" height="14" rx="2" />
-        <line x1="1" y1="5.5" x2="15" y2="5.5" />
-        <line x1="1" y1="9.5" x2="15" y2="9.5" />
-        <line x1="5.5" y1="5.5" x2="5.5" y2="15" />
-        <line x1="10" y1="5.5" x2="10" y2="15" />
-      </svg>
-    );
-  }
-  /* docx */
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
-      <path d="M3 1h7l3 3v11H3V1z" />
-      <path d="M10 1v3h3" />
-      <line x1="5" y1="8" x2="11" y2="8" strokeLinecap="round" />
-      <line x1="5" y1="11" x2="9" y2="11" strokeLinecap="round" />
-    </svg>
-  );
-}
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Documents Page
-═══════════════════════════════════════════════════════════════════════════ */
-export default function DocumentsPage() {
-  const [search, setSearch] = useState("");
+  async function handleDelete(doc: Document) {
+    if (!confirm(`Delete "${doc.title}"?`)) return;
+    try {
+      await DocumentsService.delete(doc.projectId, doc.id);
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
 
-  const filtered = ALL_DOCUMENTS.filter((d) =>
-    d.name.toLowerCase().includes(search.toLowerCase()) ||
-    d.project.toLowerCase().includes(search.toLowerCase())
-  );
+  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading documents…</p>;
+  if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
     <div>
-      {/* ── Recent Files ──────────────────────────────────────────────────── */}
-      <div style={s.sectionHeader}>
-        <h2 style={s.sectionTitle}>Recent Files</h2>
-        <button id="btn-view-all" style={s.viewAllBtn}>
-          View All →
-        </button>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Documents</h1>
+          <p style={s.sub}>{documents.length} document{documents.length !== 1 ? "s" : ""} (AES-256 encrypted at rest)</p>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <select id="select-doc-project" style={s.select} value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}>
+            <option value="ALL">All Projects</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <button id="btn-new-doc" style={s.btnPrimary} onClick={() => setShowModal(true)}>
+            + New Document
+          </button>
+        </div>
       </div>
 
-      <div style={s.recentGrid}>
-        {RECENT_FILES.map((f) => (
-          <div key={f.id} id={f.id} style={s.recentCard}>
-            <span style={s.recentIcon}>
-              <FileIcon type={f.fileType} size={18} />
-            </span>
-            <p style={s.recentName}>{f.name}</p>
-            <p style={s.recentEdited}>{f.editedLabel}</p>
+      <div style={s.table}>
+        <div style={s.thead}>
+          {["Name", "Project", "Access", "Author", "Last Modified"].map(h => (
+            <span key={h} style={s.th}>{h}</span>
+          ))}
+          <span style={s.th}></span>
+        </div>
+        {visible.length === 0 ? (
+          <div style={s.empty}>No documents found. Create your first document above.</div>
+        ) : visible.map(doc => {
+          const projName = projects.find(p => p.id === doc.projectId)?.name ?? doc.projectId;
+          return (
+            <div key={doc.id} id={`doc-row-${doc.id}`} style={s.row}>
+              <span style={s.docName}>
+                <span style={s.lockIcon}>🔒</span>
+                {doc.title}
+              </span>
+              <span style={s.td}>{projName}</span>
+              <span style={s.td}>
+                <span style={{ ...s.accessBadge, ...accessStyle(doc.accessLevel) }}>{doc.accessLevel}</span>
+              </span>
+              <span style={s.td}>{doc.authorId.slice(0, 8)}…</span>
+              <span style={s.td}>{new Date(doc.updatedAt).toLocaleDateString()}</span>
+              <span style={s.td}>
+                <button
+                  id={`btn-delete-doc-${doc.id}`}
+                  style={s.deleteBtn}
+                  onClick={() => handleDelete(doc)}
+                  title="Delete"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Create Modal ─────────────────────────────────────────────────── */}
+      {showModal && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalHead}>
+              <span style={s.modalTitle}>New Document</span>
+              <button style={s.closeBtn} onClick={() => { setShowModal(false); setCreateError(null); }}>×</button>
+            </div>
+            <form onSubmit={handleCreate} style={s.modalForm}>
+              {createError && <div style={s.errorBanner}>{createError}</div>}
+              <div style={s.field}>
+                <label style={s.label}>Project *</label>
+                <select id="select-doc-create-project" style={s.input} value={modalProjectId}
+                  onChange={e => setModalProjectId(e.target.value)} required>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Title *</label>
+                <input id="input-doc-title" style={s.input} value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)} placeholder="e.g. Methodology Draft" required />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Access level</label>
+                <select id="select-doc-access" style={s.input} value={newAccess}
+                  onChange={e => setNewAccess(e.target.value as DocumentAccess)}>
+                  <option value="PRIVATE">Private (only me)</option>
+                  <option value="TEAM">Team (all team members)</option>
+                  <option value="PUBLIC">Public (all in tenant)</option>
+                </select>
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Content</label>
+                <textarea id="input-doc-content" style={{ ...s.input, minHeight: 100, resize: "vertical" as const }}
+                  value={newContent} onChange={e => setNewContent(e.target.value)}
+                  placeholder="Document content (will be encrypted at rest)" />
+              </div>
+              <div style={s.modalActions}>
+                <button type="button" style={s.btnSecondary} onClick={() => { setShowModal(false); setCreateError(null); }}>Cancel</button>
+                <button id="btn-create-doc" type="submit"
+                  style={{ ...s.btnPrimary, opacity: creating ? 0.6 : 1 }} disabled={creating}>
+                  {creating ? "Creating…" : "Create Document"}
+                </button>
+              </div>
+            </form>
           </div>
-        ))}
-
-        {/* New Document card */}
-        <button id="btn-new-document" style={s.newDocCard}>
-          <span style={s.newDocPlus}>+</span>
-          <span style={s.newDocLabel}>New Document</span>
-        </button>
-      </div>
-
-      {/* ── All Documents ─────────────────────────────────────────────────── */}
-      <div style={s.allDocsHeader}>
-        <h2 style={s.sectionTitle}>All Documents</h2>
-        <button id="btn-filter-docs" style={s.filterBtn}>
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-            <line x1="1" y1="3.5" x2="12" y2="3.5" />
-            <line x1="3" y1="6.5" x2="10" y2="6.5" />
-            <line x1="5" y1="9.5" x2="8"  y2="9.5" />
-          </svg>
-          Filter
-        </button>
-      </div>
-
-      {/* Table */}
-      <div style={s.tableWrap}>
-        <table id="all-documents-table" style={s.table}>
-          <thead>
-            <tr>
-              {["Name", "Project", "Owner", "Date Modified", "Size", "Status", "Actions"].map(
-                (col) => (
-                  <th key={col} style={s.th}>
-                    {col}
-                  </th>
-                )
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((doc) => (
-              <tr key={doc.id} id={doc.id} style={s.tr}>
-                {/* Name */}
-                <td style={s.td}>
-                  <span style={s.nameCell}>
-                    <span style={s.fileIconWrap}>
-                      <FileIcon type={doc.fileType} size={14} />
-                    </span>
-                    <span style={s.docName}>{doc.name}</span>
-                  </span>
-                </td>
-                {/* Project */}
-                <td style={{ ...s.td, color: "#9e9e9e" }}>{doc.project}</td>
-                {/* Owner */}
-                <td style={{ ...s.td, color: "#9e9e9e" }}>{doc.owner}</td>
-                {/* Date Modified */}
-                <td style={{ ...s.td, color: "#616161" }}>{doc.dateModified}</td>
-                {/* Size */}
-                <td style={{ ...s.td, fontVariantNumeric: "tabular-nums", color: "#9e9e9e", fontFamily: "monospace" }}>
-                  {doc.size}
-                </td>
-                {/* Status */}
-                <td style={s.td}>
-                  <span style={{ ...s.statusBadge, ...STATUS_BADGE[doc.status] }}>
-                    {STATUS_ICON[doc.status]}
-                    {doc.status}
-                  </span>
-                </td>
-                {/* Actions */}
-                <td style={s.td}>
-                  <div style={s.actionsWrap}>
-                    <button
-                      id={`btn-action-${doc.id}`}
-                      style={s.actionBtn}
-                      title="More actions"
-                    >
-                      •••
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
+function accessStyle(access: DocumentAccess): React.CSSProperties {
+  switch (access) {
+    case "PRIVATE": return { background: "#fce4ec", color: "#880e4f" };
+    case "TEAM":    return { background: "#e3f2fd", color: "#1565c0" };
+    default:        return { background: "#e8f5e9", color: "#2e7d32" };
+  }
+}
+
 /* ── Styles ─────────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
-  /* Section headers */
-  sectionHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-0.2px",
-  },
-  viewAllBtn: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#616161",
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-  },
-
-  /* Recent files grid */
-  recentGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 14,
-    marginBottom: 36,
-  },
-  recentCard: {
-    background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    padding: "18px 16px 16px",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-    cursor: "pointer",
-  },
-  recentIcon: {
-    color: "#616161",
-    display: "flex",
-  },
-  recentName: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#161616",
-    lineHeight: 1.4,
-    wordBreak: "break-word" as const,
-  },
-  recentEdited: {
-    fontSize: 12,
-    color: "#9e9e9e",
-    marginTop: "auto",
-  },
-
-  /* New Document card */
-  newDocCard: {
-    background: "transparent",
-    border: "1px dashed #d0d0d0",
-    borderRadius: 8,
-    padding: "18px 16px 16px",
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    cursor: "pointer",
-    minHeight: 110,
-  },
-  newDocPlus: {
-    fontSize: 22,
-    color: "#9e9e9e",
-    lineHeight: 1,
-  },
-  newDocLabel: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#9e9e9e",
-  },
-
-  /* All Documents section */
-  allDocsHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  filterBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#616161",
-    background: "transparent",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-
-  /* Table */
-  tableWrap: {
-    background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    overflow: "hidden" as const,
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse" as const,
-    fontSize: 13,
-  },
-  th: {
-    textAlign: "left" as const,
-    padding: "10px 16px",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#9e9e9e",
-    background: "#fafafa",
-    borderBottom: "1px solid #eeeeee",
-    whiteSpace: "nowrap" as const,
-  },
-  tr: {
-    borderBottom: "1px solid #f5f5f5",
-  },
-  td: {
-    padding: "12px 16px",
-    color: "#161616",
-    fontSize: 13,
-    verticalAlign: "middle" as const,
-  },
-  nameCell: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  fileIconWrap: {
-    color: "#616161",
-    display: "flex",
-    flexShrink: 0,
-  },
-  docName: {
-    fontWeight: 500,
-    color: "#161616",
-  },
-  statusBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "3px 10px",
-    borderRadius: 4,
-    fontSize: 12,
-    fontWeight: 500,
-    whiteSpace: "nowrap" as const,
-  },
-  actionsWrap: {
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  actionBtn: {
-    fontSize: 14,
-    color: "#9e9e9e",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: "2px 6px",
-    letterSpacing: 1,
-  },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#888888" },
+  select: { padding: "8px 12px", fontSize: 13, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", background: "#fff" },
+  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnSecondary: { padding: "10px 18px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  table: { background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" },
+  thead: { display: "grid", gridTemplateColumns: "2fr 1fr 80px 100px 120px 40px", gap: 0, padding: "12px 20px", borderBottom: "1px solid #f0f0f0", background: "#fafafa" },
+  th: { fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.6px", textTransform: "uppercase" as const },
+  row: { display: "grid", gridTemplateColumns: "2fr 1fr 80px 100px 120px 40px", gap: 0, padding: "14px 20px", borderBottom: "1px solid #f8f8f8", alignItems: "center" },
+  td: { fontSize: 13, color: "#424242" },
+  docName: { fontSize: 13, fontWeight: 500, color: "#161616", display: "flex", alignItems: "center", gap: 6 },
+  lockIcon: { fontSize: 11 },
+  accessBadge: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.3px" },
+  deleteBtn: { background: "none", border: "none", fontSize: 18, color: "#bbb", cursor: "pointer", padding: "0 4px" },
+  empty: { padding: "40px 20px", textAlign: "center" as const, color: "#888", fontSize: 13 },
+  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
+  modal: { background: "#ffffff", borderRadius: 10, padding: 28, width: "100%", maxWidth: 480 },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616" },
+  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" },
+  modalForm: { display: "flex", flexDirection: "column", gap: 14 },
+  modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
+  field: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
+  input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
+  errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
 };

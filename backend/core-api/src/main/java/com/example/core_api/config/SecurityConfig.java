@@ -22,6 +22,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final com.example.core_api.multitenancy.TenantFilter tenantFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -39,7 +40,9 @@ public class SecurityConfig {
                 // Everything else requires a valid JWT
                 .anyRequest().authenticated()
             )
-            // Run JwtAuthFilter before Spring's own username/password filter
+            // TenantFilter MUST run before JwtAuthFilter so X-Tenant-ID sets the schema context
+            // before JwtAuthFilter queries the user table in DB.
+            .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

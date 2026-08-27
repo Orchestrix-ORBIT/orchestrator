@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/auth";
 
 const NAV = [
   {
@@ -84,6 +85,12 @@ export default function ResourceDashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  function handleLogout() {
+    logout();
+    router.push("/");
+  }
 
   return (
     <div style={s.root}>
@@ -119,7 +126,7 @@ export default function ResourceDashboardLayout({
           })}
         </nav>
 
-        {/* Footer / Privacy & Role Badge (FR-AUTH-06) */}
+        {/* Footer / Privacy & Role Badge */}
         <div style={s.footer}>
           <div style={s.roleBox}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -128,6 +135,19 @@ export default function ResourceDashboardLayout({
             </div>
             <span style={s.roleSub}>FR-AUTH-06 Data Isolation</span>
           </div>
+          <button
+            id="btn-rm-logout"
+            type="button"
+            onClick={handleLogout}
+            style={s.logoutBtn}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
+              <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M12.5 7H4.5" strokeLinecap="round" />
+            </svg>
+            Sign Out
+          </button>
         </div>
       </aside>
 
@@ -144,8 +164,16 @@ export default function ResourceDashboardLayout({
           <div style={s.topbarRight}>
             <div style={s.topbarAvatar}>CK</div>
             <span style={{ fontSize: 13, fontWeight: 500, color: "#161616" }}>
-              Chalani K. (Operations)
+              Operations
             </span>
+            <button
+              id="btn-topbar-rm-logout"
+              type="button"
+              onClick={handleLogout}
+              style={s.topbarLogoutBtn}
+            >
+              Sign Out
+            </button>
           </div>
         </header>
 
@@ -326,5 +354,32 @@ const s: Record<string, React.CSSProperties> = {
     maxWidth: 1400,
     width: "100%",
     boxSizing: "border-box",
+  },
+  logoutBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 10px",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#f87171",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left" as const,
+    marginTop: 8,
+  },
+  topbarLogoutBtn: {
+    padding: "5px 10px",
+    borderRadius: 5,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#c62828",
+    background: "#fff0f0",
+    border: "1px solid #f5c6cb",
+    cursor: "pointer",
+    marginLeft: 6,
   },
 };
