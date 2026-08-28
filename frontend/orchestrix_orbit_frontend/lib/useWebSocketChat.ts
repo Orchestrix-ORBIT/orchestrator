@@ -15,8 +15,8 @@ export interface ChatMessageItem {
   createdAt: string;
 }
 
-const WS_URL = "http://localhost:8080/ws";
-const API_BASE = "http://localhost:8080";
+const WS_URL = process.env.NEXT_PUBLIC_CHAT_WS_URL ?? "http://localhost:8082/ws";
+const API_BASE = process.env.NEXT_PUBLIC_CHAT_API_URL ?? "http://localhost:8082";
 
 export function useWebSocketChat(projectId: string) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
