@@ -14,5 +14,8 @@ public class ResourceResponse {
     private String description;
     private UUID ownerId;
     private ResourceStatus status;
+    private String location;
+    private Integer maxDurationHours;
+    private String metadata;
     private OffsetDateTime createdAt;
 }

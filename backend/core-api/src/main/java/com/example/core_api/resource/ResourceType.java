@@ -5,5 +5,9 @@ public enum ResourceType {
     CPU,
     STORAGE,
     DATASET,
-    API_KEY
+    API_KEY,
+    COMPUTE,
+    INSTRUMENT,
+    ROOM,
+    SOFTWARE
 }
