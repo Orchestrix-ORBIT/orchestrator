@@ -31,5 +31,9 @@ dist/
 .vite/
 *.tsbuildinfo
 
+# Agent Skills
+.agents/
+skills-lock.json
+
 # Local Notes
 .project_notes/

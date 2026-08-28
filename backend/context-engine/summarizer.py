@@ -2,22 +2,20 @@
 summarizer.py — LangChain summarization chain using Google Gemini Flash.
 
 Strategy:
-  - ≤ 80 messages  → "stuff"      (single prompt, fast)
-  - >  80 messages → "map_reduce" (chunk → summarize each → combine)
+  - <= 80 messages -> "stuff" (single prompt, fast)
+  - >  80 messages -> "map_reduce" (chunk -> summarize each -> combine)
 """
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.chains.summarize import load_summarize_chain
-from langchain.schema import Document
-
+from langchain_core.prompts import PromptTemplate
 from config import GOOGLE_API_KEY
+
 
 # ── LLM ──────────────────────────────────────────────────────────────────────
 
 def _build_llm() -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+        model="gemini-3.5-flash-lite",
         google_api_key=GOOGLE_API_KEY,
         temperature=0.3,
     )
@@ -104,15 +102,41 @@ def _chunk_messages(messages: list[dict], chunk_size: int = 40) -> list[list[dic
     return [messages[i : i + chunk_size] for i in range(0, len(messages), chunk_size)]
 
 
+def _extract_text(res) -> str:
+    if hasattr(res, "content"):
+        content = res.content
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            texts = []
+            for item in content:
+                if isinstance(item, str):
+                    texts.append(item)
+                elif isinstance(item, dict) and "text" in item:
+                    texts.append(item["text"])
+            return "\n".join(texts)
+    return str(res)
+
+
 def summarize_messages(messages: list[dict]) -> dict:
     """
-    Summarize a list of chat message dicts.
+    Summarize a list of chat message dicts using LangChain & Gemini.
     Returns a dict with keys: summary, key_points, action_items, message_count, strategy.
     """
     import json
 
-    llm = _build_llm()
     message_count = len(messages)
+
+    if not GOOGLE_API_KEY or GOOGLE_API_KEY.startswith("YOUR_"):
+        return {
+            "summary": "Google Gemini API Key is missing. Please set GOOGLE_API_KEY in backend/context-engine/.env to enable AI summarization.",
+            "key_points": ["Set GOOGLE_API_KEY in backend/context-engine/.env"],
+            "action_items": ["Get free Gemini API Key from https://aistudio.google.com/app/apikey"],
+            "message_count": message_count,
+            "strategy": "missing_api_key",
+        }
+
+    llm = _build_llm()
 
     if message_count == 0:
         return {
@@ -123,34 +147,32 @@ def summarize_messages(messages: list[dict]) -> dict:
             "strategy": "none",
         }
 
-    # ── Stuff strategy (≤ 80 messages) ───────────────────────────────────────
+    # ── Stuff strategy (<= 80 messages) ───────────────────────────────────────
     if message_count <= 80:
         chat_text = _format_messages(messages)
-        doc = Document(page_content=chat_text)
-        chain = load_summarize_chain(
-            llm=llm,
-            chain_type="stuff",
-            prompt=STUFF_PROMPT,
-        )
-        result_text = chain.invoke([doc])["output_text"]
+        formatted_prompt = STUFF_PROMPT.format(text=chat_text)
+        res = llm.invoke(formatted_prompt)
+        result_text = _extract_text(res)
         strategy = "stuff"
 
     # ── Map-Reduce strategy (> 80 messages) ──────────────────────────────────
     else:
         chunks = _chunk_messages(messages, chunk_size=40)
-        docs = [Document(page_content=_format_messages(chunk)) for chunk in chunks]
-        chain = load_summarize_chain(
-            llm=llm,
-            chain_type="map_reduce",
-            map_prompt=MAP_PROMPT,
-            combine_prompt=COMBINE_PROMPT,
-        )
-        result_text = chain.invoke(docs)["output_text"]
+        chunk_summaries = []
+        for chunk in chunks:
+            chunk_text = _format_messages(chunk)
+            formatted_map = MAP_PROMPT.format(text=chunk_text)
+            res = llm.invoke(formatted_map)
+            chunk_summaries.append(_extract_text(res))
+        
+        combined_text = "\n\n".join(chunk_summaries)
+        formatted_combine = COMBINE_PROMPT.format(text=combined_text)
+        res = llm.invoke(formatted_combine)
+        result_text = _extract_text(res)
         strategy = "map_reduce"
 
     # ── Parse JSON output ────────────────────────────────────────────────────
     try:
-        # Strip any accidental markdown code fences
         clean = result_text.strip()
         if clean.startswith("```"):
             clean = clean.split("```")[1]
@@ -158,7 +180,6 @@ def summarize_messages(messages: list[dict]) -> dict:
                 clean = clean[4:]
         parsed = json.loads(clean.strip())
     except json.JSONDecodeError:
-        # Fallback: return raw text as summary
         parsed = {
             "summary": result_text.strip(),
             "key_points": [],
