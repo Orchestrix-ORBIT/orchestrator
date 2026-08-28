@@ -38,6 +38,24 @@ public class ResourceController {
         return resourceService.getResourceById(id);
     }
 
+    @PatchMapping("/{id}/status")
+    public ResourceResponse updateResourceStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateResourceStatusRequest request) {
+        return resourceService.updateResourceStatus(id, request.getStatus());
+    }
+
+    @GetMapping("/maintenance")
+    public List<ResourceMaintenance> getAllMaintenance() {
+        return resourceService.getAllMaintenance();
+    }
+
+    @PostMapping("/maintenance")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ResourceMaintenance createMaintenance(@RequestBody ResourceMaintenance maintenance) {
+        return resourceService.createMaintenance(maintenance);
+    }
+
     private UUID getAuthenticatedUserId() {
         User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         return user.getId();

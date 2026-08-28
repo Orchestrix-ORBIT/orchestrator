@@ -9,16 +9,43 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.example.core_api.auth.UserRepository;
+import com.example.core_api.auth.User;
+
 @Service
 @Transactional
 public class ResourceService {
 
     private final ResourceRepository resourceRepository;
     private final ResourceBookingRepository bookingRepository;
+    private final UserRepository userRepository;
+    private final ResourceMaintenanceRepository maintenanceRepository;
 
-    public ResourceService(ResourceRepository resourceRepository, ResourceBookingRepository bookingRepository) {
+    public ResourceService(ResourceRepository resourceRepository, 
+                           ResourceBookingRepository bookingRepository, 
+                           UserRepository userRepository,
+                           ResourceMaintenanceRepository maintenanceRepository) {
         this.resourceRepository = resourceRepository;
         this.bookingRepository = bookingRepository;
+        this.userRepository = userRepository;
+        this.maintenanceRepository = maintenanceRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ResourceMaintenance> getAllMaintenance() {
+        return maintenanceRepository.findAll();
+    }
+
+    public ResourceMaintenance createMaintenance(ResourceMaintenance maintenance) {
+        ResourceMaintenance saved = maintenanceRepository.save(maintenance);
+        // Automatically set resource status to MAINTENANCE ONLY if maintenance is active ("In Progress")
+        if (maintenance.getResourceId() != null && "In Progress".equalsIgnoreCase(maintenance.getStatus())) {
+            resourceRepository.findById(maintenance.getResourceId()).ifPresent(res -> {
+                res.setStatus(ResourceStatus.MAINTENANCE);
+                resourceRepository.save(res);
+            });
+        }
+        return saved;
     }
 
     public ResourceResponse createResource(CreateResourceRequest request, UUID ownerId) {
@@ -53,6 +80,14 @@ public class ResourceService {
     public ResourceResponse getResourceById(UUID id) {
         Resource resource = resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + id));
+        return mapToResourceResponse(resource);
+    }
+
+    public ResourceResponse updateResourceStatus(UUID id, ResourceStatus status) {
+        Resource resource = resourceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + id));
+        resource.setStatus(status);
+        resource = resourceRepository.save(resource);
         return mapToResourceResponse(resource);
     }
 
@@ -109,6 +144,22 @@ public class ResourceService {
     }
 
     private ResourceResponse mapToResourceResponse(Resource resource) {
+        String loc = null;
+        Integer maxHours = null;
+        String meta = resource.getMetadata();
+        if (meta != null) {
+            java.util.regex.Matcher locMatcher = java.util.regex.Pattern.compile("\"location\"\\s*:\\s*\"([^\"]+)\"").matcher(meta);
+            if (locMatcher.find()) {
+                loc = locMatcher.group(1);
+            }
+            java.util.regex.Matcher hoursMatcher = java.util.regex.Pattern.compile("\"maxDurationHours\"\\s*:\\s*(\\d+)").matcher(meta);
+            if (hoursMatcher.find()) {
+                try {
+                    maxHours = Integer.parseInt(hoursMatcher.group(1));
+                } catch (Exception ignored) {}
+            }
+        }
+
         return ResourceResponse.builder()
                 .id(resource.getId())
                 .name(resource.getName())
@@ -116,15 +167,23 @@ public class ResourceService {
                 .description(resource.getDescription())
                 .ownerId(resource.getOwnerId())
                 .status(resource.getStatus())
+                .location(loc)
+                .maxDurationHours(maxHours)
+                .metadata(resource.getMetadata())
                 .createdAt(resource.getCreatedAt())
                 .build();
     }
     
     private BookingResponse mapToBookingResponse(ResourceBooking booking) {
+        String resName = resourceRepository.findById(booking.getResourceId()).map(Resource::getName).orElse("Lab Asset");
+        String email = userRepository.findById(booking.getUserId()).map(User::getEmail).orElse(booking.getUserId().toString());
+
         return BookingResponse.builder()
                 .id(booking.getId())
                 .resourceId(booking.getResourceId())
+                .resourceName(resName)
                 .userId(booking.getUserId())
+                .userEmail(email)
                 .startTime(booking.getStartTime())
                 .endTime(booking.getEndTime())
                 .status(booking.getStatus())
