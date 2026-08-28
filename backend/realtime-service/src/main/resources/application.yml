@@ -6,9 +6,9 @@ spring:
     name: realtime-service
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/orchestrix_core?sslmode=disable}
-    username: ${SPRING_DATASOURCE_USERNAME:orchestrix_app}
-    password: ${SPRING_DATASOURCE_PASSWORD:app_secret_password}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.nqmitpyrheqqrcbkwwut.supabase.co:5432/postgres?sslmode=require}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:mmINekXXuCsuDloR}
     driver-class-name: org.postgresql.Driver
 
   jpa:
