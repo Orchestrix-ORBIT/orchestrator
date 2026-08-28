@@ -21,21 +21,44 @@ public class ResourceController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ResourceResponse createResource(@Valid @RequestBody CreateResourceRequest request) {
-        UUID ownerId = getAuthenticatedUserId();
-        return resourceService.createResource(request, ownerId);
+    public ResourceResponse createResource(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
+            @Valid @RequestBody CreateResourceRequest request) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            UUID ownerId = getAuthenticatedUserId();
+            return resourceService.createResource(request, ownerId);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping
     public List<ResourceResponse> getAllResources(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @RequestParam(required = false) ResourceType type,
             @RequestParam(required = false) ResourceStatus status) {
-        return resourceService.getAllResources(type, status);
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return resourceService.getAllResources(type, status);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping("/{id}")
-    public ResourceResponse getResourceById(@PathVariable UUID id) {
-        return resourceService.getResourceById(id);
+    public ResourceResponse getResourceById(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
+            @PathVariable UUID id) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return resourceService.getResourceById(id);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     private UUID getAuthenticatedUserId() {
