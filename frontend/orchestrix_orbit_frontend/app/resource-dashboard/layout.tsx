@@ -48,25 +48,6 @@ const NAV = [
     ),
   },
   {
-    href: "/resource-dashboard/analytics",
-    label: "Usage Analytics",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4">
-        <path d="M1.5 13.5h12" strokeLinecap="round" />
-        <path d="M3.5 10.5v-2M7.5 10.5v-6M11.5 10.5v-4" strokeLinecap="round" strokeWidth="1.6" />
-      </svg>
-    ),
-  },
-  {
-    href: "/resource-dashboard/policies",
-    label: "Allocation Policies",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4">
-        <path d="M7.5 1.5l5 2v4.5c0 3-2.5 5-5 6-2.5-1-5-3-5-6V3.5l5-2z" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
     href: "/resource-dashboard/notifications",
     label: "Notifications",
     icon: (

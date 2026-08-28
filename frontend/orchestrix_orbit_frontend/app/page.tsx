@@ -137,50 +137,7 @@ export default function Home() {
             </form>
           )}
 
-          {/* ── Quick Role Switcher for sprint review ──────────────────── */}
-          <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #eeeeee", display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#9e9e9e", letterSpacing: "0.6px", textTransform: "uppercase" }}>
-              DEMO ROLE PORTALS
-            </span>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <button
-                type="button"
-                id="portal-researcher"
-                onClick={() => router.push("/dashboard")}
-                style={{
-                  padding: "8px 10px",
-                  background: "#ffffff",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#161616",
-                  cursor: "pointer",
-                  textAlign: "center",
-                }}
-              >
-                🔬 Researcher Portal
-              </button>
-              <button
-                type="button"
-                id="portal-resource-manager"
-                onClick={() => router.push("/resource-dashboard")}
-                style={{
-                  padding: "8px 10px",
-                  background: "#161616",
-                  border: "1px solid #161616",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#ffffff",
-                  cursor: "pointer",
-                  textAlign: "center",
-                }}
-              >
-                ⚙️ Resource Manager
-              </button>
-            </div>
-          </div>
+
 
         </div>
       </div>

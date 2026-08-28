@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 
-interface ResourceNotification {
+interface NotificationItem {
   id: string;
   title: string;
-  category: "Booking Request" | "Collision Lock" | "Maintenance" | "Quota Alert";
+  category: "Task" | "Booking" | "AI Alert" | "Mention";
+  sender: string;
   time: string;
   read: boolean;
   details: string;
@@ -14,127 +15,99 @@ interface ResourceNotification {
   linkHref?: string;
 }
 
-const INITIAL_NOTIFS: ResourceNotification[] = [
+const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
-    id: "RN-1",
-    title: "Urgent Booking Request: Researcher requested Illumina NovaSeq 6000 Sequencer",
-    category: "Booking Request",
-    time: "5m ago",
+    id: "NOTIF-1",
+    title: "AI Action Item ready for review: 'Recalibrate thermal sensors'",
+    category: "AI Alert",
+    sender: "AI Context Engine (LangChain)",
+    time: "10m ago",
     read: false,
-    details: "Genomic Sequence Alignment project submitted booking request for Tomorrow (09:00 - 15:00). Requires manager approval.",
-    linkText: "Review Bookings →",
-    linkHref: "/resource-dashboard/bookings",
+    details: "LangChain NLP extracted an urgent calibration task from Alpha Protocol Sec 4.2 with 96% match confidence.",
+    linkText: "Review on Overview →",
+    linkHref: "/lead-dashboard",
   },
   {
-    id: "RN-2",
-    title: "Concurrency Lock Enforced: Overlapping H100 GPU attempt rejected",
-    category: "Collision Lock",
-    time: "45m ago",
+    id: "NOTIF-2",
+    title: "Resource Booking Confirmed: GPU Lab Workstation 3",
+    category: "Booking",
+    sender: "Resource Manager",
+    time: "1h ago",
     read: false,
-    details: "PostgreSQL row lock rejected overlapping request for NVIDIA H100 GPU in 280ms. Zero conflict.",
+    details: "Your reservation for Project Alpha Core (14:00 - 17:00) was locked with zero-conflict guarantee.",
     linkText: "View Schedule →",
-    linkHref: "/resource-dashboard/bookings",
+    linkHref: "/lead-dashboard/resources",
   },
   {
-    id: "RN-3",
-    title: "Scheduled Maintenance Active: Thermo Scientific Orbitrap Mass Spectrometer",
-    category: "Maintenance",
+    id: "NOTIF-3",
+    title: "Task Moved: TASK-106 moved to COMPLETED",
+    category: "Task",
+    sender: "Marcus N.",
     time: "2h ago",
     read: false,
-    details: "Downtime window active. Automated lockout applied to all booking APIs.",
-    linkText: "View Maintenance Logs →",
-    linkHref: "/resource-dashboard/maintenance",
+    details: "Marcus N. completed 'Initial workspace schema setup'. Project Alpha Core progress updated to 78%.",
+    linkText: "Open Task Board →",
+    linkHref: "/lead-dashboard/projects/1",
   },
   {
-    id: "RN-4",
-    title: "Quota Threshold Reached: Active Project reached 80% weekly GPU cap",
-    category: "Quota Alert",
-    time: "1d ago",
+    id: "NOTIF-4",
+    title: "You were mentioned in #alpha-core-general",
+    category: "Mention",
+    sender: "Dr. Aris",
+    time: "Yesterday",
     read: true,
-    details: "Research Project has utilized 38/48 allocated hours for NVIDIA H100 SXM5 GPU compute nodes this week.",
-    linkText: "Inspect Policies →",
-    linkHref: "/resource-dashboard/policies",
+    details: "@DK (Lead) - Chamber 3 calibration logs uploaded to S3. Ready for SNR statistical review.",
+    linkText: "Open Project Chat →",
+    linkHref: "/lead-dashboard/chat",
+  },
+  {
+    id: "NOTIF-5",
+    title: "New document draft uploaded: 'Q3 Consensus Protocol v1.0'",
+    category: "Task",
+    sender: "Shehara K.",
+    time: "2 days ago",
+    read: true,
+    details: "Shehara K. shared collaborative meeting minutes for committee review.",
+    linkText: "Open Documents →",
+    linkHref: "/lead-dashboard/documents",
   },
 ];
 
-import { api } from "@/lib/api";
+export default function NotificationsPage() {
+  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [filter, setFilter] = useState<"ALL" | "UNREAD" | "Task" | "Booking" | "AI Alert">("ALL");
 
-export default function ResourceNotificationsPage() {
-  const [notifs, setNotifs] = useState<ResourceNotification[]>(INITIAL_NOTIFS);
-  const [filter, setFilter] = useState<"ALL" | "UNREAD" | ResourceNotification["category"]>("ALL");
-  const [loading, setLoading] = useState(true);
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const loadNotifications = async () => {
-    setLoading(true);
-    try {
-      const data = await api.get<any[]>("/api/notifications");
-      if (data && data.length > 0) {
-        const mapped: ResourceNotification[] = data.map((n) => ({
-          id: n.id,
-          title: n.title || "Operations Alert",
-          category: (n.type as any) || "Booking Request",
-          time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
-          read: n.read ?? n.is_read ?? false,
-          details: n.message || "Operational system event recorded.",
-          linkText: n.type === "Maintenance" ? "View Maintenance Logs →" : "Review Bookings →",
-          linkHref: n.type === "Maintenance" ? "/resource-dashboard/maintenance" : "/resource-dashboard/bookings",
-        }));
-        setNotifs(mapped);
-      }
-    } catch (err) {
-      console.error("Failed to fetch notifications from DB:", err);
-    } finally {
-      setLoading(false);
-    }
+  const handleMarkAllAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const unreadCount = notifs.filter((n) => !n.read).length;
-
-  const handleMarkAllRead = async () => {
-    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-    try {
-      await api.patch("/api/notifications/read-all", {});
-    } catch (err) {
-      console.error("Failed to mark all read in DB:", err);
-    }
-  };
-
-  const handleToggleRead = async (id: string) => {
-    setNotifs((prev) =>
+  const handleToggleRead = (id: string) => {
+    setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
     );
-    try {
-      await api.patch(`/api/notifications/${id}/read`, {});
-    } catch (err) {
-      console.error("Failed to toggle read state in DB:", err);
-    }
   };
 
-  const filteredNotifs = notifs.filter((n) => {
+  const filteredNotifs = notifications.filter((n) => {
     if (filter === "ALL") return true;
     if (filter === "UNREAD") return !n.read;
     return n.category === filter;
   });
-
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading operational notifications…</p>;
 
   return (
     <div>
       {/* ── Page Header ────────────────────────────────────────────────────── */}
       <div style={s.headerRow}>
         <div>
-          <h1 style={s.pageTitle}>Operations Alerts & Notices</h1>
+          <h1 style={s.pageTitle}>Notifications & Inbox</h1>
           <p style={s.pageSub}>
-            Real-time alerts for booking approvals, race-condition rejections, and maintenance triggers.
+            Asynchronous task alerts, member mentions, and equipment booking notifications.
           </p>
         </div>
 
         {unreadCount > 0 && (
-          <button onClick={handleMarkAllRead} style={s.btnSecondary}>
+          <button onClick={handleMarkAllAsRead} style={s.btnSecondary}>
             ✓ Mark all as read
           </button>
         )}
@@ -143,30 +116,30 @@ export default function ResourceNotificationsPage() {
       {/* ── Metric Stat Cards ────────────────────────────────────────────────── */}
       <div style={s.statGrid}>
         <div style={s.statCard}>
-          <span style={s.statLabel}>UNREAD NOTICES</span>
+          <span style={s.statLabel}>UNREAD ALERTS</span>
           <span style={s.statValue}>{unreadCount}</span>
           <span style={s.statSub}>Requires attention</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>PENDING REQUESTS</span>
+          <span style={s.statLabel}>TASK UPDATES</span>
           <span style={s.statValue}>
-            {notifs.filter((n) => n.category === "Booking Request").length}
+            {notifications.filter((n) => n.category === "Task").length}
           </span>
-          <span style={s.statSub}>Awaiting manager review</span>
+          <span style={s.statSub}>Kanban activity</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>LOCK COLLISIONS BLOCKED</span>
+          <span style={s.statLabel}>BOOKING ALERTS</span>
           <span style={s.statValue}>
-            {notifs.filter((n) => n.category === "Collision Lock").length}
+            {notifications.filter((n) => n.category === "Booking").length}
           </span>
-          <span style={s.statSub}>Auto-rejected conflicts</span>
+          <span style={s.statSub}>Lab schedule events</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>DOWNTIME ALERTS</span>
+          <span style={s.statLabel}>AI SYNTHESIS ALERTS</span>
           <span style={s.statValue}>
-            {notifs.filter((n) => n.category === "Maintenance").length}
+            {notifications.filter((n) => n.category === "AI Alert").length}
           </span>
-          <span style={s.statSub}>Service lockout notices</span>
+          <span style={s.statSub}>LangChain extractions</span>
         </div>
       </div>
 
@@ -174,7 +147,7 @@ export default function ResourceNotificationsPage() {
       <div style={s.filterBar}>
         <div style={s.filterGroup}>
           <span style={s.filterLabel}>FILTER:</span>
-          {(["ALL", "UNREAD", "Booking Request", "Collision Lock", "Maintenance", "Quota Alert"] as const).map((cat) => (
+          {(["ALL", "UNREAD", "Task", "Booking", "AI Alert"] as const).map((cat) => (
             <button
               key={cat}
               onClick={() => setFilter(cat)}
@@ -184,7 +157,7 @@ export default function ResourceNotificationsPage() {
             </button>
           ))}
         </div>
-        <span style={s.countLabel}>{filteredNotifs.length} Alerts</span>
+        <span style={s.countLabel}>{filteredNotifs.length} Notifications</span>
       </div>
 
       {/* ── Notifications List Card ─────────────────────────────────────────── */}
@@ -192,8 +165,8 @@ export default function ResourceNotificationsPage() {
         <div style={s.notifList}>
           {filteredNotifs.length === 0 ? (
             <div style={s.emptyState}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#161616" }}>No notifications</p>
-              <p style={{ fontSize: 12, color: "#9e9e9e", marginTop: 4 }}>All operations alerts are cleared.</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#161616" }}>Inbox is clear</p>
+              <p style={{ fontSize: 12, color: "#9e9e9e", marginTop: 4 }}>No notifications matching this filter.</p>
             </div>
           ) : (
             filteredNotifs.map((item) => (
@@ -210,13 +183,13 @@ export default function ResourceNotificationsPage() {
                     <span
                       style={{
                         ...s.categoryBadge,
-                        ...(item.category === "Collision Lock"
-                          ? s.badgeCollision
-                          : item.category === "Maintenance"
-                          ? s.badgeMaint
-                          : item.category === "Booking Request"
-                          ? s.badgeReq
-                          : s.badgeQuota),
+                        ...(item.category === "AI Alert"
+                          ? s.badgeAi
+                          : item.category === "Booking"
+                          ? s.badgeBooking
+                          : item.category === "Mention"
+                          ? s.badgeMention
+                          : s.badgeTask),
                       }}
                     >
                       {item.category}
@@ -230,6 +203,10 @@ export default function ResourceNotificationsPage() {
                 <p style={s.notifDesc}>{item.details}</p>
 
                 <div style={s.notifBottom}>
+                  <span style={s.notifSender}>
+                    From: <strong>{item.sender}</strong>
+                  </span>
+
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     {item.linkHref && item.linkText && (
                       <Link href={item.linkHref} style={s.notifActionLink}>
@@ -287,13 +264,14 @@ const s: Record<string, React.CSSProperties> = {
   newDot: { color: "#161616", fontSize: 8 },
   notifTime: { fontSize: 11, color: "#9e9e9e" },
   notifDesc: { fontSize: 12, color: "#616161", lineHeight: 1.4 },
-  notifBottom: { display: "flex", justifyContent: "flex-end", alignItems: "center", paddingTop: 8, borderTop: "1px solid #f9f9f9" },
+  notifBottom: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid #f9f9f9" },
+  notifSender: { fontSize: 11, color: "#9e9e9e" },
   notifActionLink: { fontSize: 12, fontWeight: 600, color: "#161616", textDecoration: "none" },
-  btnToggleRead: { background: "none", border: "none", color: "#9e9e9e", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" as const },
-  categoryBadge: { fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 3, textTransform: "uppercase" as const, whiteSpace: "nowrap" as const, display: "inline-block", flexShrink: 0 },
-  badgeReq: { background: "#161616", color: "#ffffff" },
-  badgeCollision: { background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5" },
-  badgeMaint: { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
-  badgeQuota: { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" },
+  btnToggleRead: { background: "none", border: "none", color: "#9e9e9e", fontSize: 11, cursor: "pointer" },
+  categoryBadge: { fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase" as const },
+  badgeAi: { background: "#161616", color: "#ffffff" },
+  badgeBooking: { background: "#e8f5e9", color: "#2e7d32", border: "1px solid #c8e6c9" },
+  badgeTask: { background: "#f5f5f5", color: "#424242", border: "1px solid #e0e0e0" },
+  badgeMention: { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
   emptyState: { padding: "48px 24px", textAlign: "center" as const },
 };
