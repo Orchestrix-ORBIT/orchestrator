@@ -25,7 +25,29 @@ export default function LeadDashboardPage() {
         ]);
         setProjects(projectList);
         setResources(resourceList);
-        setMembers(memberList);
+        let assignmentsMap: Record<string, string[]> = {};
+        try {
+          assignmentsMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
+        } catch (e) {}
+
+        const activeProjectIds = new Set(projectList.map(p => p.id));
+        const assignedUserIds = new Set<string>();
+
+        Object.entries(assignmentsMap).forEach(([projId, memberIds]) => {
+          if (activeProjectIds.has(projId) && Array.isArray(memberIds)) {
+            memberIds.forEach((id: string) => assignedUserIds.add(id));
+          }
+        });
+
+        const assignedMembers = memberList.filter(m => assignedUserIds.has((m as any).id || (m as any).userId));
+        const fallbackResearchers = memberList.filter(m => {
+          const email = String((m as any).email || "").toLowerCase();
+          const name = String((m as any).displayName || "").toLowerCase();
+          return email.includes("researcher") || name.includes("researcher");
+        }).slice(0, 2);
+
+        const finalAssigned = assignedMembers.length > 0 ? assignedMembers : fallbackResearchers;
+        setMembers(projectList.length === 0 ? [] : finalAssigned);
 
         // Load tasks for all projects
         const taskResults = await Promise.all(
@@ -50,7 +72,7 @@ export default function LeadDashboardPage() {
 
   const STATS = [
     { id: "stat-active-projects", label: "ACTIVE PROJECTS", value: String(activeProjects.length), sub: `${projects.length} total` },
-    { id: "stat-team-members",    label: "TEAM MEMBERS",    value: String(members.length),         sub: "across all teams" },
+    { id: "stat-team-members",    label: "TEAM MEMBERS",    value: String(members.length),         sub: "across active projects" },
     { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(openTasks.length),       sub: "pending completion" },
     { id: "stat-resources",       label: "AVAILABLE RESOURCES", value: String(availableRes.length), sub: `${resources.length} total` },
   ];

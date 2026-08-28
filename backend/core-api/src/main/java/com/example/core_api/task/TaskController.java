@@ -20,23 +20,37 @@ public class TaskController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse createTask(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateTaskRequest request) {
-        return taskService.createTask(projectId, request);
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return taskService.createTask(projectId, request);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping
     public List<TaskResponse> getTasksByProject(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) UUID assigneeId) {
         
-        if (status != null) {
-            return taskService.getTasksByProjectAndStatus(projectId, status);
-        } else if (assigneeId != null) {
-            return taskService.getTasksByProjectAndAssignee(projectId, assigneeId);
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            if (status != null) {
+                return taskService.getTasksByProjectAndStatus(projectId, status);
+            } else if (assigneeId != null) {
+                return taskService.getTasksByProjectAndAssignee(projectId, assigneeId);
+            }
+            return taskService.getTasksByProject(projectId);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
         }
-        return taskService.getTasksByProject(projectId);
     }
 
     @GetMapping("/{taskId}")
@@ -48,17 +62,31 @@ public class TaskController {
 
     @PatchMapping("/{taskId}")
     public TaskResponse updateTask(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @PathVariable UUID taskId,
             @RequestBody UpdateTaskRequest request) {
-        return taskService.updateTask(taskId, request);
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return taskService.updateTask(taskId, request);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @DeleteMapping("/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTask(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId, 
             @PathVariable UUID taskId) {
-        taskService.deleteTask(taskId);
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            taskService.deleteTask(taskId);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 }

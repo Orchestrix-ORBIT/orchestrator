@@ -1,69 +1,57 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useWebSocketChat } from "@/lib/useWebSocketChat";
+import { getEmail, getTenantSlug } from "@/lib/auth";
 
 interface Channel {
   id: string;
+  projectId: string;
   name: string;
   project: string;
-  lastMessage: string;
-  sender: string;
-  time: string;
-  unreadCount: number;
-  members: string[];
 }
 
-const CHANNELS: Channel[] = [
-  {
-    id: "ch-1",
-    name: "#alpha-core-general",
-    project: "Project Alpha Core",
-    lastMessage: "Chamber 3 calibration logs uploaded to S3. Ready for SNR statistical review.",
-    sender: "Dr. Aris",
-    time: "11:24 AM",
-    unreadCount: 2,
-    members: ["DK (Lead)", "Dr. Aris", "Chalani K.", "Amara P."],
-  },
-  {
-    id: "ch-2",
-    name: "#nexus-consensus-enclave",
-    project: "Nexus Protocol",
-    lastMessage: "Drafted zero-knowledge interface definitions for isolated PostgreSQL sidecars.",
-    sender: "E. Chen",
-    time: "10:15 AM",
-    unreadCount: 0,
-    members: ["DK (Lead)", "E. Chen", "Shehara K."],
-  },
-  {
-    id: "ch-3",
-    name: "#security-audit-compliance",
-    project: "Beta Synthesis",
-    lastMessage: "All historical 2023 dataset hashes verified with zero cross-tenant leakage.",
-    sender: "Marcus N.",
-    time: "Yesterday",
-    unreadCount: 0,
-    members: ["DK (Lead)", "Marcus N.", "Amara P."],
-  },
-];
+import { ProjectsService } from "@/lib/services/projects";
+import { TeamsService } from "@/lib/services/teams";
 
 export default function ChatPage() {
-  const [selectedChannel, setSelectedChannel] = useState<Channel>(CHANNELS[0]);
-  const [messages, setMessages] = useState([
-    { id: "m1", sender: "Dr. Aris", text: "Chamber 3 telemetry over the last 72 hours shows a 1.4°C thermal drift.", time: "11:15 AM" },
-    { id: "m2", sender: "DK (Lead)", text: "Let's isolate Chamber 3 cryo-coolant sub-manifold before running Batch #44.", time: "11:18 AM" },
-    { id: "m3", sender: "Dr. Aris", text: "Agreed. Executing 4-point thermocouple calibration script now.", time: "11:24 AM" },
-  ]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [inputText, setInputText] = useState("");
   const [aiTriggered, setAiTriggered] = useState(false);
 
+  const currentUserEmail = getEmail() || "DK (Lead)";
+
+  // Load real projects and team members from database API
+  useEffect(() => {
+    ProjectsService.getAll()
+      .then((data) => {
+        setProjects(data);
+        if (data && data.length > 0) {
+          setSelectedChannel({
+            id: data[0].id,
+            projectId: data[0].id,
+            name: `#${data[0].name.toLowerCase().replace(/\s+/g, "-")}`,
+            project: data[0].name,
+          });
+        }
+      })
+      .catch((err) => console.warn("Could not fetch projects:", err));
+
+    TeamsService.getAllMembers()
+      .then((data) => setTeamMembers(data))
+      .catch((err) => console.warn("Could not fetch team members:", err));
+  }, []);
+
+  const activeProjectId = selectedChannel ? selectedChannel.projectId : "";
+  const { messages: liveMessages, isConnected, sendMessage } = useWebSocketChat(activeProjectId);
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: `m-${Date.now()}`, sender: "DK (Lead)", text: inputText, time: "Just now" },
-    ]);
+    if (!inputText.trim() || !selectedChannel) return;
+    sendMessage(inputText, currentUserEmail);
     setInputText("");
   };
 
@@ -75,35 +63,65 @@ export default function ChatPage() {
     }, 800);
   };
 
+  const allDisplayMessages = liveMessages.map((m) => ({
+    id: m.id,
+    senderName: m.senderName || "Researcher",
+    content: m.content,
+    createdAt: m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
+  }));
+
+  const channelList: Channel[] = projects.map((p) => ({
+    id: p.id,
+    projectId: p.id,
+    name: `#${p.name.toLowerCase().replace(/\s+/g, "-")}`,
+    project: p.name,
+  }));
+
+  const assignmentsMap = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("project_assigned_members") || "{}") : {};
+  let assignedMemberIds: string[] = selectedChannel ? (assignmentsMap[selectedChannel.projectId] || []) : [];
+
+  if (selectedChannel && assignedMemberIds.length === 0 && teamMembers.length > 0) {
+    const researchers = teamMembers.filter((m: any) => {
+      const role = String(m.role || "").toUpperCase();
+      const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
+      const email = String(m.email || m.userEmail || "").toLowerCase();
+      return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
+    });
+    assignedMemberIds = researchers.slice(0, 2).map((m: any) => m.id || m.userId);
+  }
+
+  const assignedProjectMembers = teamMembers.filter(m => assignedMemberIds.includes(m.id || m.userId));
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div suppressHydrationWarning />;
+  }
+
   return (
-    <div>
+    <div suppressHydrationWarning>
       {/* ── Page Header ────────────────────────────────────────────────────── */}
       <div style={s.headerRow}>
         <div>
           <h1 style={s.pageTitle}>Project Chat</h1>
-          <p style={s.pageSub}>Secure, real-time encrypted communication and AI context extraction (FR-COLLAB-01).</p>
+          <p style={s.pageSub}>Real-time STOMP WebSockets connected to PostgreSQL database (FR-COLLAB-01).</p>
         </div>
-
-        <button 
-          onClick={handleTriggerAiEngine}
-          style={aiTriggered ? s.btnTriggered : s.btnAiTrigger}
-          title="Send thread to Automated AI Context Engine for action item extraction"
-        >
-          {aiTriggered ? "Processing with LangChain..." : "⚡ Send Thread to AI Context Engine"}
-        </button>
       </div>
 
       {/* ── Metric Stat Cards ────────────────────────────────────────────────── */}
       <div style={s.statGrid}>
         <div style={s.statCard}>
           <span style={s.statLabel}>ACTIVE CHANNELS</span>
-          <span style={s.statValue}>{CHANNELS.length}</span>
-          <span style={s.statSub}>Encrypted project rooms</span>
+          <span style={s.statValue}>{projects.length}</span>
+          <span style={s.statSub}>Real database projects</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>ONLINE RESEARCHERS</span>
-          <span style={s.statValue}>5</span>
-          <span style={s.statSub}>WebSocket connected</span>
+          <span style={s.statLabel}>TEAM MEMBERS</span>
+          <span style={s.statValue}>{assignedProjectMembers.length}</span>
+          <span style={s.statSub}>{isConnected ? "WebSocket Connected" : "Connecting STOMP..."}</span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>SOCKET CIPHER</span>
@@ -111,9 +129,9 @@ export default function ChatPage() {
           <span style={s.statSub}>In-transit keystroke encryption</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>AI CONTEXT QUEUE</span>
-          <span style={s.statValue}>2</span>
-          <span style={s.statSub}>Threads analyzed</span>
+          <span style={s.statLabel}>DATABASE MESSAGES</span>
+          <span style={s.statValue}>{liveMessages.length}</span>
+          <span style={s.statSub}>Stored in PostgreSQL</span>
         </div>
       </div>
 
@@ -121,73 +139,109 @@ export default function ChatPage() {
       <div style={s.chatLayout}>
         {/* Left: Channels List */}
         <div style={s.channelsCard}>
-          <p style={s.sectionLabel}>PROJECT CHANNELS</p>
+          <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #eeeeee" }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.6px", textTransform: "uppercase" }}>PROJECT CHANNELS</span>
+          </div>
+
           <div style={s.channelList}>
-            {CHANNELS.map((ch) => {
-              const active = selectedChannel.id === ch.id;
-              return (
-                <div
-                  key={ch.id}
-                  onClick={() => setSelectedChannel(ch)}
-                  style={active ? s.channelItemActive : s.channelItem}
-                >
-                  <div style={s.channelTop}>
-                    <span style={active ? s.chNameActive : s.chName}>{ch.name}</span>
-                    <span style={s.chTime}>{ch.time}</span>
+            {channelList.length === 0 ? (
+              <div style={{ padding: "30px 16px", textAlign: "center", color: "#9e9e9e", fontSize: 12 }}>
+                No active project channels
+              </div>
+            ) : (
+              channelList.map((ch) => {
+                const active = selectedChannel?.id === ch.id;
+                return (
+                  <div
+                    key={ch.id}
+                    onClick={() => setSelectedChannel(ch)}
+                    style={active ? s.channelItemActive : s.channelItem}
+                  >
+                    <div style={s.channelTop}>
+                      <span style={active ? s.chNameActive : s.chName}>{ch.name}</span>
+                    </div>
+                    <span style={s.chProject}>{ch.project}</span>
                   </div>
-                  <p style={s.chLastMsg}>{ch.lastMessage}</p>
-                  <span style={s.chProject}>{ch.project}</span>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
         {/* Right: Active Chat Conversation Box */}
         <div style={s.conversationCard}>
-          {/* Conversation Header */}
-          <div style={s.convHeader}>
-            <div>
-              <h3 style={s.convTitle}>{selectedChannel.name}</h3>
-              <p style={s.convSub}>{selectedChannel.project} • {selectedChannel.members.join(", ")}</p>
-            </div>
-
-            <div style={s.lockPill}>
-              <span style={s.greenDot}>●</span> End-to-End Encrypted
-            </div>
-          </div>
-
-          {/* Messages Stream */}
-          <div style={s.messagesBox}>
-            {messages.map((m) => {
-              const isMe = m.sender === "DK (Lead)";
-              return (
-                <div key={m.id} style={isMe ? s.msgRowMe : s.msgRowThem}>
-                  <div style={isMe ? s.bubbleMe : s.bubbleThem}>
-                    <div style={s.msgHeader}>
-                      <strong style={isMe ? s.senderMe : s.senderThem}>{m.sender}</strong>
-                      <span style={s.msgTime}>{m.time}</span>
-                    </div>
-                    <p style={s.msgText}>{m.text}</p>
-                  </div>
+          {selectedChannel ? (
+            <>
+              {/* Conversation Header */}
+              <div style={s.convHeader}>
+                <div>
+                  <h3 style={s.convTitle}>{selectedChannel.name}</h3>
+                  <p style={s.convSub}>{selectedChannel.project} • {assignedProjectMembers.length > 0 ? assignedProjectMembers.map(m => m.displayName || m.email).join(", ") : "No assigned project members"}</p>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Message Input Box */}
-          <form onSubmit={handleSendMessage} style={s.inputRow}>
-            <input
-              type="text"
-              placeholder={`Message ${selectedChannel.name}...`}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              style={s.msgInput}
-            />
-            <button type="submit" style={s.btnSend}>
-              Send
-            </button>
-          </form>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={s.lockPill}>
+                    <span style={{ fontSize: 8, color: isConnected ? "#2e7d32" : "#ed6c02" }}>●</span>{" "}
+                    {isConnected ? "STOMP WebSocket Live" : "Connecting..."}
+                  </div>
+                  <button 
+                    id="btn-summarize-ai"
+                    onClick={handleTriggerAiEngine}
+                    style={aiTriggered ? s.btnTriggered : s.summarizeBtn}
+                    title="Send thread to Automated AI Context Engine for action item extraction"
+                  >
+                    {aiTriggered ? "Processing with LangChain..." : "⚡ Summarize with AI"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages Stream */}
+              <div style={s.messagesBox}>
+                {allDisplayMessages.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#9e9e9e", fontSize: 13 }}>
+                    💬 No messages in <strong>{selectedChannel.name}</strong> yet.<br />
+                    Type a message below to broadcast live over WebSockets and save to PostgreSQL database!
+                  </div>
+                ) : (
+                  allDisplayMessages.map((m) => {
+                    const isMe = m.senderName === currentUserEmail || m.senderName === "DK (Lead)" || m.senderName === "You";
+                    return (
+                      <div key={m.id} style={isMe ? s.msgRowMe : s.msgRowThem}>
+                        <div style={isMe ? s.bubbleMe : s.bubbleThem}>
+                          <div style={s.msgHeader}>
+                            <strong style={isMe ? s.senderMe : s.senderThem}>{m.senderName}</strong>
+                            <span style={s.msgTime}>{m.createdAt}</span>
+                          </div>
+                          <p style={s.msgText}>{m.content}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Message Input Box */}
+              <form onSubmit={handleSendMessage} style={s.inputRow}>
+                <input
+                  type="text"
+                  placeholder={`Message ${selectedChannel.name}...`}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  style={s.msgInput}
+                />
+                <button type="submit" style={s.btnSend}>
+                  Send
+                </button>
+              </form>
+            </>
+          ) : (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 40, textAlign: "center", color: "#9e9e9e" }}>
+              <span style={{ fontSize: 36, marginBottom: 12 }}>📁</span>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#161616", marginBottom: 6 }}>No Project Selected</h3>
+              <p style={{ fontSize: 13, maxWidth: 320, marginBottom: 16 }}>Create a project in your workspace to enable real-time WebSocket chat rooms.</p>
+              <Link href="/lead-dashboard/projects" style={{ background: "#161616", color: "#ffffff", padding: "8px 16px", borderRadius: 4, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Create Your First Project</Link>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -280,15 +334,6 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
   },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#9e9e9e",
-    letterSpacing: "0.6px",
-    textTransform: "uppercase" as const,
-    padding: "16px 20px 12px",
-    borderBottom: "1px solid #eeeeee",
-  },
   channelList: {
     display: "flex",
     flexDirection: "column",
@@ -329,18 +374,6 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
     color: "#161616",
-  },
-  chTime: {
-    fontSize: 11,
-    color: "#9e9e9e",
-  },
-  chLastMsg: {
-    fontSize: 12,
-    color: "#616161",
-    lineHeight: 1.4,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
   },
   chProject: {
     fontSize: 11,
@@ -384,10 +417,6 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 5,
-  },
-  greenDot: {
-    fontSize: 8,
-    color: "#2e7d32",
   },
   messagesBox: {
     flex: 1,
@@ -469,5 +498,20 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
+  },
+  summarizeBtn: {
+    padding: "6px 14px",
+    background: "#ffffff",
+    border: "1px solid #e0e0e0",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#1c1c1c",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+    transition: "all 0.15s ease",
   },
 };

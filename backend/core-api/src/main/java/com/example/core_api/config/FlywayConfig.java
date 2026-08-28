@@ -16,17 +16,25 @@ import javax.sql.DataSource;
 @Configuration
 public class FlywayConfig {
 
-    // These read from application.yml → spring.flyway.*
-    @Value("${spring.flyway.locations}")
+    @Value("${spring.datasource.url:jdbc:postgresql://127.0.0.1:5432/orchestrix_core?sslmode=disable}")
+    private String url;
+
+    @Value("${spring.datasource.username:orchestrix_app}")
+    private String username;
+
+    @Value("${spring.datasource.password:app_secret_password}")
+    private String password;
+
+    @Value("${spring.flyway.locations:classpath:db/migration/public}")
     private String locations;
 
-    @Value("${spring.flyway.schemas}")
+    @Value("${spring.flyway.schemas:public}")
     private String schemas;
 
     @Bean
-    public Flyway flyway(DataSource dataSource) {
+    public Flyway flyway() {
         Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
+                .dataSource(url, username, password)
                 .locations(locations)           // classpath:db/migration/public
                 .schemas(schemas)               // public
                 .baselineOnMigrate(true)        // safe for existing databases

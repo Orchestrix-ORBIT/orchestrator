@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ProjectsService, type Project, type CreateProjectBody } from "@/lib/services/projects";
 
+import { TeamsService } from "@/lib/services/teams";
+
 export default function LeadProjectsPage() {
   const [projects, setProjects]       = useState<Project[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -14,12 +16,35 @@ export default function LeadProjectsPage() {
   const [creating, setCreating]       = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [availableMembers, setAvailableMembers] = useState<any[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+
   useEffect(() => {
     ProjectsService.getAll()
       .then(setProjects)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+
+    // Fetch workspace members for assignment using TeamsService (includes headers)
+    TeamsService.getAllMembers()
+      .then(members => {
+        const researchers = members.filter((m: any) => {
+          const role = String(m.role || "").toUpperCase();
+          const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
+          const email = String(m.email || m.userEmail || "").toLowerCase();
+          return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
+        });
+        setAvailableMembers(researchers);
+      })
+      .catch(() => {});
   }, []);
+
+  function toggleMember(userId: string) {
+    setSelectedMemberIds(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -29,9 +54,22 @@ export default function LeadProjectsPage() {
     try {
       const body: CreateProjectBody = { name: newName.trim(), description: newDesc.trim() || undefined };
       const created = await ProjectsService.create(body);
-      setProjects(prev => [created, ...prev]);
+
+      // Save assigned member IDs to localStorage mapping
+      try {
+        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
+        storedMap[created.id] = selectedMemberIds;
+        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
+      } catch (err) {
+        console.error("Failed to save project member assignments:", err);
+      }
+
+      const assigned = availableMembers.filter(m => selectedMemberIds.includes(m.id || m.userId));
+      const createdWithMembers = { ...created, assignedMembers: assigned };
+
+      setProjects(prev => [createdWithMembers, ...prev]);
       setShowModal(false);
-      setNewName(""); setNewDesc("");
+      setNewName(""); setNewDesc(""); setSelectedMemberIds([]);
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
@@ -111,8 +149,87 @@ export default function LeadProjectsPage() {
               </div>
               <div style={s.field}>
                 <label style={s.label}>Description</label>
-                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 80, resize: "vertical" as const }}
+                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }}
                   value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Project goals and scope" />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Assign Members (Researchers)</label>
+                
+                {/* Selected Member Chips / Tags */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: selectedMemberIds.length > 0 ? 8 : 0 }}>
+                  {selectedMemberIds.map(id => {
+                    const member = availableMembers.find(m => (m.id || m.userId) === id);
+                    if (!member) return null;
+                    const name = member.displayName || member.userDisplayName || member.email;
+                    return (
+                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
+                        {name}
+                        <button
+                          type="button"
+                          onClick={() => toggleMember(id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#1e40af", fontWeight: 700, fontSize: 14, padding: 0, lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Search Input with Dropdown Suggestions */}
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    style={s.input}
+                    placeholder="Search researcher by name or email..."
+                    value={memberSearchQuery}
+                    onChange={e => setMemberSearchQuery(e.target.value)}
+                  />
+                  {memberSearchQuery.trim() !== "" && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
+                      {availableMembers
+                        .filter(m => {
+                          const id = m.id || m.userId;
+                          if (selectedMemberIds.includes(id)) return false;
+                          const q = memberSearchQuery.toLowerCase();
+                          const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                          const email = (m.email || m.userEmail || "").toLowerCase();
+                          return name.includes(q) || email.includes(q);
+                        })
+                        .map(m => {
+                          const id = m.id || m.userId;
+                          const name = m.displayName || m.userDisplayName || m.email;
+                          return (
+                            <div
+                              key={id}
+                              onClick={() => {
+                                toggleMember(id);
+                                setMemberSearchQuery("");
+                              }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f8f8f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
+                            >
+                              <span>{name}</span>
+                              <span style={{ fontSize: 11, color: "#888" }}>{m.email}</span>
+                            </div>
+                          );
+                        })}
+                      {availableMembers.filter(m => {
+                        const id = m.id || m.userId;
+                        if (selectedMemberIds.includes(id)) return false;
+                        const q = memberSearchQuery.toLowerCase();
+                        const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                        const email = (m.email || m.userEmail || "").toLowerCase();
+                        return name.includes(q) || email.includes(q);
+                      }).length === 0 && (
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#888", textAlign: "center" }}>
+                          No matching researchers found
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={s.modalActions}>
                 <button type="button" style={s.btnSecondary} onClick={() => { setShowModal(false); setCreateError(null); }}>Cancel</button>

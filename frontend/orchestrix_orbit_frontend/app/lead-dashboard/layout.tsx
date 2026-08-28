@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 export default function LeadDashboardLayout({
@@ -7,8 +8,18 @@ export default function LeadDashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div style={{ minHeight: "100vh", background: "#f5f5f5" }} suppressHydrationWarning />;
+  }
+
   return (
-    <div style={s.root}>
+    <div style={s.root} suppressHydrationWarning>
       {/* ── Fixed Sidebar ────────────────────────────────────────────────── */}
       <Sidebar />
 
