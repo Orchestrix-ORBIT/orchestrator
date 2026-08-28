@@ -1,0 +1,278 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ProjectsService, type Project, type CreateProjectBody } from "@/lib/services/projects";
+
+import { TeamsService } from "@/lib/services/teams";
+
+export default function LeadProjectsPage() {
+  const [projects, setProjects]       = useState<Project[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
+  const [showModal, setShowModal]     = useState(false);
+  const [newName, setNewName]         = useState("");
+  const [newDesc, setNewDesc]         = useState("");
+  const [creating, setCreating]       = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const [availableMembers, setAvailableMembers] = useState<any[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+
+  useEffect(() => {
+    ProjectsService.getAll()
+      .then(setProjects)
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+
+    // Fetch workspace members for assignment using TeamsService (includes headers)
+    TeamsService.getAllMembers()
+      .then(members => {
+        const researchers = members.filter((m: any) => {
+          const role = String(m.role || "").toUpperCase();
+          const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
+          const email = String(m.email || m.userEmail || "").toLowerCase();
+          return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
+        });
+        setAvailableMembers(researchers);
+      })
+      .catch(() => {});
+  }, []);
+
+  function toggleMember(userId: string) {
+    setSelectedMemberIds(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const body: CreateProjectBody = { name: newName.trim(), description: newDesc.trim() || undefined };
+      const created = await ProjectsService.create(body);
+
+      // Save assigned member IDs to localStorage mapping
+      try {
+        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
+        storedMap[created.id] = selectedMemberIds;
+        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
+      } catch (err) {
+        console.error("Failed to save project member assignments:", err);
+      }
+
+      const assigned = availableMembers.filter(m => selectedMemberIds.includes(m.id || m.userId));
+      const createdWithMembers = { ...created, assignedMembers: assigned };
+
+      setProjects(prev => [createdWithMembers, ...prev]);
+      setShowModal(false);
+      setNewName(""); setNewDesc(""); setSelectedMemberIds([]);
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create project");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this project and all its tasks/documents?")) return;
+    try {
+      await ProjectsService.delete(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
+
+  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading projects…</p>;
+  if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
+
+  return (
+    <div>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Projects</h1>
+          <p style={s.sub}>{projects.length} projects · {projects.filter(p => p.status === "ACTIVE").length} active</p>
+        </div>
+        <button id="btn-new-project" style={s.btnPrimary} onClick={() => setShowModal(true)}>
+          + New Project
+        </button>
+      </div>
+
+      <div style={s.grid}>
+        {projects.map(p => (
+          <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
+            <div style={s.cardTop}>
+              <span style={{ ...s.badge, ...(p.status === "ACTIVE" ? s.activeStyle : s.archivedStyle) }}>
+                {p.status}
+              </span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Link id={`btn-view-project-${p.id}`}
+                  href={`/lead-dashboard/projects/${p.id}`}
+                  style={s.viewBtn}>
+                  Open →
+                </Link>
+                <button id={`btn-delete-project-${p.id}`}
+                  style={s.deleteBtn}
+                  onClick={() => handleDelete(p.id)}>×</button>
+              </div>
+            </div>
+            <h3 style={s.cardName}>{p.name}</h3>
+            <p style={s.cardDesc}>{p.description || "No description"}</p>
+            <p style={s.cardDate}>Created {new Date(p.createdAt).toLocaleDateString()}</p>
+          </div>
+        ))}
+        {projects.length === 0 && (
+          <div style={s.empty}>
+            <p>No projects yet.</p>
+            <button style={s.btnPrimary} onClick={() => setShowModal(true)}>Create your first project</button>
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalHead}>
+              <span style={s.modalTitle}>New Project</span>
+              <button style={s.closeBtn} onClick={() => { setShowModal(false); setCreateError(null); }}>×</button>
+            </div>
+            <form onSubmit={handleCreate} style={s.modalForm}>
+              {createError && <div style={s.errorBanner}>{createError}</div>}
+              <div style={s.field}>
+                <label style={s.label}>Project name *</label>
+                <input id="input-project-name" style={s.input} value={newName}
+                  onChange={e => setNewName(e.target.value)} placeholder="e.g. Neural Interface Study" required />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Description</label>
+                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }}
+                  value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Project goals and scope" />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Assign Members (Researchers)</label>
+                
+                {/* Selected Member Chips / Tags */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: selectedMemberIds.length > 0 ? 8 : 0 }}>
+                  {selectedMemberIds.map(id => {
+                    const member = availableMembers.find(m => (m.id || m.userId) === id);
+                    if (!member) return null;
+                    const name = member.displayName || member.userDisplayName || member.email;
+                    return (
+                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
+                        {name}
+                        <button
+                          type="button"
+                          onClick={() => toggleMember(id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#1e40af", fontWeight: 700, fontSize: 14, padding: 0, lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Search Input with Dropdown Suggestions */}
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    style={s.input}
+                    placeholder="Search researcher by name or email..."
+                    value={memberSearchQuery}
+                    onChange={e => setMemberSearchQuery(e.target.value)}
+                  />
+                  {memberSearchQuery.trim() !== "" && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
+                      {availableMembers
+                        .filter(m => {
+                          const id = m.id || m.userId;
+                          if (selectedMemberIds.includes(id)) return false;
+                          const q = memberSearchQuery.toLowerCase();
+                          const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                          const email = (m.email || m.userEmail || "").toLowerCase();
+                          return name.includes(q) || email.includes(q);
+                        })
+                        .map(m => {
+                          const id = m.id || m.userId;
+                          const name = m.displayName || m.userDisplayName || m.email;
+                          return (
+                            <div
+                              key={id}
+                              onClick={() => {
+                                toggleMember(id);
+                                setMemberSearchQuery("");
+                              }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f8f8f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
+                            >
+                              <span>{name}</span>
+                              <span style={{ fontSize: 11, color: "#888" }}>{m.email}</span>
+                            </div>
+                          );
+                        })}
+                      {availableMembers.filter(m => {
+                        const id = m.id || m.userId;
+                        if (selectedMemberIds.includes(id)) return false;
+                        const q = memberSearchQuery.toLowerCase();
+                        const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                        const email = (m.email || m.userEmail || "").toLowerCase();
+                        return name.includes(q) || email.includes(q);
+                      }).length === 0 && (
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#888", textAlign: "center" }}>
+                          No matching researchers found
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={s.modalActions}>
+                <button type="button" style={s.btnSecondary} onClick={() => { setShowModal(false); setCreateError(null); }}>Cancel</button>
+                <button id="btn-create-project" type="submit"
+                  style={{ ...s.btnPrimary, opacity: creating ? 0.6 : 1 }} disabled={creating}>
+                  {creating ? "Creating…" : "Create Project"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const s: Record<string, React.CSSProperties> = {
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#888888" },
+  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnSecondary: { padding: "10px 18px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
+  card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 20, display: "flex", flexDirection: "column", gap: 8 },
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  badge: { fontSize: 10, fontWeight: 700, letterSpacing: "0.5px", padding: "3px 8px", borderRadius: 4 },
+  activeStyle: { background: "#e8f5e9", color: "#2e7d32" },
+  archivedStyle: { background: "#f5f5f5", color: "#757575" },
+  viewBtn: { fontSize: 12, color: "#161616", fontWeight: 600, textDecoration: "none", padding: "4px 8px", border: "1px solid #d0d0d0", borderRadius: 4 },
+  deleteBtn: { background: "none", border: "none", fontSize: 18, color: "#bbb", cursor: "pointer", padding: "0 4px" },
+  cardName: { fontSize: 15, fontWeight: 600, color: "#161616", margin: 0 },
+  cardDesc: { fontSize: 13, color: "#616161", lineHeight: 1.5, margin: 0 },
+  cardDate: { fontSize: 11, color: "#aaa", margin: 0, marginTop: 4 },
+  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#888", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
+  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
+  modal: { background: "#ffffff", borderRadius: 10, padding: 28, width: "100%", maxWidth: 480 },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616" },
+  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" },
+  modalForm: { display: "flex", flexDirection: "column", gap: 16 },
+  modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
+  field: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
+  input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
+  errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
+};

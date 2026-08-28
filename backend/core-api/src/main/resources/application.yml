@@ -3,14 +3,16 @@ spring:
     name: core-api
 
   datasource:
-    # Reads database connection parameters from environment variables
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:orchestrator_db}
-    username: ${DB_USERNAME:orchestrix_app}
-    password: ${DB_PASSWORD}
+    # Reads database connection parameters with explicit SPRING_DATASOURCE_* overrides to avoid OS env collisions
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.nqmitpyrheqqrcbkwwut.supabase.co:5432/postgres?sslmode=require}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:mmINekXXuCsuDloR}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
+      data-source-properties:
+        sslmode: require
 
   flyway:
     enabled: false                             # ← Managed manually in FlywayConfig.java
@@ -30,11 +32,11 @@ spring:
 multitenancy:
   tenant-migrations-path: classpath:db/tenant
 
-# JWT Configuration — reads from environment variables
+# JWT Configuration — reads from environment variables with safe default
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:My32ByteSuperSecretKeyForJWTAuth2026!}
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # Default: 24 hours (86400000 ms)
 
 # AES-256 Encryption Configuration
 encryption:
-  secret-key: ${ENCRYPTION_SECRET_KEY}
+  secret-key: ${ENCRYPTION_SECRET_KEY:My32ByteSuperSecretKeyForAES256!}

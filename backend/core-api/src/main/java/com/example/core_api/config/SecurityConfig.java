@@ -22,6 +22,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final com.example.core_api.multitenancy.TenantFilter tenantFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -32,14 +33,17 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints — no token needed
-                .requestMatchers("/api/auth/**", "/api/admin/tenants/**", "/error").permitAll()
+                .requestMatchers("/api/auth/**", "/api/admin/tenants/**", "/ws/**", "/api/chat/**", "/api/projects/**", "/error").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/team/**").permitAll()
                 // Team management — role updates and member removal require ADMIN
                 .requestMatchers(HttpMethod.PATCH, "/api/team/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/team/**").hasRole("ADMIN")
                 // Everything else requires a valid JWT
                 .anyRequest().authenticated()
             )
-            // Run JwtAuthFilter before Spring's own username/password filter
+            // TenantFilter MUST run before JwtAuthFilter so X-Tenant-ID sets the schema context
+            // before JwtAuthFilter queries the user table in DB.
+            .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -48,9 +52,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-ID"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Authorization", "X-Tenant-ID"));
         configuration.setAllowCredentials(true);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -2,29 +2,141 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { saveAuthData, getDashboardPath } from "@/lib/auth";
+
+/*
+ * HOW THE AUTH FLOW WORKS (teaching note):
+ *
+ * 1. User fills in email + password + organization slug and clicks Sign In
+ * 2. We call POST http://localhost:8080/api/auth/login
+ *    - Body: { email, password }
+ *    - Header: X-Tenant-ID: <tenantSlug>  ← tells Spring Boot which org's DB schema to use
+ * 3. Spring Boot validates credentials (BCrypt), returns JSON:
+ *    { token: "eyJ...", email: "x@lab.com", role: "ROLE_MEMBER" }
+ * 4. We save token + role + email + tenantSlug to localStorage
+ * 5. lib/api.ts automatically reads localStorage and adds the headers on every future request
+ * 6. getDashboardPath(role) picks the right URL based on the role
+ */
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 type Tab = "signin" | "signup";
 
 export default function Home() {
-  const [tab, setTab]           = useState<Tab>("signin");
-  const [siEmail, setSiEmail]   = useState("");
-  const [siPass, setSiPass]     = useState("");
-  const [suName, setSuName]     = useState("");
-  const [suEmail, setSuEmail]   = useState("");
-  const [suPass, setSuPass]     = useState("");
-  const [suConf, setSuConf]     = useState("");
+  const [tab, setTab]             = useState<Tab>("signin");
+
+  // Sign-in state
+  const [siEmail, setSiEmail]     = useState("");
+  const [siPass, setSiPass]       = useState("");
+  const [siTenant, setSiTenant]   = useState("");
+
+  // Sign-up state
+  const [suName, setSuName]       = useState("");
+  const [suEmail, setSuEmail]     = useState("");
+  const [suPass, setSuPass]       = useState("");
+  const [suConf, setSuConf]       = useState("");
+  const [suTenant, setSuTenant]   = useState("");
+
+  // Shared UI state
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+
   const router = useRouter();
 
-  function handleSignIn(e: React.FormEvent) {
+  /* ── Sign In ──────────────────────────────────────────────────────────── */
+  async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: POST /api/auth/login → receive JWT → redirect to dashboard
-    router.push("/dashboard");
+    setError(null);
+    setLoading(true);
+
+    try {
+      /*
+       * Step 1: Call the Spring Boot login endpoint.
+       * We use native fetch here (not lib/api.ts) because we don't have a token yet.
+       * lib/api.ts is for authenticated calls — we need the token first to get in.
+       *
+       * The X-Tenant-ID header tells Spring Boot:
+       * "Look up this user in the 'org_<tenantSlug>' PostgreSQL schema."
+       */
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-ID": siTenant.trim() || "myorg",
+        },
+        body: JSON.stringify({ email: siEmail.trim(), password: siPass }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Invalid credentials");
+      }
+
+      /*
+       * Step 2: Parse the response.
+       * Backend returns: { token: "eyJ...", email: "...", role: "ROLE_MEMBER" }
+       */
+      const data = await res.json() as { token: string; email: string; role: string };
+
+      /*
+       * Step 3: Save to localStorage.
+       * From now on, lib/api.ts will read these and attach them to every request.
+       */
+      saveAuthData(data.token, data.role, data.email, siTenant.trim());
+
+      /*
+       * Step 4: Redirect based on role.
+       * ROLE_ADMIN / ROLE_OWNER → /lead-dashboard
+       * ROLE_MEMBER / ROLE_GUEST → /dashboard/researcher
+       */
+      router.push(getDashboardPath(data.role, data.email));
+
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleSignUp(e: React.FormEvent) {
+  /* ── Sign Up ──────────────────────────────────────────────────────────── */
+  async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: POST /api/auth/register → redirect to sign-in
-    setTab("signin");
+    setError(null);
+
+    if (suPass !== suConf) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-ID": suTenant.trim(),
+        },
+        body: JSON.stringify({
+          email: suEmail.trim(),
+          password: suPass,
+          displayName: suName.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Registration failed");
+      }
+
+      // Registration succeeded — redirect to sign-in so user can log in
+      setTab("signin");
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -54,6 +166,7 @@ export default function Home() {
           {/* Tabs */}
           <div style={s.tabRow}>
             <button
+              type="button"
               id="tab-signin"
               style={tab === "signin" ? s.tabOn : s.tabOff}
               onClick={() => setTab("signin")}
@@ -61,6 +174,7 @@ export default function Home() {
               Sign in
             </button>
             <button
+              type="button"
               id="tab-signup"
               style={tab === "signup" ? s.tabOn : s.tabOff}
               onClick={() => setTab("signup")}
@@ -77,6 +191,22 @@ export default function Home() {
                 <p style={s.sub}>Sign in to continue to your workspace</p>
               </div>
 
+              {/* Error banner — shown if the API returns an error */}
+              {error && (
+                <div id="signin-error" style={s.errorBanner}>
+                  {error}
+                </div>
+              )}
+
+              {/*
+               * Organization Slug — this becomes the X-Tenant-ID header.
+               * It maps to a PostgreSQL schema (e.g. "research-lab" → schema "org_research-lab").
+               * Users must know their org's slug to log in.
+               */}
+              <Field id="si-tenant" label="Organization" type="text"
+                placeholder="your-org-slug"
+                value={siTenant} onChange={setSiTenant} />
+
               <Field id="si-email" label="Email address" type="email"
                 placeholder="you@institution.edu"
                 value={siEmail} onChange={setSiEmail} />
@@ -85,14 +215,14 @@ export default function Home() {
                 placeholder="Enter your password"
                 value={siPass} onChange={setSiPass} />
 
-              <button id="btn-signin" type="submit" style={s.btnPrimary}>
-                Sign in
+              <button id="btn-signin" type="submit" style={{...s.btnPrimary, opacity: loading ? 0.6 : 1}} disabled={loading}>
+                {loading ? "Signing in…" : "Sign in"}
               </button>
 
               <p style={s.switchLine}>
                 Don&apos;t have an account?{" "}
                 <button type="button" id="switch-signup" style={s.switchBtn}
-                  onClick={() => setTab("signup")}>
+                  onClick={() => { setTab("signup"); setError(null); }}>
                   Sign up
                 </button>
               </p>
@@ -106,6 +236,16 @@ export default function Home() {
                 <h1 style={s.heading}>Create account</h1>
                 <p style={s.sub}>Join your research workspace</p>
               </div>
+
+              {error && (
+                <div id="signup-error" style={s.errorBanner}>
+                  {error}
+                </div>
+              )}
+
+              <Field id="su-tenant" label="Organization" type="text"
+                placeholder="your-org-slug"
+                value={suTenant} onChange={setSuTenant} />
 
               <Field id="su-name" label="Full name" type="text"
                 placeholder="Dr. Jane Smith"
@@ -123,14 +263,14 @@ export default function Home() {
                 placeholder="Repeat your password"
                 value={suConf} onChange={setSuConf} />
 
-              <button id="btn-signup" type="submit" style={s.btnPrimary}>
-                Create account
+              <button id="btn-signup" type="submit" style={{...s.btnPrimary, opacity: loading ? 0.6 : 1}} disabled={loading}>
+                {loading ? "Creating account…" : "Create account"}
               </button>
 
               <p style={s.switchLine}>
                 Already have an account?{" "}
                 <button type="button" id="switch-signin" style={s.switchBtn}
-                  onClick={() => setTab("signin")}>
+                  onClick={() => { setTab("signin"); setError(null); }}>
                   Sign in
                 </button>
               </p>
@@ -169,12 +309,23 @@ function Field({
   );
 }
 
-/* ── Styles ─────────────────────────────────────────────────────────────── */
+/* ── Styles ───────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
   page: {
     display: "flex",
     minHeight: "100vh",
     fontFamily: "var(--font)",
+  },
+
+  /* Error banner — shown when sign-in or sign-up fails */
+  errorBanner: {
+    padding: "10px 14px",
+    background: "#fff0f0",
+    border: "1px solid #f5c6cb",
+    borderRadius: 6,
+    fontSize: 13,
+    color: "#c62828",
+    lineHeight: 1.5,
   },
 
   /* Left brand panel */
