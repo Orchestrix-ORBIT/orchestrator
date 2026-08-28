@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useWebSocketChat } from "@/lib/useWebSocketChat";
 import { getEmail, getTenantSlug } from "@/lib/auth";
+import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
 
 interface Channel {
   id: string;
@@ -16,6 +17,13 @@ export default function ChatPage() {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string>("");
   const [inputValue, setInputValue] = useState("");
+
+  // ── Summarization state ──────────────────────────────────────────────────
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const currentUserEmail = getEmail() || "Researcher";
 
@@ -52,6 +60,51 @@ export default function ChatPage() {
     if (!inputValue.trim() || !activeProjectId) return;
     sendMessage(inputValue, currentUserEmail);
     setInputValue("");
+  };
+
+  // ── Summarization handlers ────────────────────────────────────────────────
+  const handleToggleSelectionMode = () => {
+    setSelectionMode((prev) => !prev);
+    setSelectedIds(new Set());
+    setSummaryResult(null);
+    setSummaryError(null);
+  };
+
+  const handleToggleMessageSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSummarize = async () => {
+    if (selectedIds.size === 0) return;
+    const selected = liveMessages
+      .filter((m) => selectedIds.has(m.id))
+      .map((m) => ({
+        senderName: m.senderName || "Researcher",
+        content: m.content,
+        createdAt: m.createdAt,
+      }));
+
+    setSummarizing(true);
+    setSummaryError(null);
+    setSummaryResult(null);
+    try {
+      const result = await summarizeMessages(
+        selected,
+        activeProjectId,
+        getTenantSlug() || "myorg"
+      );
+      setSummaryResult(result);
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+    } catch (err: any) {
+      setSummaryError(err.message ?? "Summarization failed. Is the Context Engine running?");
+    } finally {
+      setSummarizing(false);
+    }
   };
 
   const allDisplayMessages = liveMessages.map((m) => ({
@@ -109,8 +162,15 @@ export default function ChatPage() {
               {isConnected ? "STOMP WebSocket Live" : "Connecting..."}
             </span>
           </div>
-          <button id="btn-summarize-ai" style={s.summarizeBtn}>
-            ⚡ Summarize with AI
+          <button
+            id="btn-summarize-ai"
+            style={{
+              ...s.summarizeBtn,
+              ...(selectionMode ? { background: "#161616", color: "#fff", borderColor: "#161616" } : {}),
+            }}
+            onClick={handleToggleSelectionMode}
+          >
+            {selectionMode ? "✕ Cancel Selection" : "⚡ Summarize with AI"}
           </button>
         </div>
 
@@ -134,9 +194,17 @@ export default function ChatPage() {
           ) : (
             allDisplayMessages.map((msg) => {
               const isMe = msg.senderName === currentUserEmail || msg.senderName === "You" || msg.senderName === "ME";
+              const isSelected = selectedIds.has(msg.id);
+              const rowStyle: React.CSSProperties = {
+                ...(isMe ? s.msgRowMe : s.msgRow),
+                ...(selectionMode ? { cursor: "pointer", borderRadius: 8, padding: "4px", background: isSelected ? "#f0f4ff" : "transparent" } : {}),
+              };
               if (isMe) {
                 return (
-                  <div key={msg.id} style={s.msgRowMe}>
+                  <div key={msg.id} style={rowStyle} onClick={selectionMode ? () => handleToggleMessageSelect(msg.id) : undefined}>
+                    {selectionMode && (
+                      <input type="checkbox" checked={isSelected} readOnly style={{ marginLeft: 4, accentColor: "#4f46e5" }} />
+                    )}
                     <div style={s.msgMetaMe}>
                       <span style={s.msgTimeMe}>{msg.createdAt}</span>
                       <span style={s.msgSenderMe}>{msg.senderName}</span>
@@ -147,7 +215,10 @@ export default function ChatPage() {
                 );
               }
               return (
-                <div key={msg.id} style={s.msgRow}>
+                <div key={msg.id} style={rowStyle} onClick={selectionMode ? () => handleToggleMessageSelect(msg.id) : undefined}>
+                  {selectionMode && (
+                    <input type="checkbox" checked={isSelected} readOnly style={{ marginRight: 4, accentColor: "#4f46e5" }} />
+                  )}
                   <div style={s.avatarOther}>{msg.initials}</div>
                   <div style={s.msgContent}>
                     <div style={s.msgMeta}>
@@ -185,6 +256,81 @@ export default function ChatPage() {
           </form>
         )}
       </div>
+
+      {/* ── Floating selection toolbar ──────────────────────────────────── */}
+      {selectionMode && selectedIds.size > 0 && (
+        <div style={s.selectionToolbar}>
+          <span style={s.selectionCount}>{selectedIds.size} message{selectedIds.size > 1 ? "s" : ""} selected</span>
+          <button style={s.selectionClearBtn} onClick={() => setSelectedIds(new Set())}>Clear</button>
+          <button
+            id="btn-run-summarize"
+            style={s.selectionSummarizeBtn}
+            onClick={handleSummarize}
+            disabled={summarizing}
+          >
+            {summarizing ? "Summarizing..." : "Summarize →"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Summary Error Banner ────────────────────────────────────────── */}
+      {summaryError && (
+        <div style={s.errorBanner}>
+          ⚠️ {summaryError}
+          <button style={s.errorClose} onClick={() => setSummaryError(null)}>✕</button>
+        </div>
+      )}
+
+      {/* ── Summary Modal ───────────────────────────────────────────────── */}
+      {summaryResult && (
+        <div style={s.modalOverlay} onClick={() => setSummaryResult(null)}>
+          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>📄 AI Summary</div>
+              <div style={s.modalMeta}>{summaryResult.message_count} messages · {summaryResult.strategy}</div>
+              <button style={s.modalClose} onClick={() => setSummaryResult(null)}>✕</button>
+            </div>
+
+            <div style={s.modalBody}>
+              <p style={s.summaryText}>{summaryResult.summary}</p>
+
+              {summaryResult.key_points.length > 0 && (
+                <div style={s.modalSection}>
+                  <div style={s.modalSectionTitle}>🔑 Key Points</div>
+                  <ul style={s.modalList}>
+                    {summaryResult.key_points.map((kp, i) => (
+                      <li key={i} style={s.modalListItem}>{kp}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {summaryResult.action_items.length > 0 && (
+                <div style={s.modalSection}>
+                  <div style={s.modalSectionTitle}>✅ Action Items</div>
+                  <ul style={s.modalList}>
+                    {summaryResult.action_items.map((ai, i) => (
+                      <li key={i} style={s.modalListItem}>{ai}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div style={s.modalFooter}>
+              <button
+                style={s.modalCopyBtn}
+                onClick={() => navigator.clipboard.writeText(
+                  `Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`
+                )}
+              >
+                📋 Copy
+              </button>
+              <button style={s.modalCloseBtn} onClick={() => setSummaryResult(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -461,5 +607,190 @@ const s: Record<string, React.CSSProperties> = {
   enterHint: {
     fontSize: 11,
     color: "#9e9e9e",
+  },
+
+  // ── Summarization UI styles ───────────────────────────────────────────────
+  selectionToolbar: {
+    position: "fixed" as const,
+    bottom: 80,
+    left: "50%",
+    transform: "translateX(-50%)",
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    background: "#161616",
+    color: "#fff",
+    borderRadius: 40,
+    padding: "10px 20px",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
+    zIndex: 200,
+    animation: "fadeInUp 0.2s ease",
+  },
+  selectionCount: {
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#e0e0e0",
+  },
+  selectionClearBtn: {
+    padding: "5px 12px",
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#ccc",
+    background: "transparent",
+    border: "1px solid #444",
+    borderRadius: 20,
+    cursor: "pointer",
+  },
+  selectionSummarizeBtn: {
+    padding: "6px 18px",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#161616",
+    background: "#fff",
+    border: "none",
+    borderRadius: 20,
+    cursor: "pointer",
+  },
+  errorBanner: {
+    position: "fixed" as const,
+    bottom: 140,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "#fff3e0",
+    border: "1px solid #ffb74d",
+    borderRadius: 8,
+    padding: "10px 16px",
+    fontSize: 13,
+    color: "#e65100",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    zIndex: 200,
+    maxWidth: 500,
+  },
+  errorClose: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#e65100",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  modalOverlay: {
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 400,
+    padding: 24,
+  },
+  modalBox: {
+    background: "#fff",
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 560,
+    maxHeight: "80vh",
+    display: "flex",
+    flexDirection: "column" as const,
+    overflow: "hidden",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+  },
+  modalHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "18px 20px 14px",
+    borderBottom: "1px solid #f0f0f0",
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#161616",
+    flex: 1,
+  },
+  modalMeta: {
+    fontSize: 11,
+    color: "#9e9e9e",
+    background: "#f5f5f5",
+    borderRadius: 20,
+    padding: "2px 10px",
+  },
+  modalClose: {
+    background: "none",
+    border: "none",
+    fontSize: 16,
+    cursor: "pointer",
+    color: "#9e9e9e",
+    padding: 4,
+  },
+  modalBody: {
+    flex: 1,
+    overflowY: "auto" as const,
+    padding: "20px 24px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 20,
+  },
+  summaryText: {
+    fontSize: 14,
+    lineHeight: 1.7,
+    color: "#424242",
+    margin: 0,
+    padding: "14px 16px",
+    background: "#f9f9f9",
+    borderRadius: 8,
+    borderLeft: "3px solid #4f46e5",
+  },
+  modalSection: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 8,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#161616",
+    letterSpacing: "0.2px",
+  },
+  modalList: {
+    margin: 0,
+    paddingLeft: 20,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 6,
+  },
+  modalListItem: {
+    fontSize: 13,
+    lineHeight: 1.6,
+    color: "#424242",
+  },
+  modalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    padding: "14px 20px",
+    borderTop: "1px solid #f0f0f0",
+  },
+  modalCopyBtn: {
+    padding: "7px 16px",
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#4f46e5",
+    background: "#f0f0ff",
+    border: "1px solid #c7d2fe",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  modalCloseBtn: {
+    padding: "7px 16px",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#fff",
+    background: "#161616",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
   },
 };
