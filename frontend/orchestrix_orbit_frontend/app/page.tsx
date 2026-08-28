@@ -62,7 +62,7 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Tenant-ID": siTenant.trim(),
+          "X-Tenant-ID": siTenant.trim() || "myorg",
         },
         body: JSON.stringify({ email: siEmail.trim(), password: siPass }),
       });

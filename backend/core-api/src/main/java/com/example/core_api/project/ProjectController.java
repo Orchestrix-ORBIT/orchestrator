@@ -29,8 +29,16 @@ public class ProjectController {
     }
 
     @GetMapping
-    public List<ProjectResponse> getAllProjects() {
-        return projectService.getAllProjects();
+    public List<ProjectResponse> getAllProjects(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId
+    ) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return projectService.getAllProjects();
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping("/{id}")

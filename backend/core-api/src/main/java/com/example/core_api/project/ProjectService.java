@@ -38,7 +38,7 @@ public class ProjectService {
         return mapToResponse(project);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ProjectResponse> getAllProjects() {
         return projectRepository.findAll().stream()
                 .map(this::mapToResponse)

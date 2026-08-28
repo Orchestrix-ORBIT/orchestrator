@@ -28,93 +28,9 @@ const PROJECTS_MAP: Record<string, ProjectMeta> = {
   "3": { id: "3", name: "Beta Synthesis", status: "COMPLETED" },
 };
 
-const INITIAL_TASKS: TaskItem[] = [
-  {
-    id: "TASK-101",
-    title: "Quantum decoherence noise measurement",
-    description: "Run statistical signal-to-noise ratio tests on quantum channel simulation datasets.",
-    status: "TODO",
-    assignee: "DK",
-    priority: "HIGH",
-    dueDate: "Aug 20, 2026",
-    isAiGenerated: true,
-  },
-  {
-    id: "TASK-102",
-    title: "Draft localized key distribution protocol",
-    description: "Write preliminary mathematical proof for AES-256 session token key exchange.",
-    status: "TODO",
-    assignee: "SK",
-    priority: "MEDIUM",
-    dueDate: "Aug 22, 2026",
-  },
-  {
-    id: "TASK-103",
-    title: "Benchmark containerized DB isolation",
-    description: "Perform load and latency tests for single-tenant PostgreSQL instance queries.",
-    status: "IN_PROGRESS",
-    assignee: "CK",
-    priority: "HIGH",
-    dueDate: "Aug 19, 2026",
-  },
-  {
-    id: "TASK-104",
-    title: "LangChain context chunking optimization",
-    description: "Improve prompt pipeline to prevent token truncation during chat batch summarization.",
-    status: "IN_PROGRESS",
-    assignee: "DK",
-    priority: "MEDIUM",
-    dueDate: "Aug 21, 2026",
-  },
-  {
-    id: "TASK-105",
-    title: "Peer review on cryptographic proof",
-    description: "Review security assertions with university cryptography advisor before pre-print.",
-    status: "REVIEW",
-    assignee: "AP",
-    priority: "HIGH",
-    dueDate: "Aug 18, 2026",
-  },
-  {
-    id: "TASK-106",
-    title: "Initial workspace schema setup",
-    description: "Provisioned PostgreSQL schema and tables with strict multi-tenant boundary checks.",
-    status: "COMPLETED",
-    assignee: "MN",
-    priority: "LOW",
-    dueDate: "Aug 14, 2026",
-  },
-];
-
-const COMPLETED_PROJECT_TASKS: TaskItem[] = [
-  {
-    id: "TASK-301",
-    title: "Historical data ingestion & indexing",
-    description: "Archived all historical telemetry data into cold storage with encrypted SHA-256 checksums.",
-    status: "COMPLETED",
-    assignee: "AP",
-    priority: "HIGH",
-    dueDate: "Oct 10, 2023",
-  },
-  {
-    id: "TASK-302",
-    title: "Final security audit & pre-print publication",
-    description: "Completed peer review validation and published technical pre-print report.",
-    status: "COMPLETED",
-    assignee: "MN",
-    priority: "MEDIUM",
-    dueDate: "Oct 12, 2023",
-  },
-  {
-    id: "TASK-303",
-    title: "Legacy pipeline deprecation",
-    description: "Decommissioned v1 data pipelines and transferred active workers to main cluster.",
-    status: "COMPLETED",
-    assignee: "DK",
-    priority: "LOW",
-    dueDate: "Oct 08, 2023",
-  },
-];
+import { useEffect } from "react";
+import { ProjectsService } from "@/lib/services/projects";
+import { TasksService } from "@/lib/services/tasks";
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "TODO", title: "To Do" },
@@ -131,23 +47,16 @@ export default function ProjectWorkspacePage({
   const resolvedParams = use(params);
   const projectId = resolvedParams.id;
 
-  const currentProject = PROJECTS_MAP[projectId] || {
-    id: projectId,
-    name: `Project ${projectId}`,
-    status: projectId === "3" ? "COMPLETED" : "ACTIVE",
-  };
+  const [project, setProject] = useState<any>(null);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const isCompletedProject = currentProject.status === "COMPLETED";
-
-  const [tasks, setTasks] = useState<TaskItem[]>(
-    isCompletedProject ? COMPLETED_PROJECT_TASKS : INITIAL_TASKS
-  );
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [selectedAiTask, setSelectedAiTask] = useState<TaskItem | null>(null);
   const [titleInput, setTitleInput] = useState("");
   const [descInput, setDescInput] = useState("");
-  const [assigneeInput, setAssigneeInput] = useState("DK");
+  const [assigneeInput, setAssigneeInput] = useState("Researcher");
   const [priorityInput, setPriorityInput] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
   const [columnInput, setColumnInput] = useState<TaskStatus>("TODO");
 
@@ -155,42 +64,91 @@ export default function ProjectWorkspacePage({
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [proj, taskList] = await Promise.all([
+          ProjectsService.getById(projectId).catch(() => ({ id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" })),
+          TasksService.getByProject(projectId).catch(() => []),
+        ]);
+        setProject(proj);
+
+        const mappedTasks: TaskItem[] = (taskList as any[]).map((t: any) => {
+          let uiStatus: TaskStatus = "TODO";
+          if (t.status === "DONE" || t.status === "COMPLETED") uiStatus = "COMPLETED";
+          else if (t.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
+          else if (t.status === "BLOCKED" || t.status === "REVIEW") uiStatus = "REVIEW";
+
+          return {
+            id: t.id,
+            title: t.title,
+            description: t.description || "",
+            status: uiStatus,
+            assignee: t.assigneeId ? "Researcher" : "Unassigned",
+            priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
+            dueDate: t.dueDate || (t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "Active"),
+          };
+        });
+        setTasks(mappedTasks);
+      } catch (err) {
+        console.error("Failed to load project details:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [projectId]);
+
+  const currentProject = project || { id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" };
+  const isCompletedProject = currentProject.status === "COMPLETED";
+
   // Progress
   const totalCount = tasks.length;
-  const completedCount = isCompletedProject
-    ? tasks.length
-    : tasks.filter((t) => t.status === "COMPLETED").length;
-  const progressPercent = isCompletedProject
-    ? 100
-    : totalCount > 0
-    ? Math.round((completedCount / totalCount) * 100)
-    : 0;
+  const completedCount = tasks.filter((t) => t.status === "COMPLETED").length;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isCompletedProject || !titleInput.trim()) return;
 
-    const newTask: TaskItem = {
-      id: `TASK-${Date.now().toString().slice(-3)}`,
-      title: titleInput,
-      description: descInput,
-      status: columnInput,
-      assignee: assigneeInput,
-      priority: priorityInput,
-      dueDate: "Aug 25, 2026",
-    };
+    try {
+      const backendStatus = columnInput === "COMPLETED" ? "DONE" : (columnInput === "REVIEW" ? "BLOCKED" : columnInput);
+      const created = await TasksService.create(projectId, {
+        title: titleInput.trim(),
+        description: descInput.trim() || undefined,
+        priority: (priorityInput === "HIGH" ? "HIGH" : priorityInput === "MEDIUM" ? "MEDIUM" : "LOW") as any,
+      });
 
-    setTasks((prev) => [newTask, ...prev]);
-    setTitleInput("");
-    setDescInput("");
-    setShowNewTaskModal(false);
+      const newTask: TaskItem = {
+        id: created.id,
+        title: created.title,
+        description: created.description || "",
+        status: columnInput,
+        assignee: assigneeInput || "Researcher",
+        priority: priorityInput,
+        dueDate: "Just now",
+      };
+
+      setTasks((prev) => [newTask, ...prev]);
+      setTitleInput("");
+      setDescInput("");
+      setShowNewTaskModal(false);
+    } catch (err: unknown) {
+      alert("Error creating task: " + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
-  const handleMoveTask = (taskId: string, targetStatus: TaskStatus) => {
+  const handleMoveTask = async (taskId: string, targetStatus: TaskStatus) => {
     if (isCompletedProject) return;
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: targetStatus } : t))
     );
+    try {
+      const backendStatus = targetStatus === "COMPLETED" ? "DONE" : (targetStatus === "REVIEW" ? "BLOCKED" : targetStatus);
+      await TasksService.update(projectId, taskId, { status: backendStatus as any });
+    } catch (err) {
+      console.warn("Could not update task status on backend:", err);
+    }
   };
 
   const filteredTasks = tasks.filter(
@@ -203,8 +161,17 @@ export default function ProjectWorkspacePage({
     ? COLUMNS.filter((c) => c.id === "COMPLETED")
     : COLUMNS;
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div suppressHydrationWarning />;
+  }
+
   return (
-    <div>
+    <div suppressHydrationWarning>
       {/* ── Breadcrumb & Title Row ─────────────────────────────────────────── */}
       <div style={s.topNavRow}>
         <Link href="/lead-dashboard/projects" style={s.backLink}>

@@ -18,8 +18,16 @@ public class TeamController {
     }
 
     @GetMapping
-    public List<TeamMemberResponse> getAllMembers() {
-        return teamService.getAllMembers();
+    public List<TeamMemberResponse> getAllMembers(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId
+    ) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return teamService.getAllMembers();
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping("/{id}")
