@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getTenantSlug } from "@/lib/auth";
 import { ProjectsService, type Project } from "@/lib/services/projects";
 import { ResourcesService, type Resource } from "@/lib/services/resources";
 import { TeamsService, type TeamMember } from "@/lib/services/teams";
@@ -14,13 +15,26 @@ export default function LeadDashboardPage() {
   const [allTasks, setAllTasks]     = useState<Task[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
+  const [orgName, setOrgName]       = useState<string>("");
+
+  const tenantSlug = getTenantSlug() || "myorg";
+
+  useEffect(() => {
+    fetch(`http://localhost:8080/api/admin/tenants/${tenantSlug}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.name) setOrgName(data.name);
+        else setOrgName(tenantSlug.toUpperCase());
+      })
+      .catch(() => setOrgName(tenantSlug.toUpperCase()));
+  }, [tenantSlug]);
 
   useEffect(() => {
     async function load() {
       try {
         const [projectList, resourceList, memberList] = await Promise.all([
           ProjectsService.getAll(),
-          ResourcesService.getAll(),
+          ResourcesService.getAll().catch(() => [] as Resource[]),
           TeamsService.getAllMembers().catch(() => [] as TeamMember[]),
         ]);
         setProjects(projectList);
@@ -40,13 +54,7 @@ export default function LeadDashboardPage() {
         });
 
         const assignedMembers = memberList.filter(m => assignedUserIds.has((m as any).id || (m as any).userId));
-        const fallbackResearchers = memberList.filter(m => {
-          const email = String((m as any).email || "").toLowerCase();
-          const name = String((m as any).displayName || "").toLowerCase();
-          return email.includes("researcher") || name.includes("researcher");
-        }).slice(0, 2);
-
-        const finalAssigned = assignedMembers.length > 0 ? assignedMembers : fallbackResearchers;
+        const finalAssigned = assignedMembers.length > 0 ? assignedMembers : memberList;
         setMembers(projectList.length === 0 ? [] : finalAssigned);
 
         // Load tasks for all projects
@@ -63,15 +71,33 @@ export default function LeadDashboardPage() {
     load();
   }, []);
 
+  const [selectedLeadId, setSelectedLeadId] = useState<string>("ALL");
+
   if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading lead dashboard…</p>;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
-  const activeProjects = projects.filter(p => p.status === "ACTIVE");
-  const openTasks      = allTasks.filter(t => t.status !== "DONE");
+  // Identify all Research Leads & Admins from team members list
+  const leadMembers = members.filter(
+    (m) =>
+      String(m.role).toUpperCase().includes("LEAD") ||
+      String(m.role).toUpperCase().includes("ADMIN") ||
+      String(m.role).toUpperCase().includes("OWNER")
+  );
+
+  // Filter projects by selected Research Lead
+  const displayedProjects = selectedLeadId === "ALL"
+    ? projects
+    : projects.filter((p) => {
+        const leadId = (p as any).createdByUserId || (p as any).leadUserId;
+        return leadId === selectedLeadId;
+      });
+
+  const activeProjects = displayedProjects.filter(p => p.status === "ACTIVE");
+  const openTasks      = allTasks.filter(t => t.status !== "DONE" && (selectedLeadId === "ALL" || displayedProjects.some(p => p.id === t.projectId)));
   const availableRes   = resources.filter(r => r.status === "AVAILABLE");
 
   const STATS = [
-    { id: "stat-active-projects", label: "ACTIVE PROJECTS", value: String(activeProjects.length), sub: `${projects.length} total` },
+    { id: "stat-active-projects", label: "ACTIVE PROJECTS", value: String(activeProjects.length), sub: `${displayedProjects.length} total` },
     { id: "stat-team-members",    label: "TEAM MEMBERS",    value: String(members.length),         sub: "across active projects" },
     { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(openTasks.length),       sub: "pending completion" },
     { id: "stat-resources",       label: "AVAILABLE RESOURCES", value: String(availableRes.length), sub: `${resources.length} total` },
@@ -79,6 +105,47 @@ export default function LeadDashboardPage() {
 
   return (
     <div>
+      {/* ── Organization Header Banner ───────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", margin: 0, marginBottom: 4 }}>
+            Research Lead Overview
+          </h1>
+          <p style={{ fontSize: 13, color: "#757575", margin: 0 }}>
+            Active Organization: <strong style={{ color: "#161616" }}>{orgName || tenantSlug.toUpperCase()}</strong> (<code>{tenantSlug}</code>)
+          </p>
+        </div>
+        <div style={{ background: "#ffffff", border: "1px solid #d0d0d0", color: "#161616", padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+          🏢 {orgName || tenantSlug.toUpperCase()}
+        </div>
+      </div>
+
+      {/* ── Research Lead Selector Dropdown Bar ───────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#ffffff", padding: "12px 18px", borderRadius: 8, border: "1px solid #e0e0e0", marginBottom: 24, boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#161616" }}>👤 Filter Workspace View:</span>
+          <select
+            value={selectedLeadId}
+            onChange={(e) => setSelectedLeadId(e.target.value)}
+            style={{ padding: "7px 14px", fontSize: 13, borderRadius: 6, border: "1px solid #cccccc", background: "#ffffff", fontWeight: 600, color: "#161616", cursor: "pointer", outline: "none" }}
+          >
+            <option value="ALL">All Research Leads (Entire Workspace)</option>
+            {leadMembers.map((lead) => {
+              const id = (lead as any).id || (lead as any).userId;
+              const name = (lead as any).displayName || (lead as any).email || "Unnamed Lead";
+              return (
+                <option key={id} value={id}>
+                  👤 {name} ({lead.role})
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 500, color: "#757575" }}>
+          Showing {displayedProjects.length} of {projects.length} projects
+        </span>
+      </div>
+
       {/* Stats */}
       <div style={s.statsRow}>
         {STATS.map(stat => (

@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { getRole } from "@/lib/auth";
+import { AdminSidebar } from "@/components/layout/AdminSidebar";
 
-export default function LeadDashboardLayout({
+export default function AdminDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -20,45 +18,23 @@ export default function LeadDashboardLayout({
     return <div style={{ minHeight: "100vh", background: "#f5f5f5" }} suppressHydrationWarning />;
   }
 
-  const isAdmin = !!(getRole() || "").toUpperCase().match(/ADMIN|OWNER/);
-
   return (
     <div style={s.root} suppressHydrationWarning>
-      {/* ── Fixed Sidebar ────────────────────────────────────────────────── */}
-      <Sidebar />
+      {/* ── Fixed Admin Sidebar ──────────────────────────────────────────── */}
+      <AdminSidebar />
 
       {/* ── Main Area ────────────────────────────────────────────────────── */}
       <div style={s.main}>
-        {/* Topbar matching Researcher Dashboard */}
+        {/* Topbar */}
         <header style={s.topbar}>
           <div style={s.topbarRight}>
-            {isAdmin && (
-              <Link
-                href="/admin-dashboard"
-                style={{
-                  padding: "5px 12px",
-                  background: "#161616",
-                  color: "#ffffff",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginRight: 8,
-                }}
-              >
-                🛡️ Return to Admin View
-              </Link>
-            )}
-            <button id="btn-lock" style={s.iconBtn} title="End-to-end encrypted">
+            <button id="btn-lock" style={s.iconBtn} title="System Administrator Portal">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="3" y="7" width="10" height="8" rx="1.5" />
                 <path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round" />
               </svg>
             </button>
-            <button id="btn-user" style={s.iconBtn} title="Research Lead (DK)">
+            <button id="btn-user" style={s.iconBtn} title="System Administrator">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <circle cx="8" cy="5" r="3" />
                 <path d="M2 14c0-3.31 2.69-6 6-6s6 2.69 6 6" strokeLinecap="round" />
@@ -81,46 +57,44 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     minHeight: "100vh",
     background: "#f5f5f5",
-    fontFamily: "var(--font)",
   },
   main: {
-    marginLeft: 200,
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    minHeight: "100vh",
-    background: "#f5f5f5",
+    minWidth: 0,
   },
   topbar: {
     height: 48,
-    background: "#f5f5f5",
-    borderBottom: "1px solid #e0e0e0",
+    background: "#ffffff",
+    borderBottom: "1px solid #e8e8e8",
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
-    padding: "0 32px",
-    position: "sticky" as const,
-    top: 0,
-    zIndex: 10,
+    padding: "0 24px",
+    flexShrink: 0,
   },
   topbarRight: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   iconBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 6,
-    color: "#9e9e9e",
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    border: "1px solid #e8e8e8",
+    background: "#ffffff",
     display: "flex",
     alignItems: "center",
-    borderRadius: 4,
-    transition: "color 0.15s",
+    justifyContent: "center",
+    color: "#616161",
+    cursor: "pointer",
   },
   content: {
     flex: 1,
-    padding: "32px 32px 48px",
+    padding: "28px 36px",
+    maxWidth: 1200,
+    width: "100%",
   },
 };

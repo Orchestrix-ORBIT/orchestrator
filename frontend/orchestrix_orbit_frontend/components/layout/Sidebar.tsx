@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, getTenantSlug, getRole } from "@/lib/auth";
 
 const NAV = [
   {
@@ -93,6 +94,18 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [orgName, setOrgName] = useState<string>("");
+
+  useEffect(() => {
+    const slug = getTenantSlug() || "myorg";
+    fetch(`http://localhost:8080/api/admin/tenants/${slug}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.name) setOrgName(data.name);
+        else setOrgName(slug.toUpperCase());
+      })
+      .catch(() => setOrgName(slug.toUpperCase()));
+  }, []);
 
   function handleLogout() {
     logout();
@@ -104,11 +117,34 @@ export function Sidebar() {
       {/* Brand Header */}
       <div style={s.brand}>
         <span style={s.brandName}>Orchestrix</span>
-        <span style={s.brandSub}>Research Lead</span>
+        <span style={s.brandSub}>🏢 {orgName || "MYORG"} (LEAD)</span>
       </div>
 
       {/* Navigation */}
       <nav style={s.nav}>
+        {(getRole() || "").toUpperCase().match(/ADMIN|OWNER/) && (
+          <Link
+            href="/admin-dashboard"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "9px 12px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#283593",
+              background: "#e8eaf6",
+              border: "1px solid #c5cae9",
+              textDecoration: "none",
+              marginBottom: 10,
+            }}
+          >
+            <span>🛡️</span>
+            <span>Return to Admin Portal</span>
+          </Link>
+        )}
+
         {NAV.map((item) => {
           const active =
             item.href === "/lead-dashboard"

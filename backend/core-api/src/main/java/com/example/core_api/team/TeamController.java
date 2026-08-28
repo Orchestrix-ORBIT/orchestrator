@@ -37,14 +37,29 @@ public class TeamController {
 
     @PatchMapping("/{id}/role")
     public TeamMemberResponse updateMemberRole(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateMemberRoleRequest request) {
-        return teamService.updateMemberRole(id, request.getRole());
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return teamService.updateMemberRole(id, request.getRole());
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeMember(@PathVariable UUID id) {
-        teamService.removeMember(id);
+    public void removeMember(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
+            @PathVariable UUID id) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            teamService.removeMember(id);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 }

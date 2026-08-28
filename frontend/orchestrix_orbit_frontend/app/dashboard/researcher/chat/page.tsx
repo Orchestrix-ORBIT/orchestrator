@@ -12,6 +12,9 @@ interface Channel {
   name: string;
 }
 
+import { ProjectsService } from "@/lib/services/projects";
+import { TeamsService } from "@/lib/services/teams";
+
 export default function ChatPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -28,12 +31,7 @@ export default function ChatPage() {
   const currentUserEmail = getEmail() || "Researcher";
 
   useEffect(() => {
-    const tenant = getTenantSlug() || "myorg";
-
-    fetch("http://localhost:8080/api/projects", {
-      headers: { "X-Tenant-ID": tenant },
-    })
-      .then((res) => (res.ok ? res.json() : []))
+    ProjectsService.getAll()
       .then((data) => {
         setProjects(data);
         if (data && data.length > 0) {
@@ -42,10 +40,7 @@ export default function ChatPage() {
       })
       .catch((err) => console.warn("Could not fetch projects:", err));
 
-    fetch("http://localhost:8080/api/team", {
-      headers: { "X-Tenant-ID": tenant },
-    })
-      .then((res) => (res.ok ? res.json() : []))
+    TeamsService.getAllMembers()
       .then((data) => setTeamMembers(data))
       .catch((err) => console.warn("Could not fetch team members:", err));
   }, []);
