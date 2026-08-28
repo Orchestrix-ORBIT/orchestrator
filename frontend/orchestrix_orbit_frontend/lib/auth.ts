@@ -60,16 +60,25 @@ export function isLoggedIn(): boolean {
  *   ROLE_MEMBER → dashboard/researcher (regular researcher)
  *   ROLE_GUEST  → dashboard/researcher (read-only access)
  */
-export function getDashboardPath(role: string): string {
-  switch (role) {
-    case "ROLE_OWNER":
-    case "ROLE_ADMIN":
-      return "/lead-dashboard";
-    case "ROLE_MEMBER":
-    case "ROLE_GUEST":
-    default:
-      return "/dashboard/researcher";
+export function getDashboardPath(role: string, email?: string): string {
+  const normRole = (role || "").toUpperCase();
+  const normEmail = (email || "").toLowerCase();
+
+  // 1. Primary check: official role returned by backend
+  if (normRole === "ROLE_RESOURCE_MANAGER" || normRole === "RESOURCE_MANAGER") {
+    return "/resource-dashboard";
   }
+  if (normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
+    return "/lead-dashboard";
+  }
+
+  // 2. Demo account fallback: exact match for test credentials
+  if (normEmail === "resource.manager@myorg.com") {
+    return "/resource-dashboard";
+  }
+
+  // 3. Default fallback for MEMBER / GUEST
+  return "/dashboard/researcher";
 }
 
 /** Clear all auth data from storage (logout) */

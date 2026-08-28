@@ -89,7 +89,7 @@ export default function Home() {
        * ROLE_ADMIN / ROLE_OWNER → /lead-dashboard
        * ROLE_MEMBER / ROLE_GUEST → /dashboard/researcher
        */
-      router.push(getDashboardPath(data.role));
+      router.push(getDashboardPath(data.role, data.email));
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sign in failed");
