@@ -89,7 +89,9 @@ export default function Home() {
        * ROLE_ADMIN / ROLE_OWNER → /lead-dashboard
        * ROLE_MEMBER / ROLE_GUEST → /dashboard/researcher
        */
-      router.push(getDashboardPath(data.role, data.email));
+      const destPath = getDashboardPath(data.role, data.email);
+      console.log(`[Auth] Logged in as ${data.email} with role: ${data.role} -> Navigating to: ${destPath}`);
+      router.push(destPath);
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sign in failed");

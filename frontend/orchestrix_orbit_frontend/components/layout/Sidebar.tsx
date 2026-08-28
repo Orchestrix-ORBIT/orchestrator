@@ -122,29 +122,6 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav style={s.nav}>
-        {(getRole() || "").toUpperCase().match(/ADMIN|OWNER/) && (
-          <Link
-            href="/admin-dashboard"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "9px 12px",
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 700,
-              color: "#283593",
-              background: "#e8eaf6",
-              border: "1px solid #c5cae9",
-              textDecoration: "none",
-              marginBottom: 10,
-            }}
-          >
-            <span>🛡️</span>
-            <span>Return to Admin Portal</span>
-          </Link>
-        )}
-
         {NAV.map((item) => {
           const active =
             item.href === "/lead-dashboard"

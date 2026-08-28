@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
+import { getRole } from "@/lib/auth";
 
 export default function AdminDashboardLayout({
   children,
@@ -9,12 +11,25 @@ export default function AdminDashboardLayout({
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    const role = (getRole() || "").toUpperCase();
+    const isAdmin = role.includes("ADMIN") || role.includes("OWNER");
+    if (!isAdmin) {
+      if (role.includes("LEAD")) {
+        router.replace("/lead-dashboard");
+      } else {
+        router.replace("/dashboard/researcher");
+      }
+    } else {
+      setAuthorized(true);
+    }
+  }, [router]);
 
-  if (!mounted) {
+  if (!mounted || !authorized) {
     return <div style={{ minHeight: "100vh", background: "#f5f5f5" }} suppressHydrationWarning />;
   }
 

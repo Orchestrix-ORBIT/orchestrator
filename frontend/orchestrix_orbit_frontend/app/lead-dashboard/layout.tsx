@@ -32,26 +32,6 @@ export default function LeadDashboardLayout({
         {/* Topbar matching Researcher Dashboard */}
         <header style={s.topbar}>
           <div style={s.topbarRight}>
-            {isAdmin && (
-              <Link
-                href="/admin-dashboard"
-                style={{
-                  padding: "5px 12px",
-                  background: "#161616",
-                  color: "#ffffff",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginRight: 8,
-                }}
-              >
-                🛡️ Return to Admin View
-              </Link>
-            )}
             <button id="btn-lock" style={s.iconBtn} title="End-to-end encrypted">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="3" y="7" width="10" height="8" rx="1.5" />
