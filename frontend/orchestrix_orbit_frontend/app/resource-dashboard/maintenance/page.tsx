@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { ResourcesService, type Resource } from "@/lib/services/resources";
 
 interface MaintenanceEvent {
   id: string;
@@ -17,78 +18,155 @@ interface MaintenanceEvent {
 const INITIAL_MAINTENANCE: MaintenanceEvent[] = [
   {
     id: "MNT-301",
-    assetName: "Quantum Simulation Dilution Fridge",
-    category: "Lab Instrument",
-    startDate: "Aug 20, 2026",
-    endDate: "Aug 23, 2026",
+    assetName: "Thermo Scientific Orbitrap Mass Spectrometer",
+    category: "INSTRUMENT",
+    startDate: "Aug 28, 2026",
+    endDate: "Aug 30, 2026",
     downtimeType: "Preventive Calibration",
-    technician: "Oxford Cryo Technical Services (Lead: J. Vance)",
+    technician: "Resource Operations (Lead: Lab Manager)",
     status: "In Progress",
-    notes: "Thermal drift mitigation in Chamber 3 thermocouple sensors. Coolant cycle re-pressurization.",
+    notes: "Mass calibration and ionization source cleaning.",
   },
   {
     id: "MNT-302",
-    assetName: "GPU Workstation Node 1",
-    category: "GPU Compute",
-    startDate: "Aug 25, 2026 (02:00)",
-    endDate: "Aug 25, 2026 (06:00)",
+    assetName: "NVIDIA H100 SXM5 80GB GPU Compute Node",
+    category: "COMPUTE",
+    startDate: "Sep 01, 2026 (02:00)",
+    endDate: "Sep 01, 2026 (06:00)",
     downtimeType: "Firmware/Driver Update",
-    technician: "Internal Systems Ops (Chalani K.)",
+    technician: "HPC Systems Admin",
     status: "Scheduled",
-    notes: "NVIDIA CUDA 12.6 kernel update and thermal paste inspection.",
+    notes: "NVIDIA CUDA 12.6 driver update and liquid cooling inspection.",
   },
   {
     id: "MNT-303",
-    assetName: "Titan Krios Cryo-EM Suite",
-    category: "Lab Instrument",
+    assetName: "FEI Titan 300kV Transmission Electron Microscope (TEM)",
+    category: "INSTRUMENT",
     startDate: "Aug 15, 2026",
     endDate: "Aug 16, 2026",
     downtimeType: "Safety Inspection",
-    technician: "Thermo Fisher Field Engineer (M. Scott)",
+    technician: "Field Operations Support",
     status: "Completed",
-    notes: "Bi-annual vacuum seal vacuum integrity test and electron beam collimation calibration.",
-  },
-  {
-    id: "MNT-304",
-    assetName: "ISO-5 Cleanroom Photolithography Stepper",
-    category: "Cleanroom",
-    startDate: "Aug 10, 2026",
-    endDate: "Aug 11, 2026",
-    downtimeType: "Emergency Repair",
-    technician: "ASML Optics Support",
-    status: "Completed",
-    notes: "Replaced UV optical filter condenser assembly after 0.05um alignment drift alarm.",
+    notes: "Vacuum seal integrity test and electron beam collimation calibration.",
   },
 ];
 
+function computeStatusFromDates(startStr: string, endStr: string): "Scheduled" | "In Progress" | "Completed" {
+  try {
+    const now = new Date();
+    // Normalize date strings (e.g., "Aug 28, 2026", "2026-09-23")
+    const start = new Date(startStr.replace(/\s*\(\d{2}:\d{2}\)/, ''));
+    const end = new Date(endStr.replace(/\s*\(\d{2}:\d{2}\)/, ''));
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return "Scheduled";
+    }
+
+    if (now < start) {
+      return "Scheduled";
+    }
+    if (now > end) {
+      return "Completed";
+    }
+    return "In Progress";
+  } catch {
+    return "In Progress";
+  }
+}
+
 export default function MaintenanceSchedulesPage() {
   const [events, setEvents] = useState<MaintenanceEvent[]>(INITIAL_MAINTENANCE);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const resList = await ResourcesService.getAll();
+      setResources(resList);
+
+      const dbMaint = await ResourcesService.getMaintenance();
+      if (dbMaint && dbMaint.length > 0) {
+        const mapped: MaintenanceEvent[] = dbMaint.map((m: any) => {
+          const computedStatus = computeStatusFromDates(m.startDate, m.endDate);
+          return {
+            id: m.id,
+            assetName: m.assetName || "Lab Asset",
+            category: m.category || "INSTRUMENT",
+            startDate: m.startDate || "Today",
+            endDate: m.endDate || "Ongoing",
+            downtimeType: m.downtimeType || "Preventive Calibration",
+            technician: m.technician || "Lab Resource Operations",
+            status: computedStatus,
+            notes: m.notes || "Scheduled maintenance downtime window.",
+          };
+        });
+        setEvents(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to load maintenance data from DB:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   const [filter, setFilter] = useState<"ALL" | MaintenanceEvent["status"]>("ALL");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [assetNameInput, setAssetNameInput] = useState("GPU Workstation Node 2");
+  const [assetNameInput, setAssetNameInput] = useState("");
   const [downtimeTypeInput, setDowntimeTypeInput] = useState<MaintenanceEvent["downtimeType"]>("Preventive Calibration");
   const [startDateInput, setStartDateInput] = useState("");
   const [endDateInput, setEndDateInput] = useState("");
   const [technicianInput, setTechnicianInput] = useState("");
   const [notesInput, setNotesInput] = useState("");
 
-  const handleCreateMaintenance = (e: React.FormEvent) => {
+  const handleCreateMaintenance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDateInput || !endDateInput) return;
 
-    const newEvent: MaintenanceEvent = {
-      id: `MNT-${Date.now().toString().slice(-3)}`,
-      assetName: assetNameInput,
-      category: "Lab Instrument",
+    const selectedResourceName = assetNameInput || (resources.length > 0 ? resources[0].name : "NVIDIA H100 SXM5 80GB GPU Compute Node");
+    const targetResource = resources.find(
+      r => r.name === selectedResourceName || r.name.toLowerCase().includes(selectedResourceName.toLowerCase())
+    );
+
+    const computedStatus = computeStatusFromDates(startDateInput, endDateInput);
+
+    const payload = {
+      resourceId: targetResource?.id || null,
+      assetName: selectedResourceName,
+      category: targetResource?.type || "INSTRUMENT",
       startDate: startDateInput,
       endDate: endDateInput,
       downtimeType: downtimeTypeInput,
-      technician: technicianInput.trim() || "Chalani K. (Operations)",
-      status: "Scheduled",
+      technician: technicianInput.trim() || "Lab Operations Manager",
+      status: computedStatus,
       notes: notesInput.trim() || "Standard scheduled downtime block.",
     };
 
-    setEvents((prev) => [newEvent, ...prev]);
+    try {
+      await ResourcesService.createMaintenance(payload);
+
+      // Lock resource if maintenance is currently active
+      if (computedStatus === "In Progress" && targetResource) {
+        try {
+          await ResourcesService.updateStatus(targetResource.id, "MAINTENANCE");
+        } catch (ignored) {}
+      }
+
+      await loadData();
+    } catch (err) {
+      console.error("Failed to create maintenance in DB:", err);
+      // Fallback local addition if network fails
+      const fallbackEvent: MaintenanceEvent = {
+        id: `MNT-${Date.now().toString().slice(-3)}`,
+        ...payload,
+      };
+      setEvents(prev => [fallbackEvent, ...prev]);
+    }
+
     setShowAddModal(false);
     setStartDateInput("");
     setEndDateInput("");
@@ -96,16 +174,12 @@ export default function MaintenanceSchedulesPage() {
     setNotesInput("");
   };
 
-  const handleStatusChange = (id: string, status: MaintenanceEvent["status"]) => {
-    setEvents((prev) =>
-      prev.map((ev) => (ev.id === id ? { ...ev, status } : ev))
-    );
-  };
-
   const filteredEvents = events.filter((ev) => {
     if (filter === "ALL") return true;
     return ev.status === filter;
   });
+
+  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading maintenance schedules…</p>;
 
   return (
     <div>
@@ -114,7 +188,7 @@ export default function MaintenanceSchedulesPage() {
         <div>
           <h1 style={s.pageTitle}>Maintenance & Downtime Schedules</h1>
           <p style={s.pageSub}>
-            Coordinate preventive calibration, technician service visits, and automated downtime locks (FR-RES-08).
+            Coordinate preventive calibration, technician service visits, and automated downtime locks.
           </p>
         </div>
 
@@ -149,7 +223,7 @@ export default function MaintenanceSchedulesPage() {
         <div style={s.statCard}>
           <span style={s.statLabel}>FLEET RELIABILITY</span>
           <span style={s.statValue}>99.4%</span>
-          <span style={s.statSub}>MTBF: &gt; 720 hours (NFR-REL-03)</span>
+          <span style={s.statSub}>MTBF: &gt; 720 hours</span>
         </div>
       </div>
 
@@ -175,7 +249,7 @@ export default function MaintenanceSchedulesPage() {
         <div style={s.tableHeaderRow}>
           <p style={s.sectionLabel}>FACILITIES SERVICE LEDGER & DOWNTIME WINDOWS</p>
           <span style={{ fontSize: 12, color: "#9e9e9e", marginRight: 20 }}>
-            Automated Booking Lockout Active (FR-RES-08)
+            Automated Booking Lockout Active
           </span>
         </div>
 
@@ -186,8 +260,7 @@ export default function MaintenanceSchedulesPage() {
               <th style={s.th}>Downtime Window</th>
               <th style={s.th}>Technician / Vendor</th>
               <th style={s.th}>Technical Notes</th>
-              <th style={s.th}>Status</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Update Status</th>
+              <th style={{ ...s.th, textAlign: "right" }}>Status</th>
             </tr>
           </thead>
           <tbody>
@@ -211,7 +284,7 @@ export default function MaintenanceSchedulesPage() {
                 <td style={{ ...s.td, maxWidth: 300, fontSize: 12, color: "#616161", lineHeight: 1.3 }}>
                   {ev.notes}
                 </td>
-                <td style={s.td}>
+                <td style={{ ...s.td, textAlign: "right" }}>
                   <span
                     style={{
                       ...s.badge,
@@ -225,31 +298,20 @@ export default function MaintenanceSchedulesPage() {
                     {ev.status}
                   </span>
                 </td>
-                <td style={{ ...s.td, textAlign: "right" }}>
-                  <select
-                    value={ev.status}
-                    onChange={(e) => handleStatusChange(ev.id, e.target.value as MaintenanceEvent["status"])}
-                    style={s.statusSelect}
-                  >
-                    <option value="Scheduled">Scheduled</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* ── Schedule Maintenance Modal (FR-RES-08) ───────────────────────────── */}
+      {/* ── Schedule Maintenance Modal ───────────────────────────── */}
       {showAddModal && (
         <div style={m.overlay}>
           <div style={m.modal}>
             <div style={m.header}>
               <div>
                 <h3 style={m.title}>Schedule Maintenance Downtime Window</h3>
-                <p style={m.sub}>Blocks asset bookings and notifies affected researchers (FR-RES-08).</p>
+                <p style={m.sub}>Blocks asset bookings and notifies affected researchers.</p>
               </div>
               <button onClick={() => setShowAddModal(false)} style={m.closeBtn}>✕</button>
             </div>
@@ -262,12 +324,13 @@ export default function MaintenanceSchedulesPage() {
                   onChange={(e) => setAssetNameInput(e.target.value)}
                   style={m.select}
                 >
-                  <option value="GPU Workstation Node 1 (8x A100)">GPU Workstation Node 1 (8x A100)</option>
-                  <option value="GPU Workstation Node 2 (4x A100)">GPU Workstation Node 2 (4x A100)</option>
-                  <option value="Titan Krios Cryo-EM Suite">Titan Krios Cryo-EM Suite</option>
-                  <option value="Quantum Simulation Dilution Fridge">Quantum Simulation Dilution Fridge</option>
-                  <option value="High-Resolution Mass Spectrometer">High-Resolution Mass Spectrometer</option>
-                  <option value="ISO-5 Cleanroom Photolithography Stepper">ISO-5 Cleanroom Photolithography Stepper</option>
+                  {resources.length > 0 ? (
+                    resources.map(r => (
+                      <option key={r.id} value={r.name}>{r.name}</option>
+                    ))
+                  ) : (
+                    <option value="NVIDIA H100 SXM5 80GB GPU Compute Node">NVIDIA H100 SXM5 80GB GPU Compute Node</option>
+                  )}
                 </select>
               </div>
 
