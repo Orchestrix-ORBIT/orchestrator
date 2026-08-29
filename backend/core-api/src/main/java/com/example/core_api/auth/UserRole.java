@@ -8,5 +8,10 @@ public enum UserRole {
     OWNER,   // The person who created the tenant — full control
     ADMIN,   // Institute/Lab admin — manages users and settings
     MEMBER,  // Regular researcher/team member — default role on registration
-    GUEST    // Read-only access, e.g. an external collaborator
+    GUEST,   // Read-only access, e.g. an external collaborator
+    LEAD,    // Research Lead
+    RESEARCHER, // Research Team Member
+    ROLE_LEAD,
+    ROLE_RESEARCHER,
+    ROLE_ADMIN
 }

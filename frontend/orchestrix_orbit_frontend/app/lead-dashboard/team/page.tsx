@@ -88,15 +88,6 @@ export default function LeadTeamPage() {
     loadTeamData();
   }, []);
 
-  async function handleUpdateRole(memberId: string, role: TeamRole) {
-    try {
-      const updated = await TeamsService.updateMemberRole(memberId, role);
-      setMembers(prev => prev.map(m => m.userId === memberId ? { ...m, role: updated.role } : m));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to update role");
-    }
-  }
-
   async function handleRemove(memberId: string) {
     if (!confirm("Remove this member from the team?")) return;
     try {
@@ -151,15 +142,9 @@ export default function LeadTeamPage() {
                   </td>
                   <td style={s.td}>{email}</td>
                   <td style={s.td}>
-                    <select
-                      id={`select-role-${memberId}`}
-                      style={s.roleSelect}
-                      value={m.role || "MEMBER"}
-                      onChange={e => handleUpdateRole(memberId, e.target.value as TeamRole)}
-                    >
-                      <option value="MEMBER">Member</option>
-                      <option value="OBSERVER">Guest</option>
-                    </select>
+                    <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: 4, background: "#f5f5f5", border: "1px solid #e0e0e0", fontSize: 12, fontWeight: 500, color: "#333" }}>
+                      Member
+                    </span>
                   </td>
                   <td style={s.td}>
                     {assignedProjects.length > 0 ? (
