@@ -102,7 +102,7 @@ export default function NotificationsPage() {
         <div>
           <h1 style={s.pageTitle}>Notifications & Inbox</h1>
           <p style={s.pageSub}>
-            Asynchronous task alerts, member mentions, and equipment booking notifications (FR-TASK-06).
+            Asynchronous task alerts, member mentions, and equipment booking notifications.
           </p>
         </div>
 

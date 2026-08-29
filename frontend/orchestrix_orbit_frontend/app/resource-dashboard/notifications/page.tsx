@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface ResourceNotification {
@@ -17,60 +17,101 @@ interface ResourceNotification {
 const INITIAL_NOTIFS: ResourceNotification[] = [
   {
     id: "RN-1",
-    title: "Urgent Booking Request: Dinuka K. (Lead) requested GPU Node 1",
+    title: "Urgent Booking Request: Researcher requested Illumina NovaSeq 6000 Sequencer",
     category: "Booking Request",
     time: "5m ago",
     read: false,
-    details: "Project Alpha Core submitted high-priority booking for Today (14:00 - 18:00). Requires manager sign-off.",
-    linkText: "Review on Overview →",
-    linkHref: "/resource-dashboard",
+    details: "Genomic Sequence Alignment project submitted booking request for Tomorrow (09:00 - 15:00). Requires manager approval.",
+    linkText: "Review Bookings →",
+    linkHref: "/resource-dashboard/bookings",
   },
   {
     id: "RN-2",
-    title: "Concurrency Lock Enforced: Overlapping Cryo-EM attempt rejected",
+    title: "Concurrency Lock Enforced: Overlapping H100 GPU attempt rejected",
     category: "Collision Lock",
     time: "45m ago",
     read: false,
-    details: "PostgreSQL row lock rejected overlapping request for Cryo-EM Room 102 in 280ms (FR-RES-07). Zero conflict.",
+    details: "PostgreSQL row lock rejected overlapping request for NVIDIA H100 GPU in 280ms. Zero conflict.",
     linkText: "View Schedule →",
     linkHref: "/resource-dashboard/bookings",
   },
   {
     id: "RN-3",
-    title: "Scheduled Maintenance Starting: Quantum Dilution Fridge",
+    title: "Scheduled Maintenance Active: Thermo Scientific Orbitrap Mass Spectrometer",
     category: "Maintenance",
     time: "2h ago",
     read: false,
-    details: "Downtime window active until Aug 23. Automated lockout applied to all booking APIs (FR-RES-08).",
+    details: "Downtime window active. Automated lockout applied to all booking APIs.",
     linkText: "View Maintenance Logs →",
     linkHref: "/resource-dashboard/maintenance",
   },
   {
     id: "RN-4",
-    title: "Quota Threshold Reached: Project Alpha Core reached 80% weekly GPU cap",
+    title: "Quota Threshold Reached: Active Project reached 80% weekly GPU cap",
     category: "Quota Alert",
     time: "1d ago",
     read: true,
-    details: "Project Alpha Core has utilized 20/24 allocated hours for A100 SXM4 compute nodes this week.",
+    details: "Research Project has utilized 38/48 allocated hours for NVIDIA H100 SXM5 GPU compute nodes this week.",
     linkText: "Inspect Policies →",
     linkHref: "/resource-dashboard/policies",
   },
 ];
 
+import { api } from "@/lib/api";
+
 export default function ResourceNotificationsPage() {
   const [notifs, setNotifs] = useState<ResourceNotification[]>(INITIAL_NOTIFS);
   const [filter, setFilter] = useState<"ALL" | "UNREAD" | ResourceNotification["category"]>("ALL");
+  const [loading, setLoading] = useState(true);
+
+  const loadNotifications = async () => {
+    setLoading(true);
+    try {
+      const data = await api.get<any[]>("/api/notifications");
+      if (data && data.length > 0) {
+        const mapped: ResourceNotification[] = data.map((n) => ({
+          id: n.id,
+          title: n.title || "Operations Alert",
+          category: (n.type as any) || "Booking Request",
+          time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
+          read: n.read ?? n.is_read ?? false,
+          details: n.message || "Operational system event recorded.",
+          linkText: n.type === "Maintenance" ? "View Maintenance Logs →" : "Review Bookings →",
+          linkHref: n.type === "Maintenance" ? "/resource-dashboard/maintenance" : "/resource-dashboard/bookings",
+        }));
+        setNotifs(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to fetch notifications from DB:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
 
   const unreadCount = notifs.filter((n) => !n.read).length;
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await api.patch("/api/notifications/read-all", {});
+    } catch (err) {
+      console.error("Failed to mark all read in DB:", err);
+    }
   };
 
-  const handleToggleRead = (id: string) => {
+  const handleToggleRead = async (id: string) => {
     setNotifs((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
     );
+    try {
+      await api.patch(`/api/notifications/${id}/read`, {});
+    } catch (err) {
+      console.error("Failed to toggle read state in DB:", err);
+    }
   };
 
   const filteredNotifs = notifs.filter((n) => {
@@ -78,6 +119,8 @@ export default function ResourceNotificationsPage() {
     if (filter === "UNREAD") return !n.read;
     return n.category === filter;
   });
+
+  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading operational notifications…</p>;
 
   return (
     <div>

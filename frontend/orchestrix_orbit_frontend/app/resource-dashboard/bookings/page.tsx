@@ -99,7 +99,7 @@ export default function ResourceBookingsPage() {
               <div style={s.cardTop}>
                 <div>
                   <div style={s.resourceName}>{b.resourceName}</div>
-                  <div style={s.userId}>User: {b.userId.slice(0, 12)}…</div>
+                  <div style={s.userId}>Requested by: {(b as any).userEmail || (b.userId ? `${b.userId.slice(0, 12)}…` : "Researcher")}</div>
                   {b.purpose && <div style={s.purpose}>{b.purpose}</div>}
                 </div>
                 <span style={{ ...s.badge, ...statusStyle(b.status) }}>{b.status}</span>

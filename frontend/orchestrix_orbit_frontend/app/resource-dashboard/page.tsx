@@ -61,7 +61,7 @@ export default function ResourceDashboardPage() {
               <tr key={r.id}>
                 <td style={s.td}>{r.name}</td>
                 <td style={s.td}>{r.type}</td>
-                <td style={s.td}>{r.location ?? "—"}</td>
+                <td style={s.td}>{(r as any).metadata?.location || r.location || "Core Lab"}</td>
                 <td style={s.td}>
                   <span style={{ ...s.badge, ...statusStyle(r.status) }}>{r.status.replace("_", " ")}</span>
                 </td>

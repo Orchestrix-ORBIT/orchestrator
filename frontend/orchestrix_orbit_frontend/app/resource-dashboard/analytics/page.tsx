@@ -10,7 +10,7 @@ export default function UsageAnalyticsPage() {
         <div>
           <h1 style={s.pageTitle}>Usage & Capacity Analytics</h1>
           <p style={s.pageSub}>
-            Historical hardware utilization, peak booking hours, and cross-project compute quotas (FR-RES-01).
+            Historical hardware utilization, peak booking hours, and cross-project compute quotas.
           </p>
         </div>
 
@@ -24,7 +24,7 @@ export default function UsageAnalyticsPage() {
         <div style={s.statCard}>
           <span style={s.statLabel}>AVG GPU UTILIZATION</span>
           <span style={s.statValue}>84.2%</span>
-          <span style={s.statSub}>Across 12x A100 Nodes</span>
+          <span style={s.statSub}>Across H100 Compute Cluster</span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>TOTAL HOURS BOOKED</span>
@@ -39,7 +39,7 @@ export default function UsageAnalyticsPage() {
         <div style={s.statCard}>
           <span style={s.statLabel}>AVG QUEUE LATENCY</span>
           <span style={s.statValue}>&lt; 320ms</span>
-          <span style={s.statSub}>Resolution speed (NFR-PERF-02)</span>
+          <span style={s.statSub}>Resolution speed</span>
         </div>
       </div>
 
@@ -52,7 +52,7 @@ export default function UsageAnalyticsPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "16px 20px" }}>
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>GPU Compute Clusters (A100 SXM4)</strong>
+                <strong>GPU Compute Clusters (NVIDIA H100 SXM5)</strong>
                 <span style={{ fontWeight: 600 }}>88% utilized</span>
               </div>
               <div style={s.progressBarBg}>
@@ -62,7 +62,7 @@ export default function UsageAnalyticsPage() {
 
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>Cryo-EM & Microscopy Suites</strong>
+                <strong>Genomic Sequencers & Electron Microscopes (TEM)</strong>
                 <span style={{ fontWeight: 600 }}>74% utilized</span>
               </div>
               <div style={s.progressBarBg}>
@@ -72,7 +72,7 @@ export default function UsageAnalyticsPage() {
 
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>Mass Spectrometers & Analytical Benches</strong>
+                <strong>BSL-2 Cell Culture Cleanroom Facilities</strong>
                 <span style={{ fontWeight: 600 }}>52% utilized</span>
               </div>
               <div style={s.progressBarBg}>
@@ -107,24 +107,24 @@ export default function UsageAnalyticsPage() {
             <tbody>
               <tr style={s.tr}>
                 <td style={s.td}>
-                  <strong>Project Alpha Core</strong>
-                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Dinuka K. (Lead)</span>
+                  <strong>Genomic Sequence Alignment Research</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Lead Researcher (researcher@myorg.com)</span>
                 </td>
                 <td style={s.td}>214 hrs</td>
                 <td style={s.td}>44.4%</td>
               </tr>
               <tr style={s.tr}>
                 <td style={s.td}>
-                  <strong>Nexus Protocol</strong>
-                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Amara P. (Researcher)</span>
+                  <strong>Molecular Structure AI Training</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Alex Morgan (researcher.alex@myorg.com)</span>
                 </td>
                 <td style={s.td}>168 hrs</td>
                 <td style={s.td}>34.8%</td>
               </tr>
               <tr style={s.tr}>
                 <td style={s.td}>
-                  <strong>Beta Synthesis</strong>
-                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Marcus N. (Archival)</span>
+                  <strong>Cryo-EM Protein Structural Analysis</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>David Chen (researcher.david@myorg.com)</span>
                 </td>
                 <td style={s.td}>100 hrs</td>
                 <td style={s.td}>20.8%</td>

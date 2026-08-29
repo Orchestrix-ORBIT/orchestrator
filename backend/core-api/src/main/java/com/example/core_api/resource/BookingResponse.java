@@ -10,7 +10,9 @@ import java.util.UUID;
 public class BookingResponse {
     private UUID id;
     private UUID resourceId;
+    private String resourceName;
     private UUID userId;
+    private String userEmail;
     private OffsetDateTime startTime;
     private OffsetDateTime endTime;
     private BookingStatus status;

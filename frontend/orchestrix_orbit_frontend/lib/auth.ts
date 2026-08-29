@@ -64,20 +64,21 @@ export function getDashboardPath(role: string, email?: string): string {
   const normRole = (role || "").toUpperCase();
   const normEmail = (email || "").toLowerCase();
 
-  // 1. Primary check: official role returned by backend
-  if (normRole === "ROLE_RESOURCE_MANAGER" || normRole === "RESOURCE_MANAGER") {
+  // 1. Resource Manager check (email or specific role)
+  if (
+    normEmail.includes("resource.manager") ||
+    normEmail.includes("resource_manager") ||
+    normRole === "ROLE_RESOURCE_MANAGER" ||
+    normRole === "RESOURCE_MANAGER"
+  ) {
     return "/resource-dashboard";
   }
+
   if (normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
     return "/admin-dashboard";
   }
   if (normRole === "ROLE_LEAD" || normRole === "LEAD") {
     return "/lead-dashboard";
-  }
-
-  // 2. Demo account fallback: exact match for test credentials
-  if (normEmail === "resource.manager@myorg.com") {
-    return "/resource-dashboard";
   }
 
   // 3. Default fallback for MEMBER / GUEST

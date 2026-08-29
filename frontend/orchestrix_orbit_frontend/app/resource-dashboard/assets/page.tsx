@@ -82,7 +82,7 @@ export default function ResourceAssetsPage() {
               {r.description && <div style={s.assetDesc}>{r.description}</div>}
             </div>
             <span style={s.td}>{r.type}</span>
-            <span style={s.td}>{r.location ?? "—"}</span>
+            <span style={s.td}>{(r as any).metadata?.location || r.location || "Core Lab"}</span>
             <span style={s.td}>
               <span style={{ ...s.badge, ...statusStyle(r.status) }}>{r.status.replace("_", " ")}</span>
             </span>
@@ -104,7 +104,7 @@ export default function ResourceAssetsPage() {
               <div style={s.field}>
                 <label style={s.label}>Asset name *</label>
                 <input id="input-asset-name" style={s.input} value={newName}
-                  onChange={e => setNewName(e.target.value)} placeholder="e.g. GPU Node Alpha" required />
+                  onChange={e => setNewName(e.target.value)} placeholder="e.g. High-Resolution TEM Microscope" required />
               </div>
               <div style={s.field}>
                 <label style={s.label}>Type</label>

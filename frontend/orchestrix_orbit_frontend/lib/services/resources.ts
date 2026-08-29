@@ -71,8 +71,22 @@ export const ResourcesService = {
   getById: (id: string) => api.get<Resource>(`/api/resources/${id}`),
 
   /** POST /api/resources — create a new resource (admin/owner) */
-  create: (body: CreateResourceBody) =>
-    api.post<Resource>("/api/resources", body),
+  create: (body: CreateResourceBody) => {
+    const payload = {
+      name: body.name,
+      type: body.type,
+      description: body.description,
+      metadata: JSON.stringify({
+        location: body.location || "Core Lab Facility",
+        maxDurationHours: body.maxDurationHours || 4,
+      }),
+    };
+    return api.post<Resource>("/api/resources", payload);
+  },
+
+  /** PATCH /api/resources/{id}/status — update resource status */
+  updateStatus: (id: string, status: ResourceStatus) =>
+    api.patch<Resource>(`/api/resources/${id}/status`, { status }),
 
   // ── Bookings ──────────────────────────────────────────────────────────────
 
@@ -91,4 +105,14 @@ export const ResourcesService = {
   /** PATCH /api/resources/bookings/{bookingId}/status — approve/reject */
   updateBookingStatus: (bookingId: string, status: BookingStatus) =>
     api.patch<Booking>(`/api/resources/bookings/${bookingId}/status`, { status }),
+
+  // ── Maintenance ───────────────────────────────────────────────────────────
+
+  /** GET /api/resources/maintenance — fetch all maintenance logs */
+  getMaintenance: () =>
+    api.get<any[]>("/api/resources/maintenance"),
+
+  /** POST /api/resources/maintenance — create a new maintenance log */
+  createMaintenance: (body: any) =>
+    api.post<any>("/api/resources/maintenance", body),
 };

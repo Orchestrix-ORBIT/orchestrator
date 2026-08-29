@@ -14,43 +14,43 @@ interface PolicyRule {
 const INITIAL_POLICIES: PolicyRule[] = [
   {
     id: "POL-1",
-    assetCategory: "GPU Compute (8x A100 SXM4 Nodes)",
-    maxContinuousHours: 4,
-    maxWeeklyQuotaPerProject: 24,
+    assetCategory: "COMPUTE (NVIDIA H100 SXM5 80GB GPU Nodes)",
+    maxContinuousHours: 8,
+    maxWeeklyQuotaPerProject: 48,
     bufferBetweenBookingsMinutes: 15,
     priorityTier: "High-Demand",
   },
   {
     id: "POL-2",
-    assetCategory: "Titan Krios Cryo-EM Suite",
-    maxContinuousHours: 8,
-    maxWeeklyQuotaPerProject: 16,
+    assetCategory: "INSTRUMENT (Illumina NovaSeq 6000 Sequencer)",
+    maxContinuousHours: 12,
+    maxWeeklyQuotaPerProject: 36,
     bufferBetweenBookingsMinutes: 30,
     priorityTier: "High-Demand",
   },
   {
     id: "POL-3",
-    assetCategory: "Quantum Simulation Dilution Fridge",
-    maxContinuousHours: 12,
-    maxWeeklyQuotaPerProject: 36,
-    bufferBetweenBookingsMinutes: 60,
+    assetCategory: "INSTRUMENT (FEI Titan 300kV TEM Microscope)",
+    maxContinuousHours: 4,
+    maxWeeklyQuotaPerProject: 16,
+    bufferBetweenBookingsMinutes: 30,
     priorityTier: "Critical-Path",
   },
   {
     id: "POL-4",
-    assetCategory: "Mass Spectrometers & Chemical Benches",
+    assetCategory: "ROOM (BSL-2 Cell Culture Cleanroom)",
     maxContinuousHours: 6,
-    maxWeeklyQuotaPerProject: 20,
+    maxWeeklyQuotaPerProject: 24,
     bufferBetweenBookingsMinutes: 15,
     priorityTier: "Standard",
   },
   {
     id: "POL-5",
-    assetCategory: "ISO-5 Cleanroom Photolithography Bay",
-    maxContinuousHours: 4,
-    maxWeeklyQuotaPerProject: 12,
-    bufferBetweenBookingsMinutes: 30,
-    priorityTier: "Critical-Path",
+    assetCategory: "SOFTWARE (MATLAB R2026a HPC Licenses)",
+    maxContinuousHours: 24,
+    maxWeeklyQuotaPerProject: 168,
+    bufferBetweenBookingsMinutes: 0,
+    priorityTier: "Standard",
   },
 ];
 
@@ -96,7 +96,7 @@ export default function AllocationPoliciesPage() {
         <div>
           <h1 style={s.pageTitle}>Allocation Policies & Quotas</h1>
           <p style={s.pageSub}>
-            Define fair-access duration limits, project quotas, and mandatory cooldown buffers (FR-RES-03).
+            Define fair-access duration limits, project quotas, and mandatory cooldown buffers.
           </p>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default function AllocationPoliciesPage() {
         <div style={s.statCard}>
           <span style={s.statLabel}>MAX SINGLE SLOT</span>
           <span style={s.statValue}>12 hrs</span>
-          <span style={s.statSub}>Quantum Dilution Fridge</span>
+          <span style={s.statSub}>FEI Titan TEM Microscope</span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>MANDATORY COOLDOWN</span>
@@ -128,7 +128,7 @@ export default function AllocationPoliciesPage() {
       {/* ── Policies Table Card ─────────────────────────────────────────────── */}
       <div style={s.tableCard}>
         <div style={s.tableHeaderRow}>
-          <p style={s.sectionLabel}>ENFORCED ASSET DURATION RULES (FR-RES-03)</p>
+          <p style={s.sectionLabel}>ENFORCED ASSET DURATION RULES</p>
           <span style={{ fontSize: 12, color: "#9e9e9e", marginRight: 20 }}>
             Spring Boot Enforcement Engine
           </span>
@@ -185,7 +185,7 @@ export default function AllocationPoliciesPage() {
           <div style={m.modal}>
             <div style={m.header}>
               <div>
-                <h3 style={m.title}>Update Allocation Policy (FR-RES-03)</h3>
+                <h3 style={m.title}>Update Allocation Policy</h3>
                 <p style={m.sub}>{selectedPolicy.assetCategory}</p>
               </div>
               <button onClick={() => setShowEditModal(false)} style={m.closeBtn}>✕</button>
