@@ -22,28 +22,57 @@ public class ResourceBookingController {
     @PostMapping("/{id}/bookings")
     @ResponseStatus(HttpStatus.CREATED)
     public BookingResponse createBooking(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable("id") UUID resourceId,
             @Valid @RequestBody CreateBookingRequest request) {
-        UUID userId = getAuthenticatedUserId();
-        return resourceService.createBooking(resourceId, request, userId);
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            UUID userId = getAuthenticatedUserId();
+            return resourceService.createBooking(resourceId, request, userId);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping("/{id}/bookings")
-    public List<BookingResponse> getBookingsForResource(@PathVariable("id") UUID resourceId) {
-        return resourceService.getBookingsForResource(resourceId);
+    public List<BookingResponse> getBookingsForResource(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
+            @PathVariable("id") UUID resourceId) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return resourceService.getBookingsForResource(resourceId);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @PatchMapping("/bookings/{bookingId}/status")
     public BookingResponse updateBookingStatus(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID bookingId,
             @Valid @RequestBody UpdateBookingStatusRequest request) {
-        return resourceService.updateBookingStatus(bookingId, request.getStatus());
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            return resourceService.updateBookingStatus(bookingId, request.getStatus());
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     @GetMapping("/bookings/me")
-    public List<BookingResponse> getUserBookings() {
-        UUID userId = getAuthenticatedUserId();
-        return resourceService.getUserBookings(userId);
+    public List<BookingResponse> getUserBookings(
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId) {
+        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
+        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
+        try {
+            UUID userId = getAuthenticatedUserId();
+            return resourceService.getUserBookings(userId);
+        } finally {
+            com.example.core_api.multitenancy.TenantContext.clear();
+        }
     }
 
     private UUID getAuthenticatedUserId() {

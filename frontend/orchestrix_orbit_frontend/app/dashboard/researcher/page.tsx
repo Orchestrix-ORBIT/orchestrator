@@ -50,7 +50,16 @@ export default function ResearcherHomePage() {
           projectList.map((p) => TasksService.getByProject(p.id).catch(() => [] as Task[]))
         );
         const flatTasks = taskResults.flat();
-        setAllTasks(flatTasks);
+        let currentUserId = "";
+        try {
+          const userStr = localStorage.getItem("user") || "{}";
+          currentUserId = JSON.parse(userStr).id || "";
+        } catch (e) {}
+
+        const myTasksOnly = flatTasks.filter(
+          (t) => !t.assigneeId || t.assigneeId === currentUserId
+        );
+        setAllTasks(myTasksOnly);
 
         // Step 3: Fetch this user's bookings
         const myBookings = await ResourcesService.getMyBookings();
@@ -88,10 +97,10 @@ export default function ResearcherHomePage() {
   if (error)   return <ErrorState message={error} />;
 
   const STAT_ITEMS = [
-    { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(stats.openTasks),    sub: `across ${projects.length} project${projects.length !== 1 ? "s" : ""}` },
-    { id: "stat-due-today",       label: "DUE TODAY",       value: String(stats.dueToday),     sub: "tasks need attention" },
-    { id: "stat-active-bookings", label: "ACTIVE BOOKINGS", value: String(stats.activeBookings), sub: "approved this week" },
-    { id: "stat-notifications",   label: "PROJECTS",        value: String(projects.length),    sub: "active workspaces" },
+    { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(stats.openTasks),    sub: `across ${projects.length} project${projects.length !== 1 ? "s" : ""}`, href: "/dashboard/researcher/tasks" },
+    { id: "stat-due-today",       label: "DUE TODAY",       value: String(stats.dueToday),     sub: "tasks need attention", href: "/dashboard/researcher/tasks" },
+    { id: "stat-active-bookings", label: "ACTIVE BOOKINGS", value: String(stats.activeBookings), sub: "approved this week", href: "/dashboard/researcher/resources" },
+    { id: "stat-notifications",   label: "PROJECTS",        value: String(projects.length),    sub: "active workspaces", href: "/dashboard/researcher/projects" },
   ];
 
   return (
@@ -99,11 +108,11 @@ export default function ResearcherHomePage() {
       {/* ── Stats row ────────────────────────────────────────────────────── */}
       <div style={s.statsRow}>
         {STAT_ITEMS.map((stat) => (
-          <div key={stat.id} id={stat.id} style={s.statCard}>
+          <Link key={stat.id} id={stat.id} href={stat.href} style={{ ...s.statCard, textDecoration: "none", cursor: "pointer" }}>
             <span style={s.statValue}>{stat.value}</span>
             <span style={s.statLabel}>{stat.label}</span>
             <span style={s.statSub}>{stat.sub}</span>
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -115,7 +124,7 @@ export default function ResearcherHomePage() {
           <div style={s.cardHead}>
             <span style={s.cardTitle}>My Tasks</span>
             <Link id="link-all-tasks" href="/dashboard/researcher/tasks" style={s.cardLink}>
-              View all tasks →
+              View all tasks in Kanban board →
             </Link>
           </div>
           <table style={s.table}>
@@ -130,11 +139,17 @@ export default function ResearcherHomePage() {
               {pendingTasks.length === 0 ? (
                 <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#888" }}>No open tasks 🎉</td></tr>
               ) : pendingTasks.map((task) => (
-                <tr key={task.id}>
-                  <td style={s.td}>{task.title}</td>
+                <tr key={task.id} style={{ cursor: "pointer" }}>
+                  <td style={s.td}>
+                    <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none", color: "#161616", fontWeight: 600 }}>
+                      {task.title}
+                    </Link>
+                  </td>
                   <td style={s.td}>{task.projectId}</td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, ...statusStyle(task.status) }}>{task.status.replace("_", " ")}</span>
+                    <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none" }}>
+                      <span style={{ ...s.badge, ...statusStyle(task.status) }}>{task.status.replace("_", " ")}</span>
+                    </Link>
                   </td>
                   <td style={s.td}>{task.priority}</td>
                   <td style={s.td}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}</td>

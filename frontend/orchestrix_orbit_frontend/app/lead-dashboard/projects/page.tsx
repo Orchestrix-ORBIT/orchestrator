@@ -87,8 +87,12 @@ export default function LeadProjectsPage() {
     }
   }
 
+  const [filter, setFilter]           = useState<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
+
   if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading projects…</p>;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
+
+  const visibleProjects = filter === "ALL" ? projects : projects.filter(p => p.status === filter);
 
   return (
     <div>
@@ -102,8 +106,30 @@ export default function LeadProjectsPage() {
         </button>
       </div>
 
+      {/* ── Filter tabs ─────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+        {(["ALL", "ACTIVE", "ARCHIVED"] as const).map(f => (
+          <button
+            key={f}
+            style={{
+              padding: "7px 16px",
+              fontSize: 12,
+              fontWeight: filter === f ? 700 : 600,
+              color: filter === f ? "#ffffff" : "#616161",
+              background: filter === f ? "#161616" : "#f5f5f5",
+              border: filter === f ? "1px solid #161616" : "1px solid #e0e0e0",
+              borderRadius: 6,
+              cursor: "pointer",
+            }}
+            onClick={() => setFilter(f)}
+          >
+            {f === "ALL" ? `All (${projects.length})` : f === "ACTIVE" ? `Active (${projects.filter(p => p.status === "ACTIVE").length})` : `Archived (${projects.filter(p => p.status === "ARCHIVED").length})`}
+          </button>
+        ))}
+      </div>
+
       <div style={s.grid}>
-        {projects.map(p => (
+        {visibleProjects.map(p => (
           <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
             <div style={s.cardTop}>
               <span style={{ ...s.badge, ...(p.status === "ACTIVE" ? s.activeStyle : s.archivedStyle) }}>

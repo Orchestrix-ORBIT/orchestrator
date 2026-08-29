@@ -49,7 +49,15 @@ public class AttributeEncryptor implements AttributeConverter<String, String> {
             return null;
         }
         EncryptionService service = getEncryptionService();
-        return service != null ? service.decrypt(dbData) : dbData;
+        if (service == null) {
+            return dbData;
+        }
+        try {
+            return service.decrypt(dbData);
+        } catch (Exception e) {
+            // Fallback safely to raw string if dbData is unencrypted legacy text or invalid cipher
+            return dbData;
+        }
     }
 
     private EncryptionService getEncryptionService() {

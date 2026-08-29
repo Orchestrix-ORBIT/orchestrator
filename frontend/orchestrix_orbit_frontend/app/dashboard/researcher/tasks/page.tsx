@@ -17,10 +17,11 @@ import { TasksService, type Task, type TaskStatus, type TaskPriority } from "@/l
  */
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
-  { id: "TODO",        label: "To Do"        },
-  { id: "IN_PROGRESS", label: "In Progress"  },
-  { id: "DONE",        label: "Completed"    },
-  { id: "BLOCKED",     label: "Blocked"      },
+  { id: "TODO",        label: "To Do" },
+  { id: "IN_PROGRESS", label: "In Progress" },
+  { id: "DONE",        label: "Completed (Pending Review)" },
+  { id: "ACCEPTED",    label: "Accepted ✓" },
+  { id: "BLOCKED",     label: "Blocked" },
 ];
 
 export default function ResearcherTasksPage() {
@@ -62,10 +63,20 @@ export default function ResearcherTasksPage() {
     load();
   }, []);
 
+  const [assignedOnly, setAssignedOnly] = useState<boolean>(true);
+
+  let currentUserId = "";
+  try {
+    const userStr = localStorage.getItem("user") || "{}";
+    currentUserId = JSON.parse(userStr).id || "";
+  } catch (e) {}
+
   /* ── Filtered tasks ─────────────────────────────────────────────────── */
-  const filteredTasks = selectedProject === "ALL"
-    ? tasks
-    : tasks.filter(t => t.projectId === selectedProject);
+  const filteredTasks = tasks.filter((t) => {
+    const matchesProject = selectedProject === "ALL" || t.projectId === selectedProject;
+    const matchesAssignee = !assignedOnly || !t.assigneeId || t.assigneeId === currentUserId;
+    return matchesProject && matchesAssignee;
+  });
 
   /* ── Move task to different status ─────────────────────────────────── */
   async function moveTask(task: Task, newStatus: TaskStatus) {

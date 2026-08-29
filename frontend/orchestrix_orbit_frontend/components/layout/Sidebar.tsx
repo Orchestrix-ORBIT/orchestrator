@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, getTenantSlug, getRole } from "@/lib/auth";
 
 const NAV = [
   {
@@ -93,6 +94,18 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [orgName, setOrgName] = useState<string>("");
+
+  useEffect(() => {
+    const slug = getTenantSlug() || "myorg";
+    fetch(`http://localhost:8080/api/admin/tenants/${slug}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.name) setOrgName(data.name);
+        else setOrgName(slug.toUpperCase());
+      })
+      .catch(() => setOrgName(slug.toUpperCase()));
+  }, []);
 
   function handleLogout() {
     logout();
@@ -104,7 +117,7 @@ export function Sidebar() {
       {/* Brand Header */}
       <div style={s.brand}>
         <span style={s.brandName}>Orchestrix</span>
-        <span style={s.brandSub}>Research Lead</span>
+        <span style={s.brandSub}>🏢 {orgName || "MYORG"} (LEAD)</span>
       </div>
 
       {/* Navigation */}
