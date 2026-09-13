@@ -2,9 +2,12 @@ package com.example.core_api.resource;
 
 import com.example.core_api.exception.ResourceNotFoundException;
 import com.example.core_api.exception.ResourceBookingConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -93,18 +96,37 @@ public class ResourceService {
 
     public BookingResponse createBooking(UUID resourceId, CreateBookingRequest request, UUID userId) {
         if (request.getEndTime().isBefore(request.getStartTime()) || request.getEndTime().isEqual(request.getStartTime())) {
-            throw new IllegalArgumentException("End time must be strictly after start time");
-        }
-        
-        if (!resourceRepository.existsById(resourceId)) {
-            throw new ResourceNotFoundException("Resource not found with id: " + resourceId);
+            throw new IllegalArgumentException("End time must be after start time.");
         }
 
-        long overlappingCount = bookingRepository.countOverlappingBookings(
+        Resource resource = resourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + resourceId));
+
+        // ── Layer 1: Advisory lock (transaction-scoped) ───────────────────────
+        // pg_advisory_xact_lock acquires a database-level exclusive lock keyed on
+        // this resource's UUID. It blocks ANY concurrent transaction that calls this
+        // for the same resource until the first one commits or rolls back.
+        //
+        // Unlike SELECT FOR UPDATE, this works even when the booking table has ZERO
+        // rows for this resource — which is the exact gap that caused the race condition.
+        // The lock is automatically released when the @Transactional method ends.
+        bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+
+        // ── Layer 2: Application-level conflict check ─────────────────────────
+        // After acquiring the lock we can safely read — the advisory lock guarantees
+        // no concurrent insert can slip in between this check and our own insert.
+        List<ResourceBooking> conflicts = bookingRepository.findOverlappingBookings(
                 resourceId, request.getStartTime(), request.getEndTime());
 
-        if (overlappingCount > 0) {
-            throw new ResourceBookingConflictException("Resource is already booked during the requested time period");
+        if (!conflicts.isEmpty()) {
+            ResourceBooking first = conflicts.get(0);
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a")
+                    .withZone(ZoneId.of("UTC"));
+            String bookedFrom  = fmt.format(first.getStartTime());
+            String bookedUntil = fmt.format(first.getEndTime());
+            throw new ResourceBookingConflictException(
+                    "\"" + resource.getName() + "\" is already booked from " + bookedFrom +
+                    " to " + bookedUntil + " (UTC). Please choose a different time slot.");
         }
 
         ResourceBooking booking = ResourceBooking.builder()
@@ -115,8 +137,17 @@ public class ResourceService {
                 .status(BookingStatus.PENDING_APPROVAL)
                 .purpose(request.getPurpose())
                 .build();
-                
-        booking = bookingRepository.save(booking);
+
+        try {
+            booking = bookingRepository.save(booking);
+        } catch (DataIntegrityViolationException ex) {
+            // ── Layer 3: Database EXCLUDE constraint ─────────────────────────
+            // The btree_gist EXCLUDE constraint fired — a concurrent transaction
+            // beat us to it between our check and our insert.
+            throw new ResourceBookingConflictException(
+                    "\"" + resource.getName() + "\" was just booked by another user for that time slot. " +
+                    "Please refresh and choose a different time.");
+        }
         return mapToBookingResponse(booking);
     }
 

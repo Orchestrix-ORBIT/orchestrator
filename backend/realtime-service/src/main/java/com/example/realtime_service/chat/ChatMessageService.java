@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,7 +59,12 @@ public class ChatMessageService {
                 saved.getSenderId(),
                 displayName,
                 saved.getContentEncrypted(),
-                saved.getCreatedAt()
+                saved.getCreatedAt(),
+                request.replyToId(),
+                request.replyToSender(),
+                request.replyToContent(),
+                false,
+                false
         );
     }
 
@@ -81,9 +88,54 @@ public class ChatMessageService {
                             msg.getSenderId(),
                             senderName,
                             msg.getContentEncrypted(),
-                            msg.getCreatedAt()
+                            msg.getCreatedAt(),
+                            null,
+                            null,
+                            null,
+                            false,
+                            false
                     );
                 })
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatMessageResponse> getProjectMessagesPaginated(UUID projectId, String tenantId, int page, int size) {
+        if (tenantId != null && !tenantId.isBlank()) {
+            String schemaName = "org_" + tenantId.toLowerCase().replace("-", "_");
+            TenantContext.setCurrentTenant(schemaName);
+        }
+
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                page,
+                size,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")
+        );
+
+        List<ChatMessage> fetched = chatMessageRepository.findByProjectId(projectId, pageable);
+        List<ChatMessageResponse> result = new java.util.ArrayList<>(
+                fetched.stream().map(msg -> {
+                    String senderName = userRepository.findById(msg.getSenderId())
+                            .map(u -> u.getDisplayName() != null ? u.getDisplayName() : u.getEmail())
+                            .orElse("Researcher");
+                    return new ChatMessageResponse(
+                            msg.getId(),
+                            msg.getProjectId(),
+                            msg.getTaskId(),
+                            msg.getSenderId(),
+                            senderName,
+                            msg.getContentEncrypted(),
+                            msg.getCreatedAt(),
+                            null,
+                            null,
+                            null,
+                            false,
+                            false
+                    );
+                }).toList()
+        );
+
+        Collections.reverse(result);
+        return result;
     }
 }

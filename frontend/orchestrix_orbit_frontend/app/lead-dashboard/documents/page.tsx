@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface DocItem {
   id: string;
@@ -57,6 +58,7 @@ const INITIAL_DOCS: DocItem[] = [
 ];
 
 export default function DocumentsPage() {
+  const [loading, setLoading] = useState(true);
   const [docs, setDocs] = useState<DocItem[]>(INITIAL_DOCS);
   const [selectedDoc, setSelectedDoc] = useState<DocItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -65,6 +67,19 @@ export default function DocumentsPage() {
   const [contentInput, setContentInput] = useState("");
   const [editContent, setEditContent] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <LoadingState
+        title="Loading Knowledge & Documents…"
+        subtitle="Fetching research protocols, steering minutes, and pre-print papers"
+      />
+    );
+  }
 
   const openDoc = (doc: DocItem) => {
     setSelectedDoc(doc);
@@ -109,7 +124,7 @@ export default function DocumentsPage() {
         <div>
           <h1 style={s.pageTitle}>Documents & Protocols</h1>
           <p style={s.pageSub}>
-            Collaborative meeting minutes, experimental protocols, research papers, and encrypted pre-prints (FR-COLLAB-02).
+            Collaborative meeting minutes, experimental protocols, research papers, and encrypted pre-prints.
           </p>
         </div>
 

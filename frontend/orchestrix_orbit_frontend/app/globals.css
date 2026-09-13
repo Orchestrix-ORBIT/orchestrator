@@ -31,3 +31,40 @@ body {
 a { text-decoration: none; color: inherit; }
 button { font-family: var(--font); cursor: pointer; }
 input, textarea { font-family: var(--font); }
+
+/* ── Clickable Link Utilities ──────────────────────────────────────────────── */
+.clickable-project-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.clickable-project-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ── Custom Sleek Scrollbars ────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+

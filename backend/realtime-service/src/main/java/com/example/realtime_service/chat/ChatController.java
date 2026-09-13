@@ -21,13 +21,21 @@ public class ChatController {
 
     @GetMapping("/api/chat/projects/{projectId}/messages")
     public ResponseEntity<List<ChatMessageResponse>> getMessages(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId
     ) {
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         TenantContext.setCurrentTenant(schemaName);
         try {
-            List<ChatMessageResponse> messages = chatMessageService.getProjectMessages(projectId, tenantId);
+            UUID projectUuid;
+            try {
+                projectUuid = UUID.fromString(projectId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.ok(List.of());
+            }
+            List<ChatMessageResponse> messages = chatMessageService.getProjectMessagesPaginated(projectUuid, tenantId, page, size);
             return ResponseEntity.ok(messages);
         } finally {
             TenantContext.clear();

@@ -23,11 +23,27 @@ function buildHeaders(): HeadersInit {
   return headers;
 }
 
-// Helper: unwrap response — throw on non-2xx
+// Helper: unwrap response — throw on non-2xx with user-friendly message
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`API error ${res.status}: ${error}`);
+    const raw = await res.text();
+    // Try to extract the 'message' field from Spring Boot error JSON bodies
+    try {
+      const json = JSON.parse(raw);
+      const msg = json?.message || json?.error || raw;
+      // Attach HTTP status so callers can check it if needed
+      const err = new Error(msg) as Error & { status: number };
+      err.status = res.status;
+      throw err;
+    } catch (parseErr) {
+      if (parseErr instanceof SyntaxError) {
+        // Raw text response — use as-is
+        const err = new Error(raw || `Request failed (${res.status})`) as Error & { status: number };
+        err.status = res.status;
+        throw err;
+      }
+      throw parseErr;
+    }
   }
   // 204 No Content — return null
   if (res.status === 204) return null as T;

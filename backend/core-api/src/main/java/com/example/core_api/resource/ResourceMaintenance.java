@@ -37,12 +37,20 @@ public class ResourceMaintenance {
 
     private String technician;
 
-    @Builder.Default
-    private String status = "Scheduled";
+    private String status;
 
     private String notes;
 
     @Column(name = "created_at")
-    @Builder.Default
-    private OffsetDateTime createdAt = OffsetDateTime.now();
+    private OffsetDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = OffsetDateTime.now();
+        }
+        if (status == null) {
+            status = "Scheduled";
+        }
+    }
 }

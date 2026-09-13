@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface AiSummary {
   id: string;
@@ -79,7 +80,21 @@ const INSIGHTS: AiSummary[] = [
 ];
 
 export default function AiInsightsPage() {
+  const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<AiSummary | null>(null);
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <LoadingState
+        title="Loading AI Summaries & Insights…"
+        subtitle="Synthesizing experiment anomalies, NLP extractions, and model benchmarks"
+      />
+    );
+  }
 
   return (
     <div>

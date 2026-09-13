@@ -131,12 +131,8 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer / Encryption Badge & Logout */}
+      {/* Footer / Logout */}
       <div style={s.footer}>
-        <div style={s.encryptBox}>
-          <span style={s.encryptLabel}>ENCRYPTED SESSION</span>
-          <span style={s.encryptSub}>AES-256 GCM</span>
-        </div>
         <button
           id="btn-lead-logout"
           type="button"
@@ -236,8 +232,9 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   footer: {
-    padding: "16px 12px 0",
+    padding: "12px 12px 16px",
     borderTop: "1px solid #2a2a2a",
+    marginTop: "auto",
   },
   encryptBox: {
     display: "flex",
@@ -262,17 +259,19 @@ const s: Record<string, React.CSSProperties> = {
   logoutBtn: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    padding: "8px 10px",
+    padding: "7px 10px",
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 500,
     color: "#f87171",
-    background: "none",
-    border: "none",
+    background: "rgba(248, 113, 113, 0.08)",
+    border: "1px solid rgba(248, 113, 113, 0.2)",
     cursor: "pointer",
     width: "100%",
-    textAlign: "left" as const,
     marginTop: 8,
+    boxSizing: "border-box",
+    transition: "all 0.15s ease",
   },
 };
