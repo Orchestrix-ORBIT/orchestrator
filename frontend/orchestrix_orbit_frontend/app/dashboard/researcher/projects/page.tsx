@@ -1,18 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ProjectsService, type Project, type CreateProjectBody } from "@/lib/services/projects";
+import { ProjectsService, type Project } from "@/lib/services/projects";
 
 /*
  * PATTERN USED HERE (teaching note):
  *
- * This page has two states: "viewing the list" and "showing a create form".
- * When the user clicks "New Project", we show a modal form.
- * When they submit, we call ProjectsService.create() which does:
- *   POST /api/projects → { name, description }
- * Spring Boot creates the project in the DB and returns the new Project.
- * We then prepend it to our local `projects` array so the UI updates instantly
- * without needing to re-fetch the full list. This is called "optimistic update".
+ * This page lists the projects the researcher is assigned to.
+ * All project management (creation, deletion) is restricted to Project Leads / Admins.
  */
 
 type ProjectStatus = "ACTIVE" | "ARCHIVED";
@@ -22,11 +17,6 @@ export default function ResearcherProjectsPage() {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
   const [filter, setFilter]             = useState<"ALL" | ProjectStatus>("ALL");
-  const [showModal, setShowModal]       = useState(false);
-  const [newName, setNewName]           = useState("");
-  const [newDesc, setNewDesc]           = useState("");
-  const [creating, setCreating]         = useState(false);
-  const [createError, setCreateError]   = useState<string | null>(null);
 
   /* ── Fetch on mount ─────────────────────────────────────────────────── */
   useEffect(() => {
@@ -39,39 +29,6 @@ export default function ResearcherProjectsPage() {
   /* ── Filtered list ──────────────────────────────────────────────────── */
   const visible = filter === "ALL" ? projects : projects.filter(p => p.status === filter);
 
-  /* ── Create project ─────────────────────────────────────────────────── */
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    setCreating(true);
-    setCreateError(null);
-
-    try {
-      const body: CreateProjectBody = { name: newName.trim(), description: newDesc.trim() || undefined };
-      const created = await ProjectsService.create(body);
-      // Prepend so it appears at the top of the list
-      setProjects(prev => [created, ...prev]);
-      setShowModal(false);
-      setNewName("");
-      setNewDesc("");
-    } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create project");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  /* ── Delete project ─────────────────────────────────────────────────── */
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this project? This cannot be undone.")) return;
-    try {
-      await ProjectsService.delete(id);
-      setProjects(prev => prev.filter(p => p.id !== id));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Delete failed");
-    }
-  }
-
   if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading projects…</p>;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
@@ -83,9 +40,6 @@ export default function ResearcherProjectsPage() {
           <h1 style={s.title}>My Projects</h1>
           <p style={s.sub}>{projects.length} project{projects.length !== 1 ? "s" : ""} in this workspace</p>
         </div>
-        <button id="btn-new-project" onClick={() => setShowModal(true)} style={s.btnPrimary}>
-          + New Project
-        </button>
       </div>
 
       {/* ── Filter tabs ─────────────────────────────────────────────────── */}
@@ -101,8 +55,7 @@ export default function ResearcherProjectsPage() {
       <div style={s.grid}>
         {visible.length === 0 ? (
           <div style={s.empty}>
-            <p>No projects yet.</p>
-            <button style={s.btnPrimary} onClick={() => setShowModal(true)}>Create your first project</button>
+            <p>No projects yet. Contact your Research Lead to assign you to a project.</p>
           </div>
         ) : visible.map(p => (
           <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
@@ -110,14 +63,6 @@ export default function ResearcherProjectsPage() {
               <span style={{ ...s.statusBadge, ...(p.status === "ACTIVE" ? s.statusActive : s.statusArchived) }}>
                 {p.status}
               </span>
-              <button
-                id={`btn-delete-project-${p.id}`}
-                onClick={() => handleDelete(p.id)}
-                style={s.deleteBtn}
-                title="Delete project"
-              >
-                ×
-              </button>
             </div>
             <h3 style={s.cardName}>{p.name}</h3>
             <p style={s.cardDesc}>{p.description || "No description"}</p>
@@ -125,43 +70,6 @@ export default function ResearcherProjectsPage() {
           </div>
         ))}
       </div>
-
-      {/* ── Create Modal ─────────────────────────────────────────────────── */}
-      {showModal && (
-        <div style={s.overlay}>
-          <div style={s.modal}>
-            <div style={s.modalHead}>
-              <span style={s.modalTitle}>New Project</span>
-              <button style={s.closeBtn} onClick={() => { setShowModal(false); setCreateError(null); }}>×</button>
-            </div>
-            <form onSubmit={handleCreate} style={s.modalForm}>
-              {createError && (
-                <div style={s.errorBanner}>{createError}</div>
-              )}
-              <div style={s.field}>
-                <label style={s.label}>Project name *</label>
-                <input id="input-project-name" style={s.input} value={newName}
-                  onChange={e => setNewName(e.target.value)} placeholder="e.g. Quantum Analysis" required />
-              </div>
-              <div style={s.field}>
-                <label style={s.label}>Description</label>
-                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 80, resize: "vertical" as const }}
-                  value={newDesc} onChange={e => setNewDesc(e.target.value)}
-                  placeholder="What is this project about?" />
-              </div>
-              <div style={s.modalActions}>
-                <button type="button" style={s.btnSecondary}
-                  onClick={() => { setShowModal(false); setCreateError(null); }}>
-                  Cancel
-                </button>
-                <button id="btn-create-project" type="submit" style={{ ...s.btnPrimary, opacity: creating ? 0.6 : 1 }} disabled={creating}>
-                  {creating ? "Creating…" : "Create Project"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -171,9 +79,9 @@ const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
   title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
   sub: { fontSize: 13, color: "#888888" },
-  tabs: { display: "flex", gap: 4, marginBottom: 20 },
-  tabOn: { padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#161616", background: "#161616", border: "none", borderRadius: 5, cursor: "pointer", color2: "#fff" as unknown as string } as React.CSSProperties,
-  tabOff: { padding: "6px 14px", fontSize: 12, fontWeight: 500, color: "#888", background: "#f0f0f0", border: "none", borderRadius: 5, cursor: "pointer" },
+  tabs: { display: "flex", gap: 6, marginBottom: 20 },
+  tabOn: { padding: "7px 16px", fontSize: 12, fontWeight: 700, color: "#ffffff", background: "#161616", border: "1px solid #161616", borderRadius: 6, cursor: "pointer" },
+  tabOff: { padding: "7px 16px", fontSize: 12, fontWeight: 600, color: "#616161", background: "#f5f5f5", border: "1px solid #e0e0e0", borderRadius: 6, cursor: "pointer" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 },
   empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#888", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
   card: { background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 20, display: "flex", flexDirection: "column", gap: 8 },

@@ -3,7 +3,7 @@
 import React, { useState, use } from "react";
 import Link from "next/link";
 
-type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "COMPLETED";
+type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "ACCEPTED" | "BLOCKED";
 
 interface TaskItem {
   id: string;
@@ -36,8 +36,9 @@ import { TeamsService } from "@/lib/services/teams";
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "TODO", title: "To Do" },
   { id: "IN_PROGRESS", title: "In Progress" },
-  { id: "REVIEW", title: "Under Review" },
-  { id: "COMPLETED", title: "Completed" },
+  { id: "DONE", title: "Completed (Pending Review)" },
+  { id: "ACCEPTED", title: "Accepted ✓" },
+  { id: "BLOCKED", title: "Blocked" },
 ];
 
 function getInitials(name: string) {
@@ -103,9 +104,10 @@ export default function ProjectWorkspacePage({
 
         const mappedTasks: TaskItem[] = (taskList as any[]).map((t: any) => {
           let uiStatus: TaskStatus = "TODO";
-          if (t.status === "DONE" || t.status === "COMPLETED") uiStatus = "COMPLETED";
+          if (t.status === "ACCEPTED") uiStatus = "ACCEPTED";
+          else if (t.status === "DONE" || t.status === "COMPLETED") uiStatus = "DONE";
           else if (t.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
-          else if (t.status === "BLOCKED" || t.status === "REVIEW") uiStatus = "REVIEW";
+          else if (t.status === "BLOCKED") uiStatus = "BLOCKED";
 
           return {
             id: t.id,
@@ -132,7 +134,7 @@ export default function ProjectWorkspacePage({
 
   // Progress
   const totalCount = tasks.length;
-  const completedCount = tasks.filter((t) => t.status === "COMPLETED").length;
+  const completedCount = tasks.filter((t) => t.status === "ACCEPTED" || t.status === "DONE").length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const handleCreateTask = async (e: React.FormEvent) => {
@@ -140,7 +142,7 @@ export default function ProjectWorkspacePage({
     if (isCompletedProject || !titleInput.trim()) return;
 
     try {
-      const backendStatus = columnInput === "COMPLETED" ? "DONE" : (columnInput === "REVIEW" ? "BLOCKED" : columnInput);
+      const backendStatus = columnInput;
       const created = await TasksService.create(projectId, {
         title: titleInput.trim(),
         description: descInput.trim() || undefined,
@@ -174,7 +176,7 @@ export default function ProjectWorkspacePage({
       prev.map((t) => (t.id === taskId ? { ...t, status: targetStatus } : t))
     );
     try {
-      const backendStatus = targetStatus === "COMPLETED" ? "DONE" : (targetStatus === "REVIEW" ? "BLOCKED" : targetStatus);
+      const backendStatus = targetStatus;
       await TasksService.update(projectId, taskId, { status: backendStatus as any });
     } catch (err) {
       console.warn("Could not update task status on backend:", err);
@@ -212,7 +214,7 @@ export default function ProjectWorkspacePage({
   );
 
   const visibleColumns = isCompletedProject
-    ? COLUMNS.filter((c) => c.id === "COMPLETED")
+    ? COLUMNS.filter((c) => c.id === "ACCEPTED" || c.id === "DONE")
     : COLUMNS;
 
   const [mounted, setMounted] = useState(false);
@@ -419,20 +421,45 @@ export default function ProjectWorkspacePage({
                         {isCompletedProject ? (
                           <span style={s.completedBadge}>✓ Completed</span>
                         ) : (
-                          <select
-                            value={task.status}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleMoveTask(task.id, e.target.value as TaskStatus);
-                            }}
-                            style={s.statusSelect}
-                          >
-                            <option value="TODO">To Do</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="REVIEW">Review</option>
-                            <option value="COMPLETED">Completed</option>
-                          </select>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {task.status === "DONE" && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveTask(task.id, "ACCEPTED");
+                                }}
+                                style={{
+                                  padding: "4px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "#ffffff",
+                                  background: "#2e7d32",
+                                  border: "none",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                }}
+                                title="Accept this task"
+                              >
+                                Accept Task ✓
+                              </button>
+                            )}
+                            <select
+                              value={task.status}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleMoveTask(task.id, e.target.value as TaskStatus);
+                              }}
+                              style={s.statusSelect}
+                            >
+                              <option value="TODO">To Do</option>
+                              <option value="IN_PROGRESS">In Progress</option>
+                              <option value="DONE">Completed (Pending Review)</option>
+                              <option value="ACCEPTED">Accepted ✓</option>
+                              <option value="BLOCKED">Blocked</option>
+                            </select>
+                          </div>
                         )}
 
                         <span
@@ -512,11 +539,11 @@ export default function ProjectWorkspacePage({
                       fontWeight: 700,
                       padding: "3px 8px",
                       borderRadius: 12,
-                      background: selectedTask.status === "COMPLETED" ? "#e8f5e9" : selectedTask.status === "IN_PROGRESS" ? "#e3f2fd" : selectedTask.status === "REVIEW" ? "#fff3e0" : "#f5f5f5",
-                      color: selectedTask.status === "COMPLETED" ? "#2e7d32" : selectedTask.status === "IN_PROGRESS" ? "#1565c0" : selectedTask.status === "REVIEW" ? "#e65100" : "#616161",
+                      background: selectedTask.status === "ACCEPTED" ? "#e8f5e9" : selectedTask.status === "DONE" ? "#f3e8ff" : selectedTask.status === "IN_PROGRESS" ? "#e3f2fd" : selectedTask.status === "BLOCKED" ? "#fee2e2" : "#f5f5f5",
+                      color: selectedTask.status === "ACCEPTED" ? "#2e7d32" : selectedTask.status === "DONE" ? "#6b21a8" : selectedTask.status === "IN_PROGRESS" ? "#1565c0" : selectedTask.status === "BLOCKED" ? "#dc2626" : "#616161",
                       display: "inline-block"
                     }}>
-                      {selectedTask.status === "IN_PROGRESS" ? "In Progress" : selectedTask.status === "REVIEW" ? "Under Review" : selectedTask.status}
+                      {selectedTask.status === "ACCEPTED" ? "Accepted ✓" : selectedTask.status === "DONE" ? "Completed (Pending Review)" : selectedTask.status === "IN_PROGRESS" ? "In Progress" : selectedTask.status === "BLOCKED" ? "Blocked" : "To Do"}
                     </span>
                   </div>
                 </div>

@@ -1,7 +1,9 @@
 package com.example.core_api.task;
 
+import com.example.core_api.auth.User;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -62,6 +64,7 @@ public class TaskController {
 
     @PatchMapping("/{taskId}")
     public TaskResponse updateTask(
+            @AuthenticationPrincipal User currentUser,
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @PathVariable UUID taskId,
@@ -69,7 +72,7 @@ public class TaskController {
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
-            return taskService.updateTask(taskId, request);
+            return taskService.updateTask(taskId, request, currentUser);
         } finally {
             com.example.core_api.multitenancy.TenantContext.clear();
         }

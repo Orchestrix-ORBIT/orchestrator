@@ -23,23 +23,23 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 type Tab = "signin" | "signup";
 
 export default function Home() {
-  const [tab, setTab]             = useState<Tab>("signin");
+  const [tab, setTab] = useState<Tab>("signin");
 
   // Sign-in state
-  const [siEmail, setSiEmail]     = useState("");
-  const [siPass, setSiPass]       = useState("");
-  const [siTenant, setSiTenant]   = useState("");
+  const [siEmail, setSiEmail] = useState("");
+  const [siPass, setSiPass] = useState("");
+  const [siTenant, setSiTenant] = useState("");
 
   // Sign-up state
-  const [suName, setSuName]       = useState("");
-  const [suEmail, setSuEmail]     = useState("");
-  const [suPass, setSuPass]       = useState("");
-  const [suConf, setSuConf]       = useState("");
-  const [suTenant, setSuTenant]   = useState("");
+  const [suName, setSuName] = useState("");
+  const [suEmail, setSuEmail] = useState("");
+  const [suPass, setSuPass] = useState("");
+  const [suConf, setSuConf] = useState("");
+  const [suTenant, setSuTenant] = useState("");
 
   // Shared UI state
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -89,7 +89,9 @@ export default function Home() {
        * ROLE_ADMIN / ROLE_OWNER → /lead-dashboard
        * ROLE_MEMBER / ROLE_GUEST → /dashboard/researcher
        */
-      router.push(getDashboardPath(data.role, data.email));
+      const destPath = getDashboardPath(data.role, data.email);
+      console.log(`[Auth] Logged in as ${data.email} with role: ${data.role} -> Navigating to: ${destPath}`);
+      router.push(destPath);
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sign in failed");
@@ -215,7 +217,7 @@ export default function Home() {
                 placeholder="Enter your password"
                 value={siPass} onChange={setSiPass} />
 
-              <button id="btn-signin" type="submit" style={{...s.btnPrimary, opacity: loading ? 0.6 : 1}} disabled={loading}>
+              <button id="btn-signin" type="submit" style={{ ...s.btnPrimary, opacity: loading ? 0.6 : 1 }} disabled={loading}>
                 {loading ? "Signing in…" : "Sign in"}
               </button>
 
@@ -263,7 +265,7 @@ export default function Home() {
                 placeholder="Repeat your password"
                 value={suConf} onChange={setSuConf} />
 
-              <button id="btn-signup" type="submit" style={{...s.btnPrimary, opacity: loading ? 0.6 : 1}} disabled={loading}>
+              <button id="btn-signup" type="submit" style={{ ...s.btnPrimary, opacity: loading ? 0.6 : 1 }} disabled={loading}>
                 {loading ? "Creating account…" : "Create account"}
               </button>
 
@@ -411,7 +413,9 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: "#161616",
     background: "none",
-    border: "none",
+    borderTop: "none",
+    borderLeft: "none",
+    borderRight: "none",
     borderBottom: "2px solid #161616",
     marginBottom: -2,
     cursor: "pointer",
@@ -423,7 +427,10 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     color: "#9e9e9e",
     background: "none",
-    border: "none",
+    borderTop: "none",
+    borderLeft: "none",
+    borderRight: "none",
+    borderBottom: "2px solid transparent",
     cursor: "pointer",
   },
 

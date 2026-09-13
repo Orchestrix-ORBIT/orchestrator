@@ -74,8 +74,10 @@ export function getDashboardPath(role: string, email?: string): string {
     return "/resource-dashboard";
   }
 
-  // 2. Admin / Lead check
   if (normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
+    return "/admin-dashboard";
+  }
+  if (normRole === "ROLE_LEAD" || normRole === "LEAD") {
     return "/lead-dashboard";
   }
 

@@ -28,10 +28,13 @@ export interface ResearchTeam {
 }
 
 export interface TeamMember {
-  teamId: string;
-  userId: string;
+  id?: string;
+  teamId?: string;
+  userId?: string;
   role: TeamRole;
-  joinedAt: string;
+  joinedAt?: string;
+  email?: string;
+  displayName?: string;
   userEmail?: string;
   userDisplayName?: string;
 }

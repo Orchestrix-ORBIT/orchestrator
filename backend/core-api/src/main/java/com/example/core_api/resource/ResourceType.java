@@ -9,5 +9,9 @@ public enum ResourceType {
     COMPUTE,
     INSTRUMENT,
     ROOM,
-    SOFTWARE
+    EQUIPMENT,
+    LAB_EQUIPMENT,
+    SOFTWARE,
+    HARDWARE,
+    OTHER
 }

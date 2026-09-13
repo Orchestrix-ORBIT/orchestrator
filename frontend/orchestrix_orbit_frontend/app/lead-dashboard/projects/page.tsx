@@ -23,7 +23,7 @@ export default function LeadProjectsPage() {
   const [memberSearchQuery, setMemberSearchQuery] = useState("");
 
   const [searchQuery, setSearchQuery]             = useState("");
-  const [filterStatus, setFilterStatus]           = useState<"ALL" | "ACTIVE" | "COMPLETED">("ALL");
+  const [filterStatus, setFilterStatus]           = useState<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
 
   const [projectToDelete, setProjectToDelete]     = useState<Project | null>(null);
   const [deleting, setDeleting]                   = useState(false);
@@ -258,7 +258,7 @@ export default function LeadProjectsPage() {
 
       {/* ── Filter Tabs ─────────────────────────────────────────────────────── */}
       <div style={s.filterRow}>
-        {(["ALL", "ACTIVE", "COMPLETED"] as const).map(st => (
+        {(["ALL", "ACTIVE", "ARCHIVED"] as const).map(st => (
           <button
             key={st}
             onClick={() => setFilterStatus(st)}
@@ -267,7 +267,7 @@ export default function LeadProjectsPage() {
               ...(filterStatus === st ? s.filterTabActive : {}),
             }}
           >
-            {st === "ALL" ? "All Projects" : st === "ACTIVE" ? "Active" : "Completed"}
+            {st === "ALL" ? "All Projects" : st === "ACTIVE" ? "Active" : "Archived"}
             <span style={s.filterCount}>
               {st === "ALL" ? projects.length : projects.filter(p => p.status === st).length}
             </span>

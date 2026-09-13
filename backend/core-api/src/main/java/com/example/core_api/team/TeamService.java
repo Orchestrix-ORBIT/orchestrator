@@ -39,6 +39,9 @@ public class TeamService {
     public TeamMemberResponse updateMemberRole(UUID id, UserRole newRole) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + id));
+        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.OWNER) {
+            throw new IllegalArgumentException("Cannot modify the role of an Admin or Owner account.");
+        }
         user.setRole(newRole);
         user = userRepository.save(user);
         return mapToResponse(user);

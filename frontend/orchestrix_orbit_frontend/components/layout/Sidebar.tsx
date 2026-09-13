@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, getTenantSlug, getRole } from "@/lib/auth";
 
 const NAV = [
   {
@@ -93,6 +94,22 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [orgName, setOrgName] = useState<string>("");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const role = getRole() || "";
+    setIsAdmin(!!role.toUpperCase().match(/ADMIN|OWNER/));
+
+    const slug = getTenantSlug() || "myorg";
+    fetch(`http://localhost:8080/api/admin/tenants/${slug}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.name) setOrgName(data.name);
+        else setOrgName(slug.toUpperCase());
+      })
+      .catch(() => setOrgName(slug.toUpperCase()));
+  }, []);
 
   function handleLogout() {
     logout();
@@ -104,7 +121,7 @@ export function Sidebar() {
       {/* Brand Header */}
       <div style={s.brand}>
         <span style={s.brandName}>Orchestrix</span>
-        <span style={s.brandSub}>Research Lead</span>
+        <span style={s.brandSub}>🏢 {orgName || "MYORG"} (LEAD)</span>
       </div>
 
       {/* Navigation */}
@@ -129,6 +146,35 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {isAdmin && (
+          <Link
+            id="nav-lead-back-admin"
+            href="/admin-dashboard"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "9px 12px",
+              borderRadius: 6,
+              fontSize: 13,
+              color: "#818cf8",
+              fontWeight: 600,
+              cursor: "pointer",
+              textDecoration: "none",
+              marginTop: 16,
+              border: "1px dashed #4f46e5",
+              background: "rgba(79, 70, 229, 0.08)",
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", color: "#818cf8" }}>
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <path d="M1.5 7.5L7.5 1.5M7.5 1.5L13.5 7.5M7.5 1.5V13.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span>Back to Admin</span>
+          </Link>
+        )}
       </nav>
 
       {/* Footer / Logout */}

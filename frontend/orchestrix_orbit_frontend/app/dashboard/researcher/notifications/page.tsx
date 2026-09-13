@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ProjectsService } from "@/lib/services/projects";
+import { TasksService, type Task } from "@/lib/services/tasks";
+import { ResourcesService, type Booking } from "@/lib/services/resources";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 type NotifCategory = "All" | "Tasks" | "Bookings" | "Chat" | "AI";
@@ -17,51 +20,6 @@ interface Notification {
   isUnread?: boolean;
   categories: NotifCategory[];
 }
-
-/* ── Static data ─────────────────────────────────────────────────────────── */
-const NOTIFICATIONS: Notification[] = [
-  {
-    id: "notif-1",
-    type: "task",
-    title: "Task Completed",
-    description: "Dr. Aris reviewed the genomic sequence alignment report.",
-    time: "10m ago",
-    tag: "PROJECT ALPHA",
-    tagExtra: "Encrypted",
-    isUnread: true,
-    categories: ["All", "Tasks"],
-  },
-  {
-    id: "notif-2",
-    type: "message",
-    title: "New Message",
-    description: '"Can we schedule a sync regarding the synthesis phase?" - Sarah',
-    time: "1h ago",
-    tag: "LAB SETUP",
-    isUnread: true,
-    categories: ["All", "Chat"],
-  },
-  {
-    id: "notif-3",
-    type: "ai",
-    title: "AI Summary Ready",
-    description: "Your weekly literature review synthesis is available for reading.",
-    time: "Yesterday",
-    tag: "LITERATURE",
-    isUnread: false,
-    categories: ["All", "AI"],
-  },
-  {
-    id: "notif-4",
-    type: "booking",
-    title: "Booking Confirmed",
-    description: "Equipment 'Electron Microscope A' reserved for 14:00 - 16:00.",
-    time: "Oct 24",
-    tag: "EQUIPMENT",
-    isUnread: false,
-    categories: ["All", "Bookings"],
-  },
-];
 
 const TABS: NotifCategory[] = ["All", "Tasks", "Bookings", "Chat", "AI"];
 
@@ -105,17 +63,69 @@ function NotifIcon({ type }: { type: NotifType }) {
 ═══════════════════════════════════════════════════════════════════════════ */
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<NotifCategory>("All");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = NOTIFICATIONS.filter((n) =>
-    n.categories.includes(activeTab)
-  );
+  useEffect(() => {
+    async function loadNotifications() {
+      try {
+        const projects = await ProjectsService.getAll();
+        const taskPromises = projects.map((p) =>
+          TasksService.getByProject(p.id).catch(() => [] as Task[])
+        );
+        const [taskResults, bookings] = await Promise.all([
+          Promise.all(taskPromises),
+          ResourcesService.getMyBookings().catch(() => [] as Booking[]),
+        ]);
+
+        const flatTasks = taskResults.flat();
+        const items: Notification[] = [];
+
+        flatTasks.forEach((t) => {
+          items.push({
+            id: `task-${t.id}`,
+            type: "task",
+            title: `Task Status: ${t.title}`,
+            description: `Priority ${t.priority} • Status: ${t.status}`,
+            time: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "Active",
+            tag: "TASK",
+            isUnread: t.status !== "DONE",
+            categories: ["All", "Tasks"],
+          });
+        });
+
+        bookings.forEach((b) => {
+          items.push({
+            id: `booking-${b.id}`,
+            type: "booking",
+            title: `Resource Booking: ${b.resourceName || "Equipment"}`,
+            description: `Status: ${b.status} • Purpose: ${b.purpose || "Research Work"}`,
+            time: new Date(b.startTime).toLocaleDateString(),
+            tag: "RESOURCE",
+            isUnread: b.status === "APPROVED",
+            categories: ["All", "Bookings"],
+          });
+        });
+
+        setNotifications(items);
+      } catch (e) {
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadNotifications();
+  }, []);
+
+  const filtered = notifications.filter((n) => n.categories.includes(activeTab));
 
   return (
     <div>
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div style={s.pageHeader}>
         <h1 style={s.pageTitle}>Notifications</h1>
-        <button id="btn-mark-all-read" style={s.markAllBtn}>
+        <button id="btn-mark-all-read" style={s.markAllBtn} onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })))}>
           Mark all as read
         </button>
       </div>
@@ -145,9 +155,15 @@ export default function NotificationsPage() {
 
       {/* ── Notification list ─────────────────────────────────────────────── */}
       <div style={s.notifList}>
-        {filtered.map((notif) => (
-          <NotifRow key={notif.id} notif={notif} />
-        ))}
+        {loading ? (
+          <p style={{ color: "#888", padding: 24 }}>Loading notifications…</p>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "#888", background: "#ffffff", borderRadius: 8, border: "1px solid #e8e8e8" }}>
+            No notifications available in the database.
+          </div>
+        ) : (
+          filtered.map((notif) => <NotifRow key={notif.id} notif={notif} />)
+        )}
       </div>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}

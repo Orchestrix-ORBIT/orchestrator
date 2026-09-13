@@ -28,11 +28,13 @@ public class TenantFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         try {
             String tenantId = request.getHeader(TENANT_HEADER);
-
-            if (tenantId != null && !tenantId.isBlank()) {
-                // Convert slug "acme" → schema "org_acme" slug means unique identifier of the tenant
-                TenantContext.setCurrentTenant("org_" + tenantId.toLowerCase());
+            if (tenantId == null || tenantId.isBlank()) {
+                tenantId = "myorg";
             }
+
+            // Convert slug "acme" → schema "org_acme"
+            String schemaName = "org_" + tenantId.toLowerCase().replace("-", "_");
+            TenantContext.setCurrentTenant(schemaName);
 
             // Pass the request along the filter chain to the next filter / controller
             filterChain.doFilter(request, response);

@@ -11,7 +11,7 @@
 import { api } from "@/lib/api";
 
 // ── Types matching the Spring Boot TaskResponse DTO ──────────────────────────
-export type TaskStatus   = "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED";
+export type TaskStatus   = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "ACCEPTED" | "BLOCKED";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT" | "CRITICAL";
 
 export interface Task {
