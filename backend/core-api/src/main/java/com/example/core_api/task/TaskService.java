@@ -1,9 +1,12 @@
 package com.example.core_api.task;
 
+import com.example.core_api.auth.User;
+import com.example.core_api.auth.UserRole;
 import com.example.core_api.exception.ResourceNotFoundException;
 import com.example.core_api.project.ProjectRepository;
 import com.example.core_api.project.Project;
 import com.example.core_api.researchteam.TeamMemberRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,9 +81,21 @@ public class TaskService {
         return mapToResponse(task);
     }
 
-    public TaskResponse updateTask(UUID taskId, UpdateTaskRequest request) {
+    public TaskResponse updateTask(UUID taskId, UpdateTaskRequest request, User currentUser) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + taskId));
+
+        if (currentUser != null) {
+            boolean isResearcher = currentUser.getRole() == UserRole.MEMBER || currentUser.getRole() == UserRole.GUEST;
+            if (isResearcher) {
+                if (request.getStatus() == TaskStatus.ACCEPTED) {
+                    throw new AccessDeniedException("Researchers are not allowed to accept tasks.");
+                }
+                if (task.getStatus() == TaskStatus.ACCEPTED) {
+                    throw new AccessDeniedException("Accepted tasks cannot be modified by researchers.");
+                }
+            }
+        }
 
         if (request.getAssigneeId() != null && !request.getAssigneeId().equals(task.getAssigneeId())) {
             final UUID projectIdForQuery = task.getProjectId();

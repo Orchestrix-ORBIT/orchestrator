@@ -162,18 +162,20 @@ export default function ResearcherTasksPage() {
                       )}
                     </div>
                     {/* Status mover buttons */}
-                    <div style={s.moveRow}>
-                      {COLUMNS.filter(c => c.id !== col.id).map(c => (
-                        <button
-                          key={c.id}
-                          style={s.moveBtn}
-                          onClick={() => moveTask(task, c.id)}
-                          title={`Move to ${c.label}`}
-                        >
-                          → {c.label}
-                        </button>
-                      ))}
-                    </div>
+                    {col.id !== "ACCEPTED" && (
+                      <div style={s.moveRow}>
+                        {COLUMNS.filter(c => c.id !== col.id && c.id !== "ACCEPTED").map(c => (
+                          <button
+                            key={c.id}
+                            style={s.moveBtn}
+                            onClick={() => moveTask(task, c.id)}
+                            title={`Move to ${c.label}`}
+                          >
+                            → {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {colTasks.length === 0 && (

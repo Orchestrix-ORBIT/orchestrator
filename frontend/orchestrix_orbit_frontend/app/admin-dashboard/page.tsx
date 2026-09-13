@@ -248,8 +248,8 @@ export default function AdminDashboardPage() {
                           ...(String(m.role).toUpperCase().includes("ADMIN")
                             ? s.badgeAdmin
                             : String(m.role).toUpperCase().includes("LEAD")
-                            ? s.badgeLead
-                            : s.badgeMember),
+                              ? s.badgeLead
+                              : s.badgeMember),
                         }}
                       >
                         {m.role}

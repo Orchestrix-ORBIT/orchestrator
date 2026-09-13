@@ -1,8 +1,10 @@
 package com.example.core_api.project;
 
 import com.example.core_api.auth.User;
+import com.example.core_api.auth.UserRole;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +27,9 @@ public class ProjectController {
     public ProjectResponse createProject(
             @AuthenticationPrincipal User currentUser,
             @Valid @RequestBody CreateProjectRequest request) {
+        if (currentUser == null || currentUser.getRole() == UserRole.MEMBER || currentUser.getRole() == UserRole.GUEST) {
+            throw new AccessDeniedException("Researchers are not allowed to create projects.");
+        }
         return projectService.createProject(request, currentUser.getId());
     }
 
@@ -48,7 +53,12 @@ public class ProjectController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteProject(@PathVariable UUID id) {
+    public void deleteProject(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id) {
+        if (currentUser == null || currentUser.getRole() == UserRole.MEMBER || currentUser.getRole() == UserRole.GUEST) {
+            throw new AccessDeniedException("Researchers are not allowed to delete projects.");
+        }
         projectService.deleteProject(id);
     }
 
