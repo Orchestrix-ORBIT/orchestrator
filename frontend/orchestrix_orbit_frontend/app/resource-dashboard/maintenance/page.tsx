@@ -24,7 +24,7 @@ const INITIAL_MAINTENANCE: MaintenanceEvent[] = [
     endDate: "Aug 30, 2026",
     downtimeType: "Preventive Calibration",
     technician: "Resource Operations (Lead: Lab Manager)",
-    status: "In Progress",
+    status: "Completed",
     notes: "Mass calibration and ionization source cleaning.",
   },
   {
@@ -35,7 +35,7 @@ const INITIAL_MAINTENANCE: MaintenanceEvent[] = [
     endDate: "Sep 01, 2026 (06:00)",
     downtimeType: "Firmware/Driver Update",
     technician: "HPC Systems Admin",
-    status: "Scheduled",
+    status: "Completed",
     notes: "NVIDIA CUDA 12.6 driver update and liquid cooling inspection.",
   },
   {
@@ -54,12 +54,23 @@ const INITIAL_MAINTENANCE: MaintenanceEvent[] = [
 function computeStatusFromDates(startStr: string, endStr: string): "Scheduled" | "In Progress" | "Completed" {
   try {
     const now = new Date();
-    // Normalize date strings (e.g., "Aug 28, 2026", "2026-09-23")
-    const start = new Date(startStr.replace(/\s*\(\d{2}:\d{2}\)/, ''));
-    const end = new Date(endStr.replace(/\s*\(\d{2}:\d{2}\)/, ''));
+
+    const cleanStart = (startStr || "").replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+    const cleanEnd = (endStr || "").replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+
+    let start = new Date(cleanStart);
+    let end = new Date(cleanEnd);
+
+    if (isNaN(start.getTime())) start = new Date(startStr);
+    if (isNaN(end.getTime())) end = new Date(endStr);
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return "Scheduled";
+    }
+
+    // Set end-of-day if no explicit time is specified
+    if (!cleanEnd.includes(":") && !endStr.includes("T")) {
+      end.setHours(23, 59, 59, 999);
     }
 
     if (now < start) {
@@ -174,6 +185,20 @@ export default function MaintenanceSchedulesPage() {
     setNotesInput("");
   };
 
+  const openAddModal = () => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    const localNow = new Date(now.getTime() - tzOffset);
+    const localEnd = new Date(now.getTime() - tzOffset + 4 * 3600000);
+
+    if (resources.length > 0) {
+      setAssetNameInput(resources[0].name);
+    }
+    setStartDateInput(localNow.toISOString().slice(0, 16));
+    setEndDateInput(localEnd.toISOString().slice(0, 16));
+    setShowAddModal(true);
+  };
+
   const filteredEvents = events.filter((ev) => {
     if (filter === "ALL") return true;
     return ev.status === filter;
@@ -192,7 +217,7 @@ export default function MaintenanceSchedulesPage() {
           </p>
         </div>
 
-        <button onClick={() => setShowAddModal(true)} style={s.btnPrimary}>
+        <button onClick={openAddModal} style={s.btnPrimary}>
           + Schedule Maintenance Window
         </button>
       </div>
@@ -352,7 +377,7 @@ export default function MaintenanceSchedulesPage() {
                 <div style={{ ...m.field, flex: 1 }}>
                   <label style={m.label}>START DATE & TIME *</label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     required
                     value={startDateInput}
                     onChange={(e) => setStartDateInput(e.target.value)}
@@ -363,7 +388,7 @@ export default function MaintenanceSchedulesPage() {
                 <div style={{ ...m.field, flex: 1 }}>
                   <label style={m.label}>END DATE & TIME *</label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     required
                     value={endDateInput}
                     onChange={(e) => setEndDateInput(e.target.value)}

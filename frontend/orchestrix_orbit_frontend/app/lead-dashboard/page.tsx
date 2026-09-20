@@ -8,6 +8,8 @@ import { ResourcesService, type Resource } from "@/lib/services/resources";
 import { TeamsService, type TeamMember } from "@/lib/services/teams";
 import { TasksService, type Task } from "@/lib/services/tasks";
 
+import LoadingState from "@/components/ui/LoadingState";
+
 export default function LeadDashboardPage() {
   const [projects, setProjects]     = useState<Project[]>([]);
   const [resources, setResources]   = useState<Resource[]>([]);
@@ -16,6 +18,7 @@ export default function LeadDashboardPage() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [orgName, setOrgName]       = useState<string>("");
+  const [selectedLeadId, setSelectedLeadId] = useState<string>("ALL");
 
   const tenantSlug = getTenantSlug() || "myorg";
 
@@ -71,9 +74,7 @@ export default function LeadDashboardPage() {
     load();
   }, []);
 
-  const [selectedLeadId, setSelectedLeadId] = useState<string>("ALL");
-
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading lead dashboard…</p>;
+  if (loading) return <LoadingState title="Loading Lead Dashboard…" subtitle="Fetching project overview, active team members, and open tasks" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   // Identify all Research Leads & Admins from team members list
@@ -181,7 +182,7 @@ export default function LeadDashboardPage() {
                 return (
                   <tr key={p.id}>
                     <td style={s.td}>
-                      <Link href={`/lead-dashboard/projects/${p.id}`} style={{ color: "#161616", fontWeight: 500, textDecoration: "none" }}>
+                      <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link">
                         {p.name}
                       </Link>
                     </td>
@@ -208,7 +209,20 @@ const s: Record<string, React.CSSProperties> = {
   card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 24, marginBottom: 16 },
   cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   cardTitle: { fontSize: 14, fontWeight: 600, color: "#161616" },
-  cardLink: { fontSize: 12, color: "#888", textDecoration: "none", fontWeight: 500 },
+  cardLink: {
+    fontSize: 12,
+    color: "#161616",
+    background: "#f4f4f5",
+    border: "1px solid #e4e4e7",
+    padding: "5px 12px",
+    borderRadius: 6,
+    textDecoration: "none",
+    fontWeight: 600,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+  },
   table: { width: "100%", borderCollapse: "collapse" },
   th: { textAlign: "left" as const, fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.6px", textTransform: "uppercase" as const, paddingBottom: 10, borderBottom: "1px solid #f0f0f0" },
   td: { fontSize: 13, color: "#424242", padding: "10px 0", borderBottom: "1px solid #f8f8f8" },

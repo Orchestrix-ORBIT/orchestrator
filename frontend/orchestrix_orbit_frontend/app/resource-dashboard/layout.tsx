@@ -107,15 +107,8 @@ export default function ResourceDashboardLayout({
           })}
         </nav>
 
-        {/* Footer / Privacy & Role Badge */}
+        {/* Footer / Clean Sign Out */}
         <div style={s.footer}>
-          <div style={s.roleBox}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={s.roleDot}>●</span>
-              <span style={s.roleLabel}>RESOURCE ADMIN</span>
-            </div>
-            <span style={s.roleSub}>FR-AUTH-06 Data Isolation</span>
-          </div>
           <button
             id="btn-rm-logout"
             type="button"
@@ -251,32 +244,8 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   footer: {
-    padding: "16px 12px 0",
+    padding: "12px",
     borderTop: "1px solid #2a2a2a",
-  },
-  roleBox: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    padding: "8px 10px",
-    background: "#1c1c1c",
-    borderRadius: 4,
-    border: "1px solid #262626",
-  },
-  roleDot: {
-    color: "#38bdf8",
-    fontSize: 8,
-  },
-  roleLabel: {
-    fontSize: 9,
-    fontWeight: 700,
-    color: "#38bdf8",
-    letterSpacing: "0.6px",
-  },
-  roleSub: {
-    fontSize: 10,
-    color: "#666666",
-    fontFamily: "monospace",
   },
   mainWrapper: {
     marginLeft: 210,
@@ -339,18 +308,18 @@ const s: Record<string, React.CSSProperties> = {
   logoutBtn: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    padding: "8px 10px",
+    padding: "9px 12px",
     borderRadius: 6,
     fontSize: 12,
-    fontWeight: 500,
+    fontWeight: 600,
     color: "#f87171",
-    background: "none",
-    border: "none",
+    background: "#241414",
+    border: "1px solid #3d1c1c",
     cursor: "pointer",
     width: "100%",
-    textAlign: "left" as const,
-    marginTop: 8,
+    boxSizing: "border-box",
   },
   topbarLogoutBtn: {
     padding: "5px 10px",

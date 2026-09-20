@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 import Link from "next/link";
 import { ProjectsService, type Project } from "@/lib/services/projects";
 import { ResourcesService, type Booking } from "@/lib/services/resources";
@@ -93,7 +94,7 @@ export default function ResearcherHomePage() {
     .filter(b => b.status === "APPROVED" || b.status === "PENDING")
     .slice(0, 3);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
   if (error)   return <ErrorState message={error} />;
 
   const STAT_ITEMS = [
@@ -187,14 +188,7 @@ export default function ResearcherHomePage() {
   );
 }
 
-/* ── Helper components ─────────────────────────────────────────────────────── */
-function LoadingState() {
-  return (
-    <div style={{ padding: 40, textAlign: "center", color: "#888", fontSize: 14 }}>
-      Loading your workspace…
-    </div>
-  );
-}
+
 
 function ErrorState({ message }: { message: string }) {
   return (

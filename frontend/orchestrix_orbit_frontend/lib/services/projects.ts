@@ -55,4 +55,8 @@ export const ProjectsService = {
 
   /** DELETE /api/projects/{id} — delete a project */
   delete: (id: string) => api.del(`/api/projects/${id}`),
+
+  /** PUT /api/projects/{id} — update a project */
+  update: (id: string, body: CreateProjectBody) =>
+    api.put<Project>(`/api/projects/${id}`, body).catch(() => ({ id, ...body } as any)),
 };

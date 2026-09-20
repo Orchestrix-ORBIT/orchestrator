@@ -31,6 +31,7 @@ const PROJECTS_MAP: Record<string, ProjectMeta> = {
 import { useEffect } from "react";
 import { ProjectsService } from "@/lib/services/projects";
 import { TasksService } from "@/lib/services/tasks";
+import { TeamsService } from "@/lib/services/teams";
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "TODO", title: "To Do" },
@@ -39,6 +40,13 @@ const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "ACCEPTED", title: "Accepted ✓" },
   { id: "BLOCKED", title: "Blocked" },
 ];
+
+function getInitials(name: string) {
+  if (!name || name === "Unassigned") return "UA";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export default function ProjectWorkspacePage({
   params,
@@ -54,10 +62,12 @@ export default function ProjectWorkspacePage({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
-  const [selectedAiTask, setSelectedAiTask] = useState<TaskItem | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [titleInput, setTitleInput] = useState("");
   const [descInput, setDescInput] = useState("");
-  const [assigneeInput, setAssigneeInput] = useState("Researcher");
+  const [assigneeInput, setAssigneeInput] = useState("");
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
+  const [availableMembers, setAvailableMembers] = useState<any[]>([]);
   const [priorityInput, setPriorityInput] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
   const [columnInput, setColumnInput] = useState<TaskStatus>("TODO");
 
@@ -68,11 +78,29 @@ export default function ProjectWorkspacePage({
   useEffect(() => {
     async function loadData() {
       try {
-        const [proj, taskList] = await Promise.all([
+        const [proj, taskList, members] = await Promise.all([
           ProjectsService.getById(projectId).catch(() => ({ id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" })),
           TasksService.getByProject(projectId).catch(() => []),
+          TeamsService.getAllMembers().catch(() => []),
         ]);
         setProject(proj);
+
+        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
+        const assignedIds = storedMap[projectId] || [];
+
+        let projectMembers = members.filter((m: any) => assignedIds.includes(m.id || m.userId));
+        
+        // Fallback for default projects without assigned members in localStorage
+        if (projectMembers.length === 0) {
+          projectMembers = members.filter((m: any) => {
+            const role = String(m.role || "").toUpperCase();
+            const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
+            const email = String(m.email || m.userEmail || "").toLowerCase();
+            return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
+          });
+        }
+        
+        setAvailableMembers(projectMembers);
 
         const mappedTasks: TaskItem[] = (taskList as any[]).map((t: any) => {
           let uiStatus: TaskStatus = "TODO";
@@ -134,6 +162,8 @@ export default function ProjectWorkspacePage({
       setTasks((prev) => [newTask, ...prev]);
       setTitleInput("");
       setDescInput("");
+      setAssigneeSearchQuery("");
+      setAssigneeInput("");
       setShowNewTaskModal(false);
     } catch (err: unknown) {
       alert("Error creating task: " + (err instanceof Error ? err.message : String(err)));
@@ -153,6 +183,30 @@ export default function ProjectWorkspacePage({
     }
   };
 
+  const handleReassignTask = async (taskId: string, newAssigneeName: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, assignee: newAssigneeName } : t))
+    );
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask((prev) => (prev ? { ...prev, assignee: newAssigneeName } : null));
+    }
+
+    try {
+      const matchingMember = availableMembers.find(
+        (m) => (m.displayName || m.userDisplayName || m.email) === newAssigneeName
+      );
+      const assigneeId = matchingMember
+        ? matchingMember.id || matchingMember.userId
+        : newAssigneeName === "Unassigned"
+        ? null
+        : newAssigneeName;
+
+      await TasksService.update(projectId, taskId, { assigneeId: assigneeId as any });
+    } catch (err) {
+      console.warn("Could not update task assignee on backend:", err);
+    }
+  };
+
   const filteredTasks = tasks.filter(
     (t) =>
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -169,7 +223,30 @@ export default function ProjectWorkspacePage({
   }, []);
 
   if (!mounted) {
-    return <div suppressHydrationWarning />;
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: "100px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          border: "3px solid #e5e7eb",
+          borderTop: "3px solid #161616",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+          marginBottom: 16,
+        }} />
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        <p style={{ fontSize: 14, color: "#161616", fontWeight: 600, margin: 0 }}>
+          Loading Task Board…
+        </p>
+        <p style={{ fontSize: 12, color: "#888888", margin: 0, marginTop: 4 }}>
+          Fetching project tasks and assigned team members
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -286,6 +363,7 @@ export default function ProjectWorkspacePage({
                   <div
                     key={task.id}
                     draggable={!isCompletedProject}
+                    onClick={() => setSelectedTask(task)}
                     onDragStart={(e) => {
                       if (isCompletedProject) return;
                       setDraggedTaskId(task.id);
@@ -297,16 +375,21 @@ export default function ProjectWorkspacePage({
                     }}
                     style={{
                       ...s.taskCard,
-                      cursor: isCompletedProject ? "default" : "grab",
+                      cursor: "pointer",
                     }}
                   >
                     <div style={s.taskCardTop}>
-                      <span style={s.taskId}>{task.id}</span>
+                      <span style={s.taskId} title={`Full ID: ${task.id}`}>
+                        #{task.id.length > 8 ? task.id.substring(0, 8) : task.id}
+                      </span>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {task.isAiGenerated && (
                           <button
                             type="button"
-                            onClick={() => setSelectedAiTask(task)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTask(task);
+                            }}
                             style={s.aiBadge}
                             title="Click to view AI details"
                           >
@@ -329,7 +412,7 @@ export default function ProjectWorkspacePage({
                     </div>
 
                     <h4 style={s.taskTitle}>{task.title}</h4>
-                    <p style={s.taskDesc}>{task.description}</p>
+                    {task.description && <p style={s.taskDesc}>{task.description}</p>}
 
                     <div style={s.taskCardBottom}>
                       <span style={s.taskDue}>{task.dueDate}</span>
@@ -342,7 +425,10 @@ export default function ProjectWorkspacePage({
                             {task.status === "DONE" && (
                               <button
                                 type="button"
-                                onClick={() => handleMoveTask(task.id, "ACCEPTED")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveTask(task.id, "ACCEPTED");
+                                }}
                                 style={{
                                   padding: "4px 10px",
                                   fontSize: 11,
@@ -360,9 +446,11 @@ export default function ProjectWorkspacePage({
                             )}
                             <select
                               value={task.status}
-                              onChange={(e) =>
-                                handleMoveTask(task.id, e.target.value as TaskStatus)
-                              }
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleMoveTask(task.id, e.target.value as TaskStatus);
+                              }}
                               style={s.statusSelect}
                             >
                               <option value="TODO">To Do</option>
@@ -374,7 +462,22 @@ export default function ProjectWorkspacePage({
                           </div>
                         )}
 
-                        <span style={s.assigneeAvatar}>{task.assignee}</span>
+                        <span
+                          style={{
+                            ...s.assigneeAvatar,
+                            background: (!task.assignee || task.assignee === "Unassigned") ? "#f0f0f0" : "#161616",
+                            color: (!task.assignee || task.assignee === "Unassigned") ? "#757575" : "#ffffff",
+                            border: (!task.assignee || task.assignee === "Unassigned") ? "1px solid #d0d0d0" : "none",
+                            cursor: "pointer",
+                          }}
+                          title={`Assignee: ${task.assignee || "Unassigned"} (Click to reassign)`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTask(task);
+                          }}
+                        >
+                          {getInitials(task.assignee)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -389,58 +492,160 @@ export default function ProjectWorkspacePage({
         })}
       </div>
 
-      {/* ── AI Review Modal ─────────────────────────────────────────────────── */}
-      {selectedAiTask && (
-        <div style={m.overlay}>
-          <div style={m.modal}>
-            <div style={m.header}>
+      {/* ── Task Details Modal ─────────────────────────────────────────────────── */}
+      {selectedTask && (
+        <div style={m.overlay} onClick={() => setSelectedTask(null)}>
+          <div style={{ ...m.modal, maxWidth: 560, borderRadius: 10, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...m.header, background: "#fcfcfc", borderBottom: "1px solid #eee", padding: "18px 24px" }}>
               <div>
-                <h3 style={m.title}>AI Task Review</h3>
-                <p style={m.sub}>Automated synthesis details for {selectedAiTask.id}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <h3 style={{ ...m.title, fontSize: 17, fontWeight: 700 }}>
+                    {selectedTask.isAiGenerated ? "⚡ AI Task Review" : "📋 Task Card Details"}
+                  </h3>
+                  <span style={{ fontSize: 11, fontFamily: "monospace", color: "#666", background: "#f0f0f0", padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>
+                    #{selectedTask.id.length > 8 ? selectedTask.id.substring(0, 8) : selectedTask.id}
+                  </span>
+                </div>
+                <p style={{ ...m.sub, fontSize: 11, color: "#9e9e9e", marginTop: 4, wordBreak: "break-all" }}>
+                  Full ID: <code style={{ background: "#f5f5f5", padding: "1px 5px", borderRadius: 3, fontSize: 11 }}>{selectedTask.id}</code>
+                </p>
               </div>
-              <button onClick={() => setSelectedAiTask(null)} style={m.closeBtn}>✕</button>
+              <button onClick={() => setSelectedTask(null)} style={m.closeBtn}>✕</button>
             </div>
 
-            <div style={m.body}>
-              <div style={m.section}>
-                <span style={m.label}>TASK TITLE</span>
-                <p style={m.mainTitle}>{selectedAiTask.title}</p>
+            <div style={{ ...m.body, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Task Title */}
+              <div>
+                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>TASK TITLE</span>
+                <p style={{ fontSize: 15, fontWeight: 700, color: "#161616", marginTop: 4, lineHeight: 1.4 }}>{selectedTask.title}</p>
               </div>
 
-              <div style={m.section}>
-                <span style={m.label}>DESCRIPTION</span>
-                <p style={m.text}>{selectedAiTask.description}</p>
+              {/* Description */}
+              <div style={{ background: "#f9fafb", border: "1px solid #f0f0f0", borderRadius: 6, padding: "12px 14px" }}>
+                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>DESCRIPTION</span>
+                <p style={{ fontSize: 13, color: "#424242", lineHeight: 1.5, marginTop: 4 }}>
+                  {selectedTask.description || "No description provided for this task card."}
+                </p>
               </div>
 
-              <div style={{ display: "flex", gap: 20 }}>
-                <div style={{ flex: 1 }}>
-                  <span style={m.label}>ASSIGNEE</span>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "#161616", marginTop: 4 }}>
-                    {selectedAiTask.assignee} (Research Team)
-                  </p>
+              {/* Metadata Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "12px 14px" }}>
+                {/* Status */}
+                <div>
+                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>STATUS</span>
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: 12,
+                      background: selectedTask.status === "ACCEPTED" ? "#e8f5e9" : selectedTask.status === "DONE" ? "#f3e8ff" : selectedTask.status === "IN_PROGRESS" ? "#e3f2fd" : selectedTask.status === "BLOCKED" ? "#fee2e2" : "#f5f5f5",
+                      color: selectedTask.status === "ACCEPTED" ? "#2e7d32" : selectedTask.status === "DONE" ? "#6b21a8" : selectedTask.status === "IN_PROGRESS" ? "#1565c0" : selectedTask.status === "BLOCKED" ? "#dc2626" : "#616161",
+                      display: "inline-block"
+                    }}>
+                      {selectedTask.status === "ACCEPTED" ? "Accepted ✓" : selectedTask.status === "DONE" ? "Completed (Pending Review)" : selectedTask.status === "IN_PROGRESS" ? "In Progress" : selectedTask.status === "BLOCKED" ? "Blocked" : "To Do"}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <span style={m.label}>PRIORITY</span>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "#161616", marginTop: 4 }}>
-                    {selectedAiTask.priority} PRIORITY
-                  </p>
+
+                {/* Assignee */}
+                <div>
+                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>ASSIGNEE</span>
+                  <div style={{ marginTop: 4 }}>
+                    {!isCompletedProject ? (
+                      <select
+                        value={selectedTask.assignee || "Unassigned"}
+                        onChange={(e) => handleReassignTask(selectedTask.id, e.target.value)}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          padding: "4px 8px",
+                          borderRadius: 6,
+                          border: "1px solid #d0d0d0",
+                          outline: "none",
+                          background: "#ffffff",
+                          color: "#161616",
+                          width: "100%",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value="Unassigned">Unassigned (UA)</option>
+                        {availableMembers.map((mem) => {
+                          const name = mem.displayName || mem.userDisplayName || mem.email;
+                          return (
+                            <option key={mem.id || mem.userId || name} value={name}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          background: (!selectedTask.assignee || selectedTask.assignee === "Unassigned") ? "#e0e0e0" : "#161616",
+                          color: (!selectedTask.assignee || selectedTask.assignee === "Unassigned") ? "#616161" : "#ffffff",
+                          fontSize: 9,
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}>
+                          {getInitials(selectedTask.assignee)}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#161616" }}>
+                          {selectedTask.assignee || "Unassigned"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Priority */}
+                <div>
+                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>PRIORITY</span>
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: 3,
+                      background: selectedTask.priority === "HIGH" ? "#fde8e8" : selectedTask.priority === "MEDIUM" ? "#fff8e1" : "#f5f5f5",
+                      color: selectedTask.priority === "HIGH" ? "#c62828" : selectedTask.priority === "MEDIUM" ? "#f57f17" : "#616161",
+                      display: "inline-block"
+                    }}>
+                      {selectedTask.priority}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ ...m.section, borderBottom: "none", paddingBottom: 0 }}>
-                <span style={m.label}>AI CONTEXT & RECOMMENDATION</span>
-                <p style={{ fontSize: 13, color: "#616161", lineHeight: 1.5, marginTop: 4 }}>
-                  This task was drafted based on statistical signal-to-noise ratio logs. Validate requirements before transitioning to In Progress.
+              {/* Activity / AI Context */}
+              <div style={{
+                background: selectedTask.isAiGenerated ? "#f5f3ff" : "#fafafa",
+                border: selectedTask.isAiGenerated ? "1px solid #ddd6fe" : "1px solid #eee",
+                borderRadius: 6,
+                padding: "12px 14px"
+              }}>
+                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: selectedTask.isAiGenerated ? "#6d28d9" : "#9e9e9e", fontWeight: 700 }}>
+                  {selectedTask.isAiGenerated ? "🤖 AI CONTEXT & RECOMMENDATION" : "🕒 ACTIVITY LOG"}
+                </span>
+                <p style={{ fontSize: 12, color: selectedTask.isAiGenerated ? "#5b21b6" : "#616161", lineHeight: 1.5, marginTop: 4 }}>
+                  {selectedTask.isAiGenerated
+                    ? "This task was automatically drafted by the localized context engine. Validate requirements before transitioning stages."
+                    : `Task active since ${selectedTask.dueDate || "recent sprint"}. All updates are synchronized in real-time across team workspaces.`}
                 </p>
               </div>
             </div>
 
-            <div style={m.footer}>
+            <div style={{ ...m.footer, padding: "14px 24px 18px", borderTop: "1px solid #eee" }}>
               <button
-                onClick={() => setSelectedAiTask(null)}
+                onClick={() => setSelectedTask(null)}
                 style={m.btnPrimary}
               >
-                Close Review
+                Close Details
               </button>
             </div>
           </div>
@@ -487,11 +692,16 @@ export default function ProjectWorkspacePage({
                     onChange={(e) => setAssigneeInput(e.target.value)}
                     style={m.select}
                   >
-                    <option value="DK">DK (Lead)</option>
-                    <option value="SK">SK (Researcher)</option>
-                    <option value="CK">CK (Researcher)</option>
-                    <option value="AP">AP (Researcher)</option>
-                    <option value="MN">MN (Researcher)</option>
+                    <option value="">Select Assignee...</option>
+                    {availableMembers.map((mem: any) => {
+                      const id = mem.id || mem.userId;
+                      const name = mem.displayName || mem.userDisplayName || mem.email;
+                      return (
+                        <option key={id} value={name}>
+                          {name}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -776,9 +986,9 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   assigneeAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     background: "#161616",
     color: "#ffffff",
     fontSize: 10,
@@ -786,6 +996,9 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    letterSpacing: "0.5px",
+    flexShrink: 0,
+    cursor: "default",
   },
   emptyCol: {
     padding: "24px 12px",

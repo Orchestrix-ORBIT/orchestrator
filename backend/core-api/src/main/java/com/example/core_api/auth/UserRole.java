@@ -10,5 +10,9 @@ public enum UserRole {
     LEAD,              // Research Lead / Team Supervisor — manages projects, tasks, chat
     MEMBER,            // Regular researcher/team member — default role on registration
     RESOURCE_MANAGER,  // Resource & equipment allocation manager
-    GUEST              // Read-only access, e.g. an external collaborator
+    GUEST,             // Read-only access, e.g. an external collaborator
+    RESEARCHER,        // Research Team Member
+    ROLE_LEAD,
+    ROLE_RESEARCHER,
+    ROLE_ADMIN
 }

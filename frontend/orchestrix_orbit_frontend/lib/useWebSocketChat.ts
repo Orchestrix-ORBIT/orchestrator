@@ -13,37 +13,97 @@ export interface ChatMessageItem {
   senderName: string;
   content: string;
   createdAt: string;
+  replyToId?: string;
+  replyToSender?: string;
+  replyToContent?: string;
+  isDeleted?: boolean;
+  isEdited?: boolean;
+  reactions?: Record<string, number>;
 }
 
 const WS_URL = process.env.NEXT_PUBLIC_CHAT_WS_URL ?? "http://localhost:8082/ws";
 const API_BASE = process.env.NEXT_PUBLIC_CHAT_API_URL ?? "http://localhost:8082";
 
-export function useWebSocketChat(projectId: string) {
+export function useWebSocketChat(projectId: string, pageSize = 15) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const pageRef = useRef(0);
   const stompClientRef = useRef<Client | null>(null);
 
-  // 1. Fetch historical messages via REST API
+  // 1. Fetch initial batch of recent messages (page 0)
   const fetchHistory = useCallback(async () => {
     if (!projectId) return;
+    setIsLoadingHistory(true);
+    pageRef.current = 0;
     try {
       const tenant = getTenantSlug() || "myorg";
-      const res = await fetch(`${API_BASE}/api/chat/projects/${projectId}/messages`, {
-        headers: {
-          "X-Tenant-ID": tenant,
-        },
-      });
+      const res = await fetch(
+        `${API_BASE}/api/chat/projects/${projectId}/messages?page=0&size=${pageSize}`,
+        {
+          headers: {
+            "X-Tenant-ID": tenant,
+          },
+        }
+      );
       if (res.ok) {
-        const data = await res.json();
+        const data: ChatMessageItem[] = await res.json();
         setMessages(data);
+        setHasMore(data.length >= pageSize);
+      } else {
+        setMessages([]);
+        setHasMore(false);
       }
     } catch (e) {
       console.warn("Could not load chat history:", e);
+      setMessages([]);
+      setHasMore(false);
+    } finally {
+      setIsLoadingHistory(false);
     }
-  }, [projectId]);
+  }, [projectId, pageSize]);
 
-  // 2. Connect STOMP over SockJS / WebSocket
+  // 2. Fetch older messages on scroll up (reverse pagination)
+  const loadMoreMessages = useCallback(async () => {
+    if (!projectId || isLoadingMore || !hasMore) return;
+    const nextPage = pageRef.current + 1;
+    setIsLoadingMore(true);
+    try {
+      const tenant = getTenantSlug() || "myorg";
+      const res = await fetch(
+        `${API_BASE}/api/chat/projects/${projectId}/messages?page=${nextPage}&size=${pageSize}`,
+        {
+          headers: {
+            "X-Tenant-ID": tenant,
+          },
+        }
+      );
+      if (res.ok) {
+        const olderData: ChatMessageItem[] = await res.json();
+        if (olderData.length > 0) {
+          pageRef.current = nextPage;
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const filtered = olderData.filter((m) => !existingIds.has(m.id));
+            return [...filtered, ...prev];
+          });
+        }
+        setHasMore(olderData.length >= pageSize);
+      } else {
+        setHasMore(false);
+      }
+    } catch (e) {
+      console.warn("Could not load older messages:", e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [projectId, pageSize, isLoadingMore, hasMore]);
+
+  // 3. Connect STOMP over SockJS / WebSocket
   useEffect(() => {
     if (!projectId) return;
 
@@ -101,9 +161,13 @@ export function useWebSocketChat(projectId: string) {
     };
   }, [projectId, fetchHistory]);
 
-  // 3. Send message over STOMP channel
+  // 4. Send message over STOMP channel
   const sendMessage = useCallback(
-    (content: string, senderDisplayName?: string) => {
+    (
+      content: string,
+      senderDisplayName?: string,
+      replyTo?: { id: string; senderName: string; content: string } | null
+    ) => {
       if (!content.trim() || !projectId) return;
 
       const tenant = getTenantSlug() || "myorg";
@@ -115,6 +179,9 @@ export function useWebSocketChat(projectId: string) {
         content: content.trim(),
         senderName,
         tenantId: tenant,
+        replyToId: replyTo?.id || null,
+        replyToSender: replyTo?.senderName || null,
+        replyToContent: replyTo?.content || null,
       };
 
       const optimisticMsg: ChatMessageItem = {
@@ -124,6 +191,9 @@ export function useWebSocketChat(projectId: string) {
         senderName,
         content: content.trim(),
         createdAt: new Date().toISOString(),
+        replyToId: replyTo?.id,
+        replyToSender: replyTo?.senderName,
+        replyToContent: replyTo?.content,
       };
 
       // Optimistically show message immediately in UI
@@ -142,8 +212,12 @@ export function useWebSocketChat(projectId: string) {
   return {
     messages,
     isConnected,
+    isLoadingHistory,
+    isLoadingMore,
+    hasMore,
     error,
     sendMessage,
+    loadMoreMessages,
     refetchHistory: fetchHistory,
   };
 }

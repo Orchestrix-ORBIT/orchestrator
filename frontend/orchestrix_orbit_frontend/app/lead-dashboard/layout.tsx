@@ -59,7 +59,9 @@ export default function LeadDashboardLayout({
 const s: Record<string, React.CSSProperties> = {
   root: {
     display: "flex",
-    minHeight: "100vh",
+    height: "100vh",
+    maxHeight: "100vh",
+    overflow: "hidden",
     background: "#f5f5f5",
     fontFamily: "var(--font)",
   },
@@ -68,7 +70,9 @@ const s: Record<string, React.CSSProperties> = {
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    minHeight: "100vh",
+    height: "100vh",
+    maxHeight: "100vh",
+    overflow: "hidden",
     background: "#f5f5f5",
   },
   topbar: {
@@ -79,8 +83,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "flex-end",
     padding: "0 32px",
-    position: "sticky" as const,
-    top: 0,
+    flexShrink: 0,
     zIndex: 10,
   },
   topbarRight: {
@@ -101,6 +104,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   content: {
     flex: 1,
-    padding: "32px 32px 48px",
+    padding: "16px 24px",
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
   },
 };

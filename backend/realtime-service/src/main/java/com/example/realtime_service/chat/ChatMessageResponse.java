@@ -10,5 +10,10 @@ public record ChatMessageResponse(
         UUID senderId,
         String senderName,
         String content,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        UUID replyToId,
+        String replyToSender,
+        String replyToContent,
+        Boolean isDeleted,
+        Boolean isEdited
 ) {}

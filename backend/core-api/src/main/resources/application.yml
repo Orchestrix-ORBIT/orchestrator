@@ -22,7 +22,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: "none"        # Managed by Flyway per tenant schema
+      ddl-auto: "update"        # Auto-create missing tables like resource_maintenance in PostgreSQL
     show-sql: false
     properties:
       hibernate:

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface NotificationItem {
   id: string;
@@ -74,8 +75,22 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 ];
 
 export default function NotificationsPage() {
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [filter, setFilter] = useState<"ALL" | "UNREAD" | "Task" | "Booking" | "AI Alert">("ALL");
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <LoadingState
+        title="Loading Notifications & Activity…"
+        subtitle="Fetching real-time workspace alerts, task updates, and system mentions"
+      />
+    );
+  }
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

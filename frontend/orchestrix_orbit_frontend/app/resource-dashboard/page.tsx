@@ -5,12 +5,19 @@ import { ResourcesService, type Resource } from "@/lib/services/resources";
 
 export default function ResourceDashboardPage() {
   const [resources, setResources] = useState<Resource[]>([]);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
   useEffect(() => {
-    ResourcesService.getAll()
-      .then(setResources)
+    Promise.all([
+      ResourcesService.getAll().catch(() => []),
+      ResourcesService.getMaintenance().catch(() => []),
+    ])
+      .then(([resList, maintList]) => {
+        setResources(resList);
+        setMaintenanceLogs(maintList || []);
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -18,9 +25,14 @@ export default function ResourceDashboardPage() {
   if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading…</p>;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
-  const available    = resources.filter(r => r.status === "AVAILABLE").length;
-  const inUse        = resources.filter(r => r.status === "IN_USE").length;
-  const maintenance  = resources.filter(r => r.status === "MAINTENANCE").length;
+  const effectiveResources = resources.map(r => ({
+    ...r,
+    effectiveStatus: getEffectiveStatus(r, maintenanceLogs),
+  }));
+
+  const available    = effectiveResources.filter(r => r.effectiveStatus === "AVAILABLE").length;
+  const inUse        = effectiveResources.filter(r => r.effectiveStatus === "IN_USE").length;
+  const maintenance  = effectiveResources.filter(r => r.effectiveStatus === "MAINTENANCE").length;
   const utilization  = resources.length ? Math.round((inUse / resources.length) * 100) : 0;
 
   const STATS = [
@@ -57,13 +69,13 @@ export default function ResourceDashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {resources.slice(0, 8).map(r => (
+            {effectiveResources.slice(0, 8).map(r => (
               <tr key={r.id}>
                 <td style={s.td}>{r.name}</td>
                 <td style={s.td}>{r.type}</td>
                 <td style={s.td}>{(r as any).metadata?.location || r.location || "Core Lab"}</td>
                 <td style={s.td}>
-                  <span style={{ ...s.badge, ...statusStyle(r.status) }}>{r.status.replace("_", " ")}</span>
+                  <span style={{ ...s.badge, ...statusStyle(r.effectiveStatus) }}>{r.effectiveStatus.replace("_", " ")}</span>
                 </td>
               </tr>
             ))}
@@ -72,6 +84,62 @@ export default function ResourceDashboardPage() {
       </div>
     </div>
   );
+}
+
+function parseMaintDates(m: any) {
+  if (!m) return null;
+  const sRaw = m.startDate || "";
+  const eRaw = m.endDate || "";
+  if (!sRaw && !eRaw) return null;
+  const cleanStart = sRaw.replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+  const cleanEnd = eRaw.replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+  let start = new Date(cleanStart);
+  let end = new Date(cleanEnd);
+  if (isNaN(start.getTime())) start = new Date(sRaw);
+  if (isNaN(end.getTime())) end = new Date(eRaw);
+  if (!isNaN(end.getTime()) && !cleanEnd.includes(":") && !eRaw.includes("T")) {
+    end.setHours(23, 59, 59, 999);
+  }
+  return {
+    start: !isNaN(start.getTime()) ? start : null,
+    end: !isNaN(end.getTime()) ? end : null,
+  };
+}
+
+function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = []): Resource["status"] {
+  const now = new Date();
+  const assetLogs = (maintenanceLogs || []).filter((m: any) => {
+    const isIdMatch = m.resourceId && resource.id && String(m.resourceId) === String(resource.id);
+    const isNameMatch = m.assetName && resource.name && String(m.assetName).trim().toLowerCase() === String(resource.name).trim().toLowerCase();
+    return isIdMatch || isNameMatch;
+  });
+
+  // Check if ANY log is currently active
+  const activeLog = assetLogs.find((m) => {
+    const dates = parseMaintDates(m);
+    if (!dates || !dates.end) return false;
+    if (dates.start && dates.end) {
+      return now >= dates.start && now <= dates.end;
+    }
+    return now <= dates.end;
+  });
+
+  if (activeLog) {
+    return "MAINTENANCE";
+  }
+
+  // If DB statically says MAINTENANCE but no logs are currently active or upcoming, treat as AVAILABLE
+  if (resource.status === "MAINTENANCE") {
+    const hasActiveOrUpcoming = assetLogs.some((m) => {
+      const dates = parseMaintDates(m);
+      return dates?.end && now <= dates.end;
+    });
+    if (!hasActiveOrUpcoming) {
+      return "AVAILABLE";
+    }
+  }
+
+  return resource.status;
 }
 
 function statusStyle(status: string): React.CSSProperties {

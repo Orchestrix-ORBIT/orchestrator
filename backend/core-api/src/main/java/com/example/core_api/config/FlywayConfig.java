@@ -40,7 +40,8 @@ public class FlywayConfig {
                 .baselineOnMigrate(true)        // safe for existing databases
                 .load();
 
-        // Run migrations now — this creates public.tenants before Hibernate validates
+        // Repair and run migrations — this updates schema history and creates public tables
+        flyway.repair();
         flyway.migrate();
 
         return flyway;

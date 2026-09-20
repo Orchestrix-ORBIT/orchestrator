@@ -10,6 +10,7 @@ import {
 
 export default function ResourceAssetsPage() {
   const [resources, setResources]       = useState<Resource[]>([]);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<any[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
   const [showModal, setShowModal]       = useState(false);
@@ -22,8 +23,14 @@ export default function ResourceAssetsPage() {
   const [createError, setCreateError]   = useState<string | null>(null);
 
   useEffect(() => {
-    ResourcesService.getAll()
-      .then(setResources)
+    Promise.all([
+      ResourcesService.getAll().catch(() => []),
+      ResourcesService.getMaintenance().catch(() => []),
+    ])
+      .then(([resList, maintList]) => {
+        setResources(resList);
+        setMaintenanceLogs(maintList || []);
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -75,21 +82,24 @@ export default function ResourceAssetsPage() {
         </div>
         {resources.length === 0 ? (
           <div style={s.empty}>No assets registered yet.</div>
-        ) : resources.map(r => (
-          <div key={r.id} id={`asset-row-${r.id}`} style={s.row}>
-            <div>
-              <div style={s.assetName}>{r.name}</div>
-              {r.description && <div style={s.assetDesc}>{r.description}</div>}
+        ) : resources.map(r => {
+          const effectiveStatus = getEffectiveStatus(r, maintenanceLogs);
+          return (
+            <div key={r.id} id={`asset-row-${r.id}`} style={s.row}>
+              <div>
+                <div style={s.assetName}>{r.name}</div>
+                {r.description && <div style={s.assetDesc}>{r.description}</div>}
+              </div>
+              <span style={s.td}>{r.type}</span>
+              <span style={s.td}>{(r as any).metadata?.location || r.location || "Core Lab"}</span>
+              <span style={s.td}>
+                <span style={{ ...s.badge, ...statusStyle(effectiveStatus) }}>{effectiveStatus.replace("_", " ")}</span>
+              </span>
+              <span style={s.td}>{r.maxDurationHours ?? "—"}h</span>
+              <span style={s.td}>{new Date(r.createdAt).toLocaleDateString()}</span>
             </div>
-            <span style={s.td}>{r.type}</span>
-            <span style={s.td}>{(r as any).metadata?.location || r.location || "Core Lab"}</span>
-            <span style={s.td}>
-              <span style={{ ...s.badge, ...statusStyle(r.status) }}>{r.status.replace("_", " ")}</span>
-            </span>
-            <span style={s.td}>{r.maxDurationHours ?? "—"}h</span>
-            <span style={s.td}>{new Date(r.createdAt).toLocaleDateString()}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {showModal && (
@@ -145,6 +155,62 @@ export default function ResourceAssetsPage() {
       )}
     </div>
   );
+}
+
+function parseMaintDates(m: any) {
+  if (!m) return null;
+  const sRaw = m.startDate || "";
+  const eRaw = m.endDate || "";
+  if (!sRaw && !eRaw) return null;
+  const cleanStart = sRaw.replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+  const cleanEnd = eRaw.replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+  let start = new Date(cleanStart);
+  let end = new Date(cleanEnd);
+  if (isNaN(start.getTime())) start = new Date(sRaw);
+  if (isNaN(end.getTime())) end = new Date(eRaw);
+  if (!isNaN(end.getTime()) && !cleanEnd.includes(":") && !eRaw.includes("T")) {
+    end.setHours(23, 59, 59, 999);
+  }
+  return {
+    start: !isNaN(start.getTime()) ? start : null,
+    end: !isNaN(end.getTime()) ? end : null,
+  };
+}
+
+function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = []): Resource["status"] {
+  const now = new Date();
+  const assetLogs = (maintenanceLogs || []).filter((m: any) => {
+    const isIdMatch = m.resourceId && resource.id && String(m.resourceId) === String(resource.id);
+    const isNameMatch = m.assetName && resource.name && String(m.assetName).trim().toLowerCase() === String(resource.name).trim().toLowerCase();
+    return isIdMatch || isNameMatch;
+  });
+
+  // Check if ANY log is currently active
+  const activeLog = assetLogs.find((m) => {
+    const dates = parseMaintDates(m);
+    if (!dates || !dates.end) return false;
+    if (dates.start && dates.end) {
+      return now >= dates.start && now <= dates.end;
+    }
+    return now <= dates.end;
+  });
+
+  if (activeLog) {
+    return "MAINTENANCE";
+  }
+
+  // If DB statically says MAINTENANCE but no logs are currently active or upcoming, treat as AVAILABLE
+  if (resource.status === "MAINTENANCE") {
+    const hasActiveOrUpcoming = assetLogs.some((m) => {
+      const dates = parseMaintDates(m);
+      return dates?.end && now <= dates.end;
+    });
+    if (!hasActiveOrUpcoming) {
+      return "AVAILABLE";
+    }
+  }
+
+  return resource.status;
 }
 
 function statusStyle(status: string): React.CSSProperties {

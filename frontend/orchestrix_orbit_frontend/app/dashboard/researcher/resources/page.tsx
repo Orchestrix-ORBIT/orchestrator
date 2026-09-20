@@ -158,10 +158,30 @@ export default function ResearcherResourcesPage() {
           <div style={s.modal}>
             <div style={s.modalHead}>
               <span style={s.modalTitle}>Book — {bookingResource.name}</span>
-              <button style={s.closeBtn} onClick={() => setShowBookingModal(false)}>×</button>
+              <button style={s.closeBtn} onClick={() => { setShowBookingModal(false); setBookingError(null); }}>×</button>
             </div>
             <form onSubmit={handleBook} style={s.modalForm}>
-              {bookingError && <div style={s.errorBanner}>{bookingError}</div>}
+              {bookingError && (
+                <div style={{
+                  background: "#fef2f2",
+                  border: "1.5px solid #f87171",
+                  borderRadius: 6,
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  color: "#991b1b",
+                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  lineHeight: 1.5,
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>🚫</span>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 2 }}>Booking Failed</div>
+                    <div>{bookingError}</div>
+                  </div>
+                </div>
+              )}
               {projects.length > 0 && (
                 <div style={s.field}>
                   <label style={s.label}>Project</label>
@@ -187,7 +207,7 @@ export default function ResearcherResourcesPage() {
                   onChange={e => setBookingPurpose(e.target.value)} placeholder="e.g. Simulation run batch 4" />
               </div>
               <div style={s.modalActions}>
-                <button type="button" style={s.btnSecondary} onClick={() => setShowBookingModal(false)}>Cancel</button>
+                <button type="button" style={s.btnSecondary} onClick={() => { setShowBookingModal(false); setBookingError(null); }}>Cancel</button>
                 <button id="btn-confirm-booking" type="submit"
                   style={{ ...s.btnPrimary, opacity: booking ? 0.6 : 1 }} disabled={booking}>
                   {booking ? "Booking…" : "Confirm Booking"}
