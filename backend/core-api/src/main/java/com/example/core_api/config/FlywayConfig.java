@@ -38,6 +38,8 @@ public class FlywayConfig {
                 .locations(locations)           // classpath:db/migration/public
                 .schemas(schemas)               // public
                 .baselineOnMigrate(true)        // safe for existing databases
+                .outOfOrder(true)
+                .ignoreMigrationPatterns("*:missing")
                 .load();
 
         // Repair and run migrations — this updates schema history and creates public tables
