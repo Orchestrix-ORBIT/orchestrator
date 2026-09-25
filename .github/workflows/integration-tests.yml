@@ -1,0 +1,44 @@
+name: Integration tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orchestrix_test
+          POSTGRES_PASSWORD: orchestrix_test_only
+          POSTGRES_DB: orchestrix_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U orchestrix_test -d orchestrix_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:55432/orchestrix_test?sslmode=disable
+      SPRING_DATASOURCE_USERNAME: orchestrix_test
+      SPRING_DATASOURCE_PASSWORD: orchestrix_test_only
+      SPRING_DATASOURCE_HIKARI_DATA_SOURCE_PROPERTIES_SSLMODE: disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Core API HTTP and tenant migrations
+        working-directory: backend/core-api
+        run: sh ./mvnw -B -q -Dtest=TenantMigrationIT,CoreApiHttpIT test
+      - name: Realtime chat persistence
+        working-directory: backend/realtime-service
+        run: sh ./mvnw -B -q -Dtest=ChatDatabaseIT test
