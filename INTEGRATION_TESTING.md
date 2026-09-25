@@ -10,11 +10,11 @@
 | `CoreApiHttpIT` on isolated PostgreSQL | Passed on 25 September 2026 | Real HTTP requests covered registration/login, role denial, project and task create/read/delete, database rows, and tenant isolation. Its temporary tenant schemas were removed. |
 | Realtime HTTP and STOMP backed by PostgreSQL | Pending | Chat storage, subscriber delivery, and tenant separation need verification through a running service. |
 | Frontend and context-engine cross-service flows | Pending | Network requests need checking without mocked service boundaries. |
-| CI integration job | Workflow added; GitHub run pending | `.github/workflows/integration-tests.yml` starts PostgreSQL and runs the three opt-in tests. |
+| CI integration job | [Passed on `integration_testing` on 25 September 2026](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36119821788); `dev` merge pending | `.github/workflows/integration-tests.yml` starts PostgreSQL and runs the three opt-in tests. |
 
 ## Next work
 
-1. Confirm the new [CI workflow](.github/workflows/integration-tests.yml) passes on GitHub. Local runs of its three tests passed.
+1. Merge the [CI workflow](.github/workflows/integration-tests.yml) into `dev` and confirm the `dev` run passes. The branch run and local runs of its three tests passed.
 2. Add realtime tests that connect a STOMP client, send a message, receive it on a subscriber, and confirm tenant separation and persistence.
 3. Add cross-service checks for frontend-to-Core API and chat-to-context-engine requests.
 4. Run an authorized live smoke check through the Java services against Supabase, using test-owned data and explicit cleanup.

@@ -32,7 +32,7 @@ The test name or framework does not decide the level. A controller called direct
 
 **Integration testing**
 
-1. Run the new [CI integration workflow](.github/workflows/integration-tests.yml) on GitHub and confirm it passes. It uses isolated PostgreSQL and runs the three opt-in `*IT` tests; this local review has not observed a CI run. Normal Maven `*Test` selection still excludes them.
+1. Merge the [CI integration workflow](.github/workflows/integration-tests.yml) into `dev` and confirm its `dev` run passes. Its first run [passed on `integration_testing`](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36119821788) with isolated PostgreSQL and the three opt-in `*IT` tests. Normal Maven `*Test` selection still excludes them.
 2. Extend `CoreApiHttpIT` beyond its first registration/login, project, task, role, and tenant-isolation path to cover additional Core API boundaries, including tenant provisioning and resource operations.
 3. Add a realtime test using a connected STOMP client and subscriber, including tenant separation. `ChatDatabaseIT` checks controller-to-database behavior without the WebSocket transport.
 4. Add cross-service checks for frontend API calls and chat-to-summary flow. The frontend tests mock network calls, while the context-engine HTTP tests mock Gemini. The optional live smoke check validates one model response but does not cover the full application path.
@@ -42,7 +42,7 @@ The test name or framework does not decide the level. A controller called direct
 
 ## Next phase: integration testing
 
-The active work and results are tracked in [INTEGRATION_TESTING.md](INTEGRATION_TESTING.md). Core API HTTP and realtime persistence checks now pass against isolated PostgreSQL. The next work is live STOMP delivery, cross-service requests, a verified CI run, and live Java service checks against Supabase. The Supabase Data API create/read/delete smoke check passed, but it did not exercise the Java services.
+The active work and results are tracked in [INTEGRATION_TESTING.md](INTEGRATION_TESTING.md). Core API HTTP and realtime persistence checks now pass against isolated PostgreSQL, including in the first GitHub Actions run on `integration_testing`. The next work is merging the workflow into `dev`, live STOMP delivery, cross-service requests, and live Java service checks against Supabase. The Supabase Data API create/read/delete smoke check passed, but it did not exercise the Java services.
 
 ## Verification notes (25 September 2026)
 
