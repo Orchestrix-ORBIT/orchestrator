@@ -98,7 +98,7 @@ class ChatControllerTest {
 
         verify(chatMessageService, times(1)).saveMessage(request, null);
         verify(messagingTemplate, times(1)).convertAndSend(
-                eq("/topic/project/" + projectId.toString()),
+                eq("/topic/tenant/myorg/project/" + projectId),
                 eq(responsePayload)
         );
         assertThat(TenantContext.getCurrentTenant()).isNull(); // cleared in finally block

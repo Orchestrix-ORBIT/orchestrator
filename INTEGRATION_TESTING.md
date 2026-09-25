@@ -8,14 +8,14 @@
 | `ChatDatabaseIT` on isolated PostgreSQL | Passed on 25 September 2026 | Chat controller and repository store and read a message. |
 | Supabase Data API smoke check | Passed on 25 September 2026 | One unique `resource_maintenance` record was created, read, deleted, and confirmed absent. This bypassed the Java services. |
 | `CoreApiHttpIT` on isolated PostgreSQL | Passed on 25 September 2026 | Real HTTP requests covered registration/login, role denial, project and task create/read/delete, database rows, and tenant isolation. Its temporary tenant schemas were removed. |
-| Realtime HTTP and STOMP backed by PostgreSQL | Pending | Chat storage, subscriber delivery, and tenant separation need verification through a running service. |
+| `ChatStompIT` on isolated PostgreSQL | Passed locally on 25 September 2026 | Two live SockJS/STOMP clients receive messages only on their own tenant topics with the same project ID; HTTP history and database rows remain separated. |
 | Frontend and context-engine cross-service flows | Pending | Network requests need checking without mocked service boundaries. |
-| CI integration job | [Passed on `integration_testing` on 25 September 2026](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36119821788); `dev` merge pending | `.github/workflows/integration-tests.yml` starts PostgreSQL and runs the three opt-in tests. |
+| CI integration job | [Earlier three-test run passed on `integration_testing`](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36119821788); expanded workflow run pending | `.github/workflows/integration-tests.yml` now includes `ChatStompIT` alongside the previous three tests. |
 
 ## Next work
 
-1. Merge the [CI workflow](.github/workflows/integration-tests.yml) into `dev` and confirm the `dev` run passes. The branch run and local runs of its three tests passed.
-2. Add realtime tests that connect a STOMP client, send a message, receive it on a subscriber, and confirm tenant separation and persistence.
+1. Run the expanded [CI workflow](.github/workflows/integration-tests.yml) on GitHub, merge it into `dev`, and confirm the `dev` run passes. The four tests passed locally.
+2. Authenticate STOMP clients and authorize subscriptions to tenant topics. The current test checks routing isolation for correctly scoped subscriptions, not protection from a client deliberately subscribing to another tenant's topic.
 3. Add cross-service checks for frontend-to-Core API and chat-to-context-engine requests.
 4. Run an authorized live smoke check through the Java services against Supabase, using test-owned data and explicit cleanup.
 
@@ -36,7 +36,7 @@ export SPRING_DATASOURCE_USERNAME=orchestrix_test
 export SPRING_DATASOURCE_PASSWORD=orchestrix_test_only
 export SPRING_DATASOURCE_HIKARI_DATA_SOURCE_PROPERTIES_SSLMODE=disable
 (cd core-api && ./mvnw -Dtest=TenantMigrationIT,CoreApiHttpIT test)
-(cd realtime-service && ./mvnw -Dtest=ChatDatabaseIT test)
+(cd realtime-service && ./mvnw -Dtest=ChatDatabaseIT,ChatStompIT test)
 ```
 
-The Core API HTTP test creates two uniquely named tenant schemas and drops them after the test. `ChatDatabaseIT` uses the `org_integration_lab` schema created by `TenantMigrationIT`; run them in the order above. The opt-in environment guard prevents these tests from running against the Supabase JDBC URL.
+The Core API HTTP test creates two uniquely named tenant schemas and drops them after the test. `ChatDatabaseIT` and `ChatStompIT` use the `org_integration_lab` schema created by `TenantMigrationIT`; `ChatStompIT` also uses `org_integration_other`. Run the tests in the order above. The opt-in environment guard prevents these tests from running against the Supabase JDBC URL.

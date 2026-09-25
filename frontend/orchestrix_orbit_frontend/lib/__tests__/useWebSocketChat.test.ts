@@ -9,6 +9,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 const mockPublish = vi.fn();
 const mockActivate = vi.fn();
 const mockDeactivate = vi.fn();
+const mockSubscribe = vi.fn();
 
 vi.mock("@stomp/stompjs", () => {
   class MockClient {
@@ -35,7 +36,9 @@ vi.mock("@stomp/stompjs", () => {
       mockPublish(args);
     }
 
-    subscribe(_dest: string, _cb: unknown) {}
+    subscribe(dest: string, cb: unknown) {
+      mockSubscribe(dest, cb);
+    }
   }
 
   return { Client: MockClient };
@@ -97,6 +100,20 @@ describe("useWebSocketChat — initial state", () => {
     expect(result.current.messages).toEqual([]);
     expect(result.current.isLoadingHistory).toBe(true);
     expect(result.current.error).toBeNull();
+  });
+
+  it("subscribes to the tenant-specific project topic", () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as unknown as Response);
+
+    renderHook(() => useWebSocketChat(PROJECT_ID));
+
+    expect(mockSubscribe).toHaveBeenCalledWith(
+      `/topic/tenant/test_tenant/project/${PROJECT_ID}`,
+      expect.any(Function)
+    );
   });
 });
 

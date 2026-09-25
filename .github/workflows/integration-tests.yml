@@ -39,6 +39,6 @@ jobs:
       - name: Core API HTTP and tenant migrations
         working-directory: backend/core-api
         run: sh ./mvnw -B -q -Dtest=TenantMigrationIT,CoreApiHttpIT test
-      - name: Realtime chat persistence
+      - name: Realtime chat persistence and STOMP delivery
         working-directory: backend/realtime-service
-        run: sh ./mvnw -B -q -Dtest=ChatDatabaseIT test
+        run: sh ./mvnw -B -q -Dtest=ChatDatabaseIT,ChatStompIT test

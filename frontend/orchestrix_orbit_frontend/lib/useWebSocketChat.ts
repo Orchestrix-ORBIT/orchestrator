@@ -119,7 +119,8 @@ export function useWebSocketChat(projectId: string, pageSize = 15) {
         setError(null);
 
         // Subscribe to live messages for this project
-        client.subscribe(`/topic/project/${projectId}`, (message: IMessage) => {
+        const tenant = (getTenantSlug() || "myorg").toLowerCase().replace(/-/g, "_");
+        client.subscribe(`/topic/tenant/${tenant}/project/${projectId}`, (message: IMessage) => {
           try {
             const receivedMsg: ChatMessageItem = JSON.parse(message.body);
             setMessages((prev) => {
