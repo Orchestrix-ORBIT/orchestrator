@@ -6,9 +6,9 @@ spring:
     name: realtime-service
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-0-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres.nqmitpyrheqqrcbkwwut}
-    password: ${SPRING_DATASOURCE_PASSWORD:mmINekXXuCsuDloR}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:

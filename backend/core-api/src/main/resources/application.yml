@@ -4,9 +4,9 @@ spring:
 
   datasource:
     # Reads database connection parameters with explicit SPRING_DATASOURCE_* overrides to avoid OS env collisions
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.nqmitpyrheqqrcbkwwut.supabase.co:5432/postgres?sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:mmINekXXuCsuDloR}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
