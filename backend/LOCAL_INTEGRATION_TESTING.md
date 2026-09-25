@@ -29,7 +29,7 @@ export SPRING_DATASOURCE_HIKARI_DATA_SOURCE_PROPERTIES_SSLMODE=disable
 Run Core API first so Flyway creates public tables and the tenant schema, then run realtime:
 
 ```bash
-(cd core-api && ./mvnw test && ./mvnw -Dtest=TenantMigrationIT test)
+(cd core-api && ./mvnw test && ./mvnw -Dtest=TenantMigrationIT,CoreApiHttpIT test)
 (cd realtime-service && ./mvnw test && ./mvnw -Dtest=ChatDatabaseIT test)
 ```
 
@@ -39,12 +39,13 @@ When finished:
 docker stop orchestrix-integration-pg
 ```
 
-`TenantMigrationIT` and `ChatDatabaseIT` are opt-in tests. They run only when `SPRING_DATASOURCE_URL` points at `127.0.0.1` or `localhost` on port `55432` with database `orchestrix_test`. They are excluded from the regular Maven test naming pattern, and the test data is isolated from Supabase.
+`TenantMigrationIT`, `CoreApiHttpIT`, and `ChatDatabaseIT` are opt-in tests. They run only when `SPRING_DATASOURCE_URL` points at `127.0.0.1` or `localhost` on port `55432` with database `orchestrix_test`. They are excluded from the regular Maven test naming pattern, and the test data is isolated from Supabase.
 
 ## What the checks establish
 
 - `CoreApiApplicationTests` starts Core API and applies its public Flyway migrations to PostgreSQL.
 - `TenantMigrationIT` calls `TenantMigrationService`, checks that `users`, `projects`, and `chat_messages` exist in a tenant schema, and checks that tenant migrations were recorded. The run applied 13 migrations.
+- `CoreApiHttpIT` starts the Core API on a random local port, sends real HTTP requests for registration/login, project and task creation, reads and deletion, verifies role and tenant boundaries, checks database rows, and drops its temporary tenant schemas.
 - `ChatDatabaseIT` creates a tenant user and project, sends a message through the realtime controller, reads it back through the controller, checks the tenant table, and removes its fixtures.
 
-On the local PostgreSQL 16 container, the Core API suite passed (117 tests), `TenantMigrationIT` passed, and `ChatDatabaseIT` passed. The realtime unit suite previously passed (22 tests). These checks do not prove live STOMP delivery to a subscribed client or complete browser-to-backend workflows.
+On 25 September 2026, `TenantMigrationIT`, `CoreApiHttpIT`, and `ChatDatabaseIT` each passed against a temporary PostgreSQL 16 container, which was then stopped and removed. Earlier local runs also passed the complete Core API suite (117 tests) and realtime suite (22 tests). These checks do not prove live STOMP delivery to a subscribed client or complete browser-to-backend workflows.
