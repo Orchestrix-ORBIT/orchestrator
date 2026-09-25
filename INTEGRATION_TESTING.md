@@ -10,11 +10,11 @@
 | `CoreApiHttpIT` on isolated PostgreSQL | Passed on 25 September 2026 | Real HTTP requests covered registration/login, role denial, project and task create/read/delete, database rows, and tenant isolation. Its temporary tenant schemas were removed. |
 | `ChatStompIT` on isolated PostgreSQL | Passed locally on 25 September 2026 | Two live SockJS/STOMP clients receive messages only on their own tenant topics with the same project ID; HTTP history and database rows remain separated. |
 | Frontend and context-engine cross-service flows | Pending | Network requests need checking without mocked service boundaries. |
-| CI integration job | [Earlier three-test run passed on `integration_testing`](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36119821788); expanded workflow run pending | `.github/workflows/integration-tests.yml` now includes `ChatStompIT` alongside the previous three tests. |
+| CI integration job | [Four-test run passed on `integration_testing`](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36123591800); `dev` merge pending | `.github/workflows/integration-tests.yml` runs `ChatStompIT` alongside the previous three tests. |
 
 ## Next work
 
-1. Run the expanded [CI workflow](.github/workflows/integration-tests.yml) on GitHub, merge it into `dev`, and confirm the `dev` run passes. The four tests passed locally.
+1. Merge the expanded [CI workflow](.github/workflows/integration-tests.yml) into `dev` and confirm the `dev` run passes. The four tests passed locally and on the `integration_testing` branch.
 2. Authenticate STOMP clients and authorize subscriptions to tenant topics. The current test checks routing isolation for correctly scoped subscriptions, not protection from a client deliberately subscribing to another tenant's topic.
 3. Add cross-service checks for frontend-to-Core API and chat-to-context-engine requests.
 4. Run an authorized live smoke check through the Java services against Supabase, using test-owned data and explicit cleanup.

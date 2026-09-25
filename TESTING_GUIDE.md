@@ -32,7 +32,7 @@ The test name or framework does not decide the level. A controller called direct
 
 **Integration testing**
 
-1. Merge the updated [CI integration workflow](.github/workflows/integration-tests.yml) into `dev` and confirm its `dev` run passes. Its earlier run [passed on `integration_testing`](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36119821788) with three opt-in `*IT` tests; the new `ChatStompIT` has passed locally but has not yet run on GitHub. Normal Maven `*Test` selection excludes them.
+1. Merge the updated [CI integration workflow](.github/workflows/integration-tests.yml) into `dev` and confirm its `dev` run passes. All four opt-in `*IT` tests [passed on `integration_testing`](https://github.com/Orchestrix-ORBIT/orchestrator/actions/runs/36123591800). Normal Maven `*Test` selection excludes them.
 2. Extend `CoreApiHttpIT` beyond its first registration/login, project, task, role, and tenant-isolation path to cover additional Core API boundaries, including tenant provisioning and resource operations.
 3. Add authentication and authorization for STOMP tenant subscriptions. The new test verifies routing and persistence separation between tenant topics, but clients can currently request a different tenant’s topic because subscriptions are not authorized.
 4. Add cross-service checks for frontend API calls and chat-to-summary flow. The frontend tests mock network calls, while the context-engine HTTP tests mock Gemini. The optional live smoke check validates one model response but does not cover the full application path.
@@ -51,6 +51,6 @@ The active work and results are tracked in [INTEGRATION_TESTING.md](INTEGRATION_
 - Core API: `JAVA_HOME=/home/sheharak/.jdks/jdk-21.0.6+7 ./mvnw -q -Dtest='*Test,!CoreApiApplicationTests' test` → **116 passed**.
 - Realtime service: `JAVA_HOME=/home/sheharak/.jdks/jdk-21.0.6+7 ./mvnw -q -Dtest='*Test,!RealtimeServiceApplicationTests' test` → **21 passed**.
 - The Java context and database integration tests require a database. See [LOCAL_INTEGRATION_TESTING.md](backend/LOCAL_INTEGRATION_TESTING.md) for the isolated PostgreSQL setup. The context startup tests were not rerun in this review.
-- Isolated PostgreSQL integration tests rerun on 25 September: `TenantMigrationIT`, `CoreApiHttpIT`, `ChatDatabaseIT`, and `ChatStompIT` passed with no failures. The new STOMP test has not yet run in GitHub Actions.
+- Isolated PostgreSQL integration tests rerun on 25 September: `TenantMigrationIT`, `CoreApiHttpIT`, `ChatDatabaseIT`, and `ChatStompIT` passed with no failures locally and on the `integration_testing` GitHub Actions run.
 
 Test locations: [frontend tests](frontend/orchestrix_orbit_frontend/FRONTEND_TESTING.md), [Core API tests](backend/core-api/src/test/java), [realtime tests](backend/realtime-service/src/test/java), [context-engine tests](backend/context-engine/tests).
