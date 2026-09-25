@@ -33,6 +33,20 @@ Run Core API first so Flyway creates public tables and the tenant schema, then r
 (cd realtime-service && ./mvnw test && ./mvnw -Dtest=ChatDatabaseIT,ChatStompIT test)
 ```
 
+To run the frontend and chat-to-context-engine flow, install the frontend npm dependencies and context-engine Python dependencies, build both service jars, then run the guarded script from the repository root:
+
+```bash
+(cd core-api && ./mvnw -DskipTests package)
+(cd realtime-service && ./mvnw -DskipTests package)
+cd ..
+npm ci --prefix frontend/orchestrix_orbit_frontend
+python3 -m venv backend/context-engine/venv
+backend/context-engine/venv/bin/python -m pip install -r backend/context-engine/requirements-test.txt
+CONTEXT_PYTHON="$PWD/backend/context-engine/venv/bin/python" bash backend/run_cross_service_integration.sh
+```
+
+The script requires the exact isolated JDBC URL, starts Core API, realtime, and the real context-engine HTTP route with a deterministic Gemini substitute, and stops the services afterward. Each run creates a unique tenant in the disposable database; stopping the container removes it.
+
 When finished:
 
 ```bash
@@ -48,5 +62,6 @@ docker stop orchestrix-integration-pg
 - `CoreApiHttpIT` starts the Core API on a random local port, sends real HTTP requests for registration/login, project and task creation, reads and deletion, verifies role and tenant boundaries, checks database rows, and drops its temporary tenant schemas.
 - `ChatDatabaseIT` creates a tenant user and project, sends a message through the realtime controller, reads it back through the controller, checks the tenant table, and removes its fixtures.
 - `ChatStompIT` connects two live SockJS/STOMP clients to the running realtime service, sends a message for each tenant using the same project ID, verifies delivery to the correct topic, checks HTTP history and database rows, and removes its fixtures.
+- `crossServices.it.test.ts` uses frontend service modules over live HTTP to create and read a project, sends chat over live STOMP, reads it from realtime history, and sends that exact message to the context-engine route. The model call is deterministic; no Gemini key or Supabase connection is used.
 
 On 25 September 2026, `TenantMigrationIT`, `CoreApiHttpIT`, `ChatDatabaseIT`, and `ChatStompIT` passed against a temporary PostgreSQL 16 container. Earlier local runs also passed the complete Core API suite (117 tests) and realtime suite (22 tests). These checks do not prove authenticated STOMP subscriptions or complete browser-to-backend workflows.
