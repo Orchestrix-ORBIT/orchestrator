@@ -219,7 +219,7 @@ export default function LeadTeamPage() {
                   </td>
                   <td style={s.td}>
                     <span style={s.roleBadge}>
-                      Member
+                      {m.role || "Researcher"}
                     </span>
                   </td>
                   <td style={s.td}>

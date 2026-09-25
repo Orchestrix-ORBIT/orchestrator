@@ -67,10 +67,15 @@ public class DocumentService {
 
         // Build the entity using the Lombok @Builder pattern.
         // version starts at 1 (set as @Builder.Default in Document.java).
+        String category = (request.getCategory() != null && !request.getCategory().isBlank())
+                ? request.getCategory()
+                : "OTHER";
+
         Document document = Document.builder()
                 .projectId(projectId)
                 .authorId(authorId)
                 .title(request.getTitle())
+                .category(category)
                 .contentEncrypted(request.getContentEncrypted())
                 .fileStorageKey(request.getFileStorageKey())
                 .build();
@@ -144,6 +149,9 @@ public class DocumentService {
         // Apply only non-null fields from the request
         if (request.getTitle() != null) {
             document.setTitle(request.getTitle());
+        }
+        if (request.getCategory() != null && !request.getCategory().isBlank()) {
+            document.setCategory(request.getCategory());
         }
         if (request.getContentEncrypted() != null) {
             document.setContentEncrypted(request.getContentEncrypted());

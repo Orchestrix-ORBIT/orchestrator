@@ -5,38 +5,37 @@
  * The backend AES-256 encrypts document content — the frontend receives
  * the decrypted content transparently (server handles the cipher).
  *
- * Backend access levels: PRIVATE | TEAM | PUBLIC
+ * Backend categories: MEETING_MINUTES | EXPERIMENTAL_PROTOCOL | PRE_PRINT_PAPER | ARCHIVED_DATASET | OTHER
  */
 
 import { api } from "@/lib/api";
 
 // ── Types matching Spring Boot DocumentResponse DTO ──────────────────────────
-export type DocumentAccess = "PRIVATE" | "TEAM" | "PUBLIC";
-
 export interface Document {
   id: string;
   projectId: string;
-  title: string;
-  contentPreview?: string; // First 200 chars of decrypted content
-  mimeType?: string;
-  sizeBytes?: number;
-  accessLevel: DocumentAccess;
   authorId: string;
+  title: string;
+  category: string;          // MEETING_MINUTES | EXPERIMENTAL_PROTOCOL | PRE_PRINT_PAPER | ARCHIVED_DATASET | OTHER
+  contentEncrypted: string | null;  // decrypted by server transparently
+  fileStorageKey: string | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateDocumentBody {
   title: string;
-  content?: string;
-  mimeType?: string;
-  accessLevel?: DocumentAccess;
+  category?: string;
+  contentEncrypted?: string;
+  fileStorageKey?: string;
 }
 
 export interface UpdateDocumentBody {
   title?: string;
-  content?: string;
-  accessLevel?: DocumentAccess;
+  category?: string;
+  contentEncrypted?: string;
+  fileStorageKey?: string;
 }
 
 // ── Service object ───────────────────────────────────────────────────────────

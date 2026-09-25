@@ -22,11 +22,6 @@ type ProjectMeta = {
   status: "ACTIVE" | "COMPLETED";
 };
 
-const PROJECTS_MAP: Record<string, ProjectMeta> = {
-  "1": { id: "1", name: "Project Alpha Core", status: "ACTIVE" },
-  "2": { id: "2", name: "Nexus Protocol", status: "ACTIVE" },
-  "3": { id: "3", name: "Beta Synthesis", status: "COMPLETED" },
-};
 
 import { useEffect } from "react";
 import { ProjectsService } from "@/lib/services/projects";

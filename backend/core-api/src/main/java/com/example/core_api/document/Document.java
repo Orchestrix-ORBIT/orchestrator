@@ -27,6 +27,13 @@ public class Document {
     @Column(nullable = false)
     private String title;
 
+    /**
+     * Document category: MEETING_MINUTES | EXPERIMENTAL_PROTOCOL | PRE_PRINT_PAPER | ARCHIVED_DATASET | OTHER
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private String category = "OTHER";
+
     // Stored encrypted; null if the document is a file-based upload
     @Convert(converter = AttributeEncryptor.class)
     @Column(name = "content_encrypted", columnDefinition = "TEXT")

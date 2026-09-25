@@ -38,10 +38,19 @@ export interface CreateProjectBody {
   description?: string;
 }
 
+// ── Utility: remove projects with duplicate names (keeps first by name sort) ─
+function dedupeByName(projects: Project[]): Project[] {
+  const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
+  return sorted.filter(
+    (p, idx, arr) => arr.findIndex(x => x.name.trim() === p.name.trim()) === idx
+  );
+}
+
 // ── Service object ───────────────────────────────────────────────────────────
 export const ProjectsService = {
-  /** GET /api/projects — list all projects in this tenant */
-  getAll: () => api.get<Project[]>("/api/projects"),
+  /** GET /api/projects — list all projects in this tenant (auto-deduplicated by name) */
+  getAll: () =>
+    api.get<Project[]>("/api/projects").then(dedupeByName),
 
   /** GET /api/projects/{id} — get one project by UUID */
   getById: (id: string) => api.get<Project>(`/api/projects/${id}`),
