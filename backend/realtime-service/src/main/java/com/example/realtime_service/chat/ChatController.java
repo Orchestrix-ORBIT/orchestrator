@@ -49,7 +49,8 @@ public class ChatController {
         TenantContext.setCurrentTenant(schemaName);
         try {
             ChatMessageResponse response = chatMessageService.saveMessage(request, null);
-            String destination = "/topic/project/" + request.projectId().toString();
+            String destination = "/topic/tenant/" + tenant.toLowerCase().replace('-', '_')
+                    + "/project/" + request.projectId();
             messagingTemplate.convertAndSend(destination, response);
         } finally {
             TenantContext.clear();

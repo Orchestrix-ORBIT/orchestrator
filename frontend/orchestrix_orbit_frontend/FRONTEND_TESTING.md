@@ -1,8 +1,8 @@
 # Orchestrix ORBIT — Frontend Testing Documentation
 
 > **Framework**: Vitest v5 + React Testing Library + jsdom  
-> **Total Tests**: 117 across 13 files  
-> **Result**: ✅ 117/117 passing
+> **Total Tests**: 118 across 13 files
+> **Result**: ✅ 118/118 passing
 
 ---
 
@@ -225,7 +225,7 @@ Uses a `TenantConsumer` helper component to surface hook values.
 
 ---
 
-### 10. `lib/__tests__/useWebSocketChat.test.ts` — WebSocket Chat Hook (7 tests)
+### 10. `lib/__tests__/useWebSocketChat.test.ts` — WebSocket Chat Hook (8 tests)
 
 **Source**: `lib/useWebSocketChat.ts`
 
@@ -234,6 +234,7 @@ Exercises the real hook logic against a fully mocked STOMP/SockJS stack.
 | Test Group | What's Verified |
 |------------|----------------|
 | Initial state | messages = [], isLoadingHistory = true, error = null |
+| Tenant topic | Subscribes to the normalized tenant and project topic |
 | `fetchHistory` success | Messages set from API; isLoadingHistory = false |
 | `fetchHistory` hasMore | hasMore = false when count < pageSize |
 | `fetchHistory` API 5xx | Empty messages, hasMore = false, no throw |
@@ -365,7 +366,7 @@ orchestrix_orbit_frontend/
     ├── __tests__/
     │   ├── auth.test.ts             (14 tests)
     │   ├── api.test.ts              (16 tests)
-    │   └── useWebSocketChat.test.ts (7 tests)
+    │   └── useWebSocketChat.test.ts (8 tests)
     └── services/__tests__/
         ├── tasks.test.ts            (7 tests)
         ├── projects.test.ts         (7 tests)
@@ -390,8 +391,8 @@ orchestrix_orbit_frontend/
 | resources.test.ts | 12 | ✅ Pass |
 | summarize.test.ts | 3 | ✅ Pass |
 | TenantContext.test.tsx | 4 | ✅ Pass |
-| useWebSocketChat.test.ts | 7 | ✅ Pass |
+| useWebSocketChat.test.ts | 8 | ✅ Pass |
 | LoadingState.test.tsx | 5 | ✅ Pass |
 | Sidebar.test.tsx | 9 | ✅ Pass |
 | AdminSidebar.test.tsx | 7 | ✅ Pass |
-| **Total** | **117** | **✅ All Pass** |
+| **Total** | **118** | **✅ All Pass** |

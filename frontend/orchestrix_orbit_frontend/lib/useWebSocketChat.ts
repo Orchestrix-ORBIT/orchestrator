@@ -4,25 +4,11 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Client, IMessage } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { getTenantSlug, getEmail } from "./auth";
+import { fetchProjectMessages, type ChatMessageItem } from "./services/chat";
 
-export interface ChatMessageItem {
-  id: string;
-  projectId: string;
-  taskId?: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  createdAt: string;
-  replyToId?: string;
-  replyToSender?: string;
-  replyToContent?: string;
-  isDeleted?: boolean;
-  isEdited?: boolean;
-  reactions?: Record<string, number>;
-}
+export type { ChatMessageItem } from "./services/chat";
 
 const WS_URL = process.env.NEXT_PUBLIC_CHAT_WS_URL ?? "http://localhost:8082/ws";
-const API_BASE = process.env.NEXT_PUBLIC_CHAT_API_URL ?? "http://localhost:8082";
 
 export function useWebSocketChat(projectId: string, pageSize = 15) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -42,22 +28,9 @@ export function useWebSocketChat(projectId: string, pageSize = 15) {
     pageRef.current = 0;
     try {
       const tenant = getTenantSlug() || "myorg";
-      const res = await fetch(
-        `${API_BASE}/api/chat/projects/${projectId}/messages?page=0&size=${pageSize}`,
-        {
-          headers: {
-            "X-Tenant-ID": tenant,
-          },
-        }
-      );
-      if (res.ok) {
-        const data: ChatMessageItem[] = await res.json();
-        setMessages(data);
-        setHasMore(data.length >= pageSize);
-      } else {
-        setMessages([]);
-        setHasMore(false);
-      }
+      const data = await fetchProjectMessages(projectId, tenant, 0, pageSize);
+      setMessages(data);
+      setHasMore(data.length >= pageSize);
     } catch (e) {
       console.warn("Could not load chat history:", e);
       setMessages([]);
@@ -74,28 +47,16 @@ export function useWebSocketChat(projectId: string, pageSize = 15) {
     setIsLoadingMore(true);
     try {
       const tenant = getTenantSlug() || "myorg";
-      const res = await fetch(
-        `${API_BASE}/api/chat/projects/${projectId}/messages?page=${nextPage}&size=${pageSize}`,
-        {
-          headers: {
-            "X-Tenant-ID": tenant,
-          },
-        }
-      );
-      if (res.ok) {
-        const olderData: ChatMessageItem[] = await res.json();
-        if (olderData.length > 0) {
-          pageRef.current = nextPage;
-          setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m.id));
-            const filtered = olderData.filter((m) => !existingIds.has(m.id));
-            return [...filtered, ...prev];
-          });
-        }
-        setHasMore(olderData.length >= pageSize);
-      } else {
-        setHasMore(false);
+      const olderData = await fetchProjectMessages(projectId, tenant, nextPage, pageSize);
+      if (olderData.length > 0) {
+        pageRef.current = nextPage;
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const filtered = olderData.filter((m) => !existingIds.has(m.id));
+          return [...filtered, ...prev];
+        });
       }
+      setHasMore(olderData.length >= pageSize);
     } catch (e) {
       console.warn("Could not load older messages:", e);
     } finally {
@@ -119,7 +80,8 @@ export function useWebSocketChat(projectId: string, pageSize = 15) {
         setError(null);
 
         // Subscribe to live messages for this project
-        client.subscribe(`/topic/project/${projectId}`, (message: IMessage) => {
+        const tenant = (getTenantSlug() || "myorg").toLowerCase().replace(/-/g, "_");
+        client.subscribe(`/topic/tenant/${tenant}/project/${projectId}`, (message: IMessage) => {
           try {
             const receivedMsg: ChatMessageItem = JSON.parse(message.body);
             setMessages((prev) => {
