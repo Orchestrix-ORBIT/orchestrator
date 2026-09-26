@@ -30,6 +30,20 @@ docker compose up -d
 ```
 > **Note**: To stop containers later, run `docker compose down`.
 
+### Supabase database on an IPv4-only network
+
+The direct Supabase database host (`db.<project-ref>.supabase.co`) uses IPv6 unless the project has the IPv4 add-on. If the machine running the Java services has no IPv6 route, set these values in both `backend/core-api/.env` and `backend/realtime-service/.env` using the **Session pooler** host shown in the Supabase Dashboard's Connect dialog:
+
+```dotenv
+SPRING_DATASOURCE_URL=jdbc:postgresql://<session-pooler-host>:5432/postgres?sslmode=require
+SPRING_DATASOURCE_USERNAME=postgres.<project-ref>
+SPRING_DATASOURCE_PASSWORD=<database-password>
+```
+
+The pooler host cannot be derived reliably from the project region; copy the exact host from the dashboard. Keep these `.env` files local because they contain credentials. The local Docker database above is a separate alternative and uses its own connection settings.
+
+Core API and Realtime must also use the same `JWT_SECRET`. Core API signs tenant-bound login tokens; Realtime verifies them for chat history and STOMP connections. Users with tokens issued before this change must sign in again.
+
 ---
 
 ## 2. Core API Service (Spring Boot)

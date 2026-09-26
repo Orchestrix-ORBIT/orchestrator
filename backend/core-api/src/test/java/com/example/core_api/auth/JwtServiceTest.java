@@ -1,5 +1,7 @@
 package com.example.core_api.auth;
 
+import com.example.core_api.multitenancy.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -31,6 +33,7 @@ class JwtServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        TenantContext.setCurrentTenant("org_orbit_lab");
         jwtService = new JwtService();
 
         // Inject the secret key directly via reflection
@@ -53,6 +56,11 @@ class JwtServiceTest {
                 .role(UserRole.MEMBER)
                 .status(UserStatus.ACTIVE)
                 .build();
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
     }
 
     // =========================================================================
@@ -131,6 +139,13 @@ class JwtServiceTest {
         // ACT + ASSERT — token should NOT be valid for a different user
         // (email in token != differentUser.getUsername())
         assertThat(jwtService.isTokenValid(tokenForUser1, differentUser)).isFalse();
+    }
+
+    @Test
+    void isTokenValid_inDifferentTenant_returnsFalse() {
+        String token = jwtService.generateToken(sampleUser);
+        TenantContext.setCurrentTenant("org_other_lab");
+        assertThat(jwtService.isTokenValid(token, sampleUser)).isFalse();
     }
 
     @Test

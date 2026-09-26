@@ -1,6 +1,9 @@
 server:
   port: 8082
 
+jwt:
+  secret: ${JWT_SECRET:My32ByteSuperSecretKeyForJWTAuth2026!}
+
 spring:
   application:
     name: realtime-service

@@ -53,6 +53,7 @@ vi.mock("sockjs-client", () => ({
 vi.mock("../auth", () => ({
   getTenantSlug: vi.fn(() => "test-tenant"),
   getEmail: vi.fn(() => "user@test.com"),
+  getToken: vi.fn(() => "test-token"),
 }));
 
 import { useWebSocketChat } from "../useWebSocketChat";

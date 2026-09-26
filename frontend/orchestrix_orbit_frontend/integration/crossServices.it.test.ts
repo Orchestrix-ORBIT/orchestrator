@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
-import { saveAuthData } from "@/lib/auth";
+import { getToken, saveAuthData } from "@/lib/auth";
 import { ProjectsService } from "@/lib/services/projects";
 import { fetchProjectMessages } from "@/lib/services/chat";
 import { summarizeMessages } from "@/lib/services/summarize";
@@ -27,6 +27,7 @@ async function postJson(path: string, tenant: string | null, body: unknown) {
 async function sendStompMessage(projectId: string, tenant: string, senderName: string, content: string) {
   const client = new Client({
     webSocketFactory: () => new SockJS(wsUrl),
+    connectHeaders: { Authorization: `Bearer ${getToken() ?? ""}` },
     reconnectDelay: 0,
   });
   try {

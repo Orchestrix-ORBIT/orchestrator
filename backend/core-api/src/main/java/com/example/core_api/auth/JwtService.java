@@ -1,5 +1,6 @@
 package com.example.core_api.auth;
 
+import com.example.core_api.multitenancy.TenantContext;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -43,6 +44,7 @@ public class JwtService {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("role", userDetails.getAuthorities()
                 .iterator().next().getAuthority()); // e.g. "ROLE_MEMBER"
+        extraClaims.put("tenant", currentTenant());
 
         return buildToken(extraClaims, userDetails);
     }
@@ -61,7 +63,9 @@ public class JwtService {
     //   2. The token is not expired
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String emailInToken = extractEmail(token);
-        return emailInToken.equals(userDetails.getUsername()) && !isTokenExpired(token);
+        return emailInToken.equals(userDetails.getUsername())
+                && currentTenant().equals(extractClaim(token, claims -> claims.get("tenant", String.class)))
+                && !isTokenExpired(token);
     }
 
 
@@ -117,6 +121,11 @@ public class JwtService {
     // Checks if the token's "exp" claim is before the current time.
     private boolean isTokenExpired(String token) {
         return extractClaim(token, Claims::getExpiration).before(new Date());
+    }
+
+    private String currentTenant() {
+        String tenant = TenantContext.getCurrentTenant();
+        return tenant == null ? "org_myorg" : tenant;
     }
 
     // Converts the raw secret string from .env into a cryptographic SecretKey object.

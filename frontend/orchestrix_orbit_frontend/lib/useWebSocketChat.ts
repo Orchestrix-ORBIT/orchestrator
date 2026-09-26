@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Client, IMessage } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
-import { getTenantSlug, getEmail } from "./auth";
+import { getTenantSlug, getEmail, getToken } from "./auth";
 import { fetchProjectMessages, type ChatMessageItem } from "./services/chat";
 
 export type { ChatMessageItem } from "./services/chat";
@@ -72,6 +72,7 @@ export function useWebSocketChat(projectId: string, pageSize = 15) {
 
     const client = new Client({
       webSocketFactory: () => new SockJS(WS_URL),
+      connectHeaders: { Authorization: `Bearer ${getToken() ?? ""}` },
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
