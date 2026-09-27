@@ -13,4 +13,6 @@ public class CreateBookingRequest {
     private OffsetDateTime endTime;
     
     private String purpose;
+    
+    private java.util.UUID projectId;
 }

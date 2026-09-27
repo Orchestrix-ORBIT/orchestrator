@@ -87,6 +87,51 @@ export default function AiInsightsPage() {
   const [insights, setInsights]       = useState<InsightItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<InsightItem | null>(null);
   const [projects, setProjects]       = useState<Project[]>([]);
+  const [isApproving, setIsApproving] = useState(false);
+  const [editTitle, setEditTitle]     = useState("");
+  const [editDesc, setEditDesc]       = useState("");
+
+  // When a modal opens, seed the editable fields
+  useEffect(() => {
+    if (selectedItem) {
+      setEditTitle(selectedItem.topic);
+      setEditDesc(selectedItem.summary);
+    }
+  }, [selectedItem]);
+
+  async function handleApprove(item: InsightItem) {
+    setIsApproving(true);
+    try {
+      // Actually create the task on the Kanban board!
+      await TasksService.create(item.projectId, {
+        title: editTitle || item.topic,
+        description: editDesc || item.summary,
+        priority: "MEDIUM",
+      });
+
+      // Optimistically update the UI to show it as Executed
+      setInsights((prev) =>
+        prev.map((i) =>
+          i.id === item.id ? { ...i, status: "Executed" } : i
+        )
+      );
+      setSelectedItem(null);
+    } catch (e) {
+      alert("Failed to approve task: " + e);
+    } finally {
+      setIsApproving(false);
+    }
+  }
+
+  function handleReject(item: InsightItem) {
+    // Optimistically update the UI to show it as Archived
+    setInsights((prev) =>
+      prev.map((i) =>
+        i.id === item.id ? { ...i, status: "Archived" } : i
+      )
+    );
+    setSelectedItem(null);
+  }
 
   useEffect(() => {
     async function load() {
@@ -230,7 +275,7 @@ export default function AiInsightsPage() {
                     <span
                       style={{
                         ...s.badge,
-                        ...(item.status === "Executed" ? s.badgeDone : s.badgePending),
+                        ...(item.status === "Executed" ? s.badgeDone : item.status === "Archived" ? s.badgeArchived : s.badgePending),
                       }}
                     >
                       {item.status}
@@ -265,10 +310,32 @@ export default function AiInsightsPage() {
                 </p>
               </div>
 
-              <div style={m.section}>
-                <span style={m.label}>EXECUTIVE SUMMARY</span>
-                <p style={m.text}>{selectedItem.summary}</p>
-              </div>
+              {selectedItem.status === "Pending Approval" ? (
+                <>
+                  <div style={m.section}>
+                    <span style={m.label}>EDIT TASK TITLE</span>
+                    <input
+                      style={{ ...m.input, marginTop: 8 }}
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                    />
+                  </div>
+                  <div style={m.section}>
+                    <span style={m.label}>EDIT TASK DESCRIPTION</span>
+                    <textarea
+                      style={{ ...m.textarea, marginTop: 8 }}
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div style={m.section}>
+                  <span style={m.label}>EXECUTIVE SUMMARY</span>
+                  <p style={m.text}>{selectedItem.summary}</p>
+                </div>
+              )}
 
               <div style={{ ...m.section, borderBottom: "none", paddingBottom: 0 }}>
                 <span style={m.label}>KEY FINDINGS & ACTION ITEMS</span>
@@ -288,16 +355,37 @@ export default function AiInsightsPage() {
                 Status: <strong>{selectedItem.status}</strong>
               </span>
               <div style={{ display: "flex", gap: 8 }}>
-                <Link
-                  href={`/lead-dashboard/projects/${selectedItem.projectId}`}
-                  style={{ padding: "8px 14px", background: "#f5f5f5", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
-                  onClick={() => setSelectedItem(null)}
-                >
-                  Open Project →
-                </Link>
-                <button onClick={() => setSelectedItem(null)} style={m.btnPrimary}>
-                  Close
-                </button>
+                {selectedItem.status === "Pending Approval" ? (
+                  <>
+                    <button 
+                      onClick={() => handleReject(selectedItem)} 
+                      style={m.btnDanger}
+                      disabled={isApproving}
+                    >
+                      Reject
+                    </button>
+                    <button 
+                      onClick={() => handleApprove(selectedItem)} 
+                      style={m.btnPrimary}
+                      disabled={isApproving}
+                    >
+                      {isApproving ? "Approving..." : "Approve & Convert to Task"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href={`/lead-dashboard/projects/${selectedItem.projectId}`}
+                      style={{ padding: "8px 14px", background: "#f5f5f5", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+                      onClick={() => setSelectedItem(null)}
+                    >
+                      Open Project →
+                    </Link>
+                    <button onClick={() => setSelectedItem(null)} style={m.btnPrimary}>
+                      Close
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -330,6 +418,7 @@ const s: Record<string, React.CSSProperties> = {
   badge:     { fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4 },
   badgeDone: { background: "#161616", color: "#ffffff" },
   badgePending: { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
+  badgeArchived: { background: "#f5f5f5", color: "#9e9e9e", border: "1px solid #e0e0e0" },
 };
 
 const m: Record<string, React.CSSProperties> = {
@@ -345,4 +434,7 @@ const m: Record<string, React.CSSProperties> = {
   text:     { fontSize: 13, color: "#424242", lineHeight: 1.5, marginTop: 4 },
   footer:   { padding: "14px 24px", borderTop: "1px solid #eeeeee", background: "#fafafa", display: "flex", alignItems: "center", justifyContent: "space-between" },
   btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnDanger:  { padding: "8px 16px", background: "#fff0f0", color: "#c62828", border: "1px solid #f5c6cb", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  input:      { width: "100%", boxSizing: "border-box" as const, padding: "8px 12px", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontFamily: "var(--font)" },
+  textarea:   { width: "100%", boxSizing: "border-box" as const, padding: "8px 12px", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontFamily: "var(--font)", resize: "vertical" as const },
 };

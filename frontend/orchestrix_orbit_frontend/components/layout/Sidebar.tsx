@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { logout, getTenantSlug, getRole } from "@/lib/auth";
+import { usePathname } from "next/navigation";
+import { getTenantSlug } from "@/lib/auth";
 
 const NAV = [
   {
@@ -93,14 +93,9 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [orgName, setOrgName] = useState<string>("");
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const role = getRole() || "";
-    setIsAdmin(!!role.toUpperCase().match(/ADMIN|OWNER/));
-
     const slug = getTenantSlug() || "myorg";
     fetch(`http://localhost:8080/api/admin/tenants/${slug}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -110,11 +105,6 @@ export function Sidebar() {
       })
       .catch(() => setOrgName(slug.toUpperCase()));
   }, []);
-
-  function handleLogout() {
-    logout();
-    router.push("/");
-  }
 
   return (
     <aside style={s.sidebar}>
@@ -147,52 +137,9 @@ export function Sidebar() {
           );
         })}
 
-        {isAdmin && (
-          <Link
-            id="nav-lead-back-admin"
-            href="/admin-dashboard"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "9px 12px",
-              borderRadius: 6,
-              fontSize: 13,
-              color: "#818cf8",
-              fontWeight: 600,
-              cursor: "pointer",
-              textDecoration: "none",
-              marginTop: 16,
-              border: "1px dashed #4f46e5",
-              background: "rgba(79, 70, 229, 0.08)",
-            }}
-          >
-            <span style={{ display: "flex", alignItems: "center", color: "#818cf8" }}>
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4">
-                <path d="M1.5 7.5L7.5 1.5M7.5 1.5L13.5 7.5M7.5 1.5V13.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span>Back to Admin</span>
-          </Link>
-        )}
+
       </nav>
 
-      {/* Footer / Logout */}
-      <div style={s.footer}>
-        <button
-          id="btn-lead-logout"
-          type="button"
-          onClick={handleLogout}
-          style={s.logoutBtn}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
-            <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M12.5 7H4.5" strokeLinecap="round" />
-          </svg>
-          Sign Out
-        </button>
-      </div>
     </aside>
   );
 }
@@ -276,48 +223,5 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
-  },
-  footer: {
-    padding: "12px 12px 16px",
-    borderTop: "1px solid #2a2a2a",
-    marginTop: "auto",
-  },
-  encryptBox: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    padding: "8px 10px",
-    background: "#1c1c1c",
-    borderRadius: 4,
-    border: "1px solid #262626",
-  },
-  encryptLabel: {
-    fontSize: 9,
-    fontWeight: 700,
-    color: "#4ade80",
-    letterSpacing: "0.6px",
-  },
-  encryptSub: {
-    fontSize: 10,
-    color: "#666666",
-    fontFamily: "monospace",
-  },
-  logoutBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: "7px 10px",
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#f87171",
-    background: "rgba(248, 113, 113, 0.08)",
-    border: "1px solid rgba(248, 113, 113, 0.2)",
-    cursor: "pointer",
-    width: "100%",
-    marginTop: 8,
-    boxSizing: "border-box",
-    transition: "all 0.15s ease",
   },
 };

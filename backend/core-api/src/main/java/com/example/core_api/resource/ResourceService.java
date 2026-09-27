@@ -14,6 +14,8 @@ import java.util.stream.Collectors;
 
 import com.example.core_api.auth.UserRepository;
 import com.example.core_api.auth.User;
+import com.example.core_api.project.ProjectRepository;
+import com.example.core_api.project.Project;
 
 @Service
 @Transactional
@@ -23,15 +25,18 @@ public class ResourceService {
     private final ResourceBookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final ResourceMaintenanceRepository maintenanceRepository;
+    private final ProjectRepository projectRepository;
 
     public ResourceService(ResourceRepository resourceRepository, 
                            ResourceBookingRepository bookingRepository, 
                            UserRepository userRepository,
-                           ResourceMaintenanceRepository maintenanceRepository) {
+                           ResourceMaintenanceRepository maintenanceRepository,
+                           ProjectRepository projectRepository) {
         this.resourceRepository = resourceRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.maintenanceRepository = maintenanceRepository;
+        this.projectRepository = projectRepository;
     }
 
     @Transactional(readOnly = true)
@@ -132,6 +137,7 @@ public class ResourceService {
         ResourceBooking booking = ResourceBooking.builder()
                 .resourceId(resourceId)
                 .userId(userId)
+                .projectId(request.getProjectId())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .status(BookingStatus.PENDING_APPROVAL)
@@ -208,12 +214,18 @@ public class ResourceService {
     private BookingResponse mapToBookingResponse(ResourceBooking booking) {
         String resName = resourceRepository.findById(booking.getResourceId()).map(Resource::getName).orElse("Lab Asset");
         String email = userRepository.findById(booking.getUserId()).map(User::getEmail).orElse(booking.getUserId().toString());
+        String projName = null;
+        if (booking.getProjectId() != null) {
+            projName = projectRepository.findById(booking.getProjectId()).map(Project::getName).orElse("Unknown Project");
+        }
 
         return BookingResponse.builder()
                 .id(booking.getId())
                 .resourceId(booking.getResourceId())
                 .resourceName(resName)
                 .userId(booking.getUserId())
+                .projectId(booking.getProjectId())
+                .projectName(projName)
                 .userEmail(email)
                 .startTime(booking.getStartTime())
                 .endTime(booking.getEndTime())

@@ -361,8 +361,7 @@ export default function ResourcesPage() {
 
       const projNameVal = selectedProject || (targetProj ? targetProj.name : (dbProjects.length > 0 ? dbProjects[0].name : "Project Alpha Core"));
 
-      // Throws if the API returns a conflict (409) or any other error
-      await ResourcesService.createBooking(selectedResource, {
+      const createdBooking = await ResourcesService.createBooking(selectedResource, {
         projectId: targetProj ? targetProj.id : undefined,
         startTime,
         endTime,
@@ -370,16 +369,12 @@ export default function ResourcesPage() {
       });
 
       const newBooking = {
-        id: `BK-${Date.now()}`,
-        resourceId: String(selectedResource),
-        resourceName: targetRes ? targetRes.name : "Lab Resource",
-        projectId: targetProj ? targetProj.id : undefined,
+        ...createdBooking,
         project: projNameVal,
         projectName: projNameVal,
-        startTime,
-        endTime,
         bookedBy: "Dinuka K. (Lead)",
-        status: "APPROVED",
+        // Override the hardcoded status from the mock with the actual DB status
+        status: createdBooking.status || "PENDING_APPROVAL",
       };
 
       // Save to local ledger

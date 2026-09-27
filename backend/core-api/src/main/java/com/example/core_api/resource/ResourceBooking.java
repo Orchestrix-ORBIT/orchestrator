@@ -24,6 +24,9 @@ public class ResourceBooking {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    @Column(name = "project_id")
+    private UUID projectId;
+
     @Column(name = "start_time", nullable = false)
     private OffsetDateTime startTime;
 
