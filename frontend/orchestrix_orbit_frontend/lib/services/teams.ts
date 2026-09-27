@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type TeamRole = "LEAD" | "MEMBER" | "OBSERVER";
+export type ResearchTeamRole = "LEADER" | "CO_LEADER" | "MEMBER" | "ADVISOR";
 
 export interface ResearchTeam {
   id: string;
@@ -46,7 +47,7 @@ export interface CreateTeamBody {
 
 export interface AddMemberBody {
   userId: string;
-  role: TeamRole;
+  roleInTeam: ResearchTeamRole;
 }
 
 // ── Service object ───────────────────────────────────────────────────────────

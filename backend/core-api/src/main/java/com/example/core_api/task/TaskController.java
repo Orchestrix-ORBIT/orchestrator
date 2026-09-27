@@ -1,6 +1,8 @@
 package com.example.core_api.task;
 
 import com.example.core_api.auth.User;
+import com.example.core_api.exception.ResourceNotFoundException;
+import org.springframework.security.access.AccessDeniedException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,9 +24,11 @@ public class TaskController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse createTask(
+            @AuthenticationPrincipal User currentUser,
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateTaskRequest request) {
+        requireAuthenticated(currentUser);
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
@@ -59,7 +63,7 @@ public class TaskController {
     public TaskResponse getTaskById(
             @PathVariable UUID projectId, 
             @PathVariable UUID taskId) {
-        return taskService.getTaskById(taskId);
+        return taskInProject(projectId, taskId);
     }
 
     @PatchMapping("/{taskId}")
@@ -69,9 +73,11 @@ public class TaskController {
             @PathVariable UUID projectId,
             @PathVariable UUID taskId,
             @RequestBody UpdateTaskRequest request) {
+        requireAuthenticated(currentUser);
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
+            taskInProject(projectId, taskId);
             return taskService.updateTask(taskId, request, currentUser);
         } finally {
             com.example.core_api.multitenancy.TenantContext.clear();
@@ -81,15 +87,30 @@ public class TaskController {
     @DeleteMapping("/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTask(
+            @AuthenticationPrincipal User currentUser,
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId, 
             @PathVariable UUID taskId) {
+        requireAuthenticated(currentUser);
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
+            taskInProject(projectId, taskId);
             taskService.deleteTask(taskId);
         } finally {
             com.example.core_api.multitenancy.TenantContext.clear();
         }
+    }
+
+    private void requireAuthenticated(User currentUser) {
+        if (currentUser == null) throw new AccessDeniedException("Authentication required");
+    }
+
+    private TaskResponse taskInProject(UUID projectId, UUID taskId) {
+        TaskResponse task = taskService.getTaskById(taskId);
+        if (!projectId.equals(task.getProjectId())) {
+            throw new ResourceNotFoundException("Task not found in project: " + projectId);
+        }
+        return task;
     }
 }

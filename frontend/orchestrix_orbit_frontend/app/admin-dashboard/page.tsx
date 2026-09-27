@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getTenantSlug } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { TeamsService, TeamMember } from "@/lib/services/teams";
 
 interface TenantItem {
@@ -33,8 +34,7 @@ export default function AdminDashboardPage() {
   }, []);
 
   const fetchTenants = () => {
-    fetch("http://localhost:8080/api/admin/tenants")
-      .then((res) => (res.ok ? res.json() : []))
+    api.get<TenantItem[]>("/api/admin/tenants")
       .then((data) => setTenants(data))
       .catch((err) => console.warn("Could not fetch tenants:", err));
   };
@@ -54,21 +54,10 @@ export default function AdminDashboardPage() {
     setProvisionErr(null);
 
     try {
-      const res = await fetch("http://localhost:8080/api/admin/tenants", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const created = await api.post<TenantItem>("/api/admin/tenants", {
           slug: newSlug.trim().toLowerCase().replace(/\s+/g, "-"),
           name: newName.trim(),
-        }),
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to provision tenant");
-      }
-
-      const created: TenantItem = await res.json();
       setProvisionMsg(`Successfully created tenant: ${created.name} (${created.schemaName})`);
       setNewSlug("");
       setNewName("");

@@ -7,6 +7,9 @@ if [[ "${SPRING_DATASOURCE_URL:-}" != "$expected_url" ]]; then
   echo "Cross-service tests require the isolated PostgreSQL URL: $expected_url" >&2
   exit 2
 fi
+export TENANT_BOOTSTRAP_KEY="${TENANT_BOOTSTRAP_KEY:-integration-bootstrap-key}"
+export JWT_SECRET="${JWT_SECRET:-integration-test-only-shared-jwt-secret-2026}"
+export ENCRYPTION_SECRET_KEY="${ENCRYPTION_SECRET_KEY:-integration-test-aes-key-1234567}"
 
 context_python="${CONTEXT_PYTHON:-python3}"
 log_dir="$(mktemp -d)"
@@ -36,9 +39,9 @@ if [[ -z "$core_jar" || -z "$realtime_jar" ]]; then
   exit 2
 fi
 
-java -jar "$core_jar" --server.port=8080 >"$log_dir/core.log" 2>&1 &
+"${JAVA_HOME:+$JAVA_HOME/bin/}java" -jar "$core_jar" --server.port=8080 >"$log_dir/core.log" 2>&1 &
 core_pid=$!
-java -jar "$realtime_jar" --server.port=8082 >"$log_dir/realtime.log" 2>&1 &
+"${JAVA_HOME:+$JAVA_HOME/bin/}java" -jar "$realtime_jar" --server.port=8082 >"$log_dir/realtime.log" 2>&1 &
 realtime_pid=$!
 (cd "$project_root/backend/context-engine" && "$context_python" -m uvicorn integration_stub:app --app-dir tests --host 127.0.0.1 --port 8083) >"$log_dir/context.log" 2>&1 &
 context_pid=$!
@@ -46,7 +49,10 @@ context_pid=$!
 for url in 'http://127.0.0.1:8080/api/admin/tenants' 'http://127.0.0.1:8082/ws/info' 'http://127.0.0.1:8083/'; do
   ready=0
   for attempt in {1..90}; do
-    if curl -fsS "$url" >/dev/null 2>&1; then ready=1; break; fi
+    if [[ "$url" == *'/api/admin/tenants' ]]; then
+      code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)"
+      if [[ "$code" == '403' || "$code" == '200' ]]; then ready=1; break; fi
+    elif curl -fsS "$url" >/dev/null 2>&1; then ready=1; break; fi
     sleep 1
   done
   if [[ $ready -ne 1 ]]; then echo "Service did not become ready: $url" >&2; exit 1; fi

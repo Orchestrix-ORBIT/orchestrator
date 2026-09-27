@@ -16,6 +16,7 @@ const { mockLogout, mockPush } = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({
   logout: mockLogout,
   getTenantSlug: vi.fn(() => "myorg"),
+  getToken: vi.fn(() => "test-token"),
   getRole: vi.fn(() => "ROLE_LEAD"),
 }));
 

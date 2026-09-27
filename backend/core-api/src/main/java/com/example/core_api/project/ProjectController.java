@@ -17,9 +17,11 @@ import java.util.UUID;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ProjectAccess projectAccess;
 
-    public ProjectController(ProjectService projectService) {
+    public ProjectController(ProjectService projectService, ProjectAccess projectAccess) {
         this.projectService = projectService;
+        this.projectAccess = projectAccess;
     }
 
     @PostMapping
@@ -35,12 +37,15 @@ public class ProjectController {
 
     @GetMapping
     public List<ProjectResponse> getAllProjects(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId
+            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
+            @AuthenticationPrincipal User currentUser
     ) {
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
-            return projectService.getAllProjects();
+            return projectService.getAllProjects().stream()
+                    .filter(project -> projectAccess.canAccess(currentUser, project.getId()))
+                    .toList();
         } finally {
             com.example.core_api.multitenancy.TenantContext.clear();
         }

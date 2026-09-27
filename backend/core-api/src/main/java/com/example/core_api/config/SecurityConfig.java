@@ -33,8 +33,11 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints — no token needed
-                .requestMatchers("/api/auth/**", "/api/admin/tenants/**", "/ws/**", "/api/chat/**", "/api/projects/**", "/api/resources/**", "/error").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/team/**").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/register", "/error").permitAll()
+                // Creation also accepts a deployment bootstrap key, checked by TenantController.
+                .requestMatchers(HttpMethod.POST, "/api/admin/tenants").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/admin/tenants/*").authenticated()
+                .requestMatchers("/api/admin/tenants/**", "/api/admin/tenants").hasAnyRole("ADMIN", "OWNER")
                 // Team management — role updates and member removal require ADMIN
                 .requestMatchers(HttpMethod.PATCH, "/api/team/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/team/**").hasRole("ADMIN")

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import jakarta.validation.constraints.NotBlank;
 
 @Entity
 @Table(name = "resource_maintenance")
@@ -22,6 +23,7 @@ public class ResourceMaintenance {
     private UUID resourceId;
 
     @Column(name = "asset_name", nullable = false)
+    @NotBlank
     private String assetName;
 
     private String category;

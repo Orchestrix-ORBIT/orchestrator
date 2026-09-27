@@ -36,6 +36,7 @@ export interface ProjectSummary {
 export interface CreateProjectBody {
   name: string;
   description?: string;
+  teamId?: string;
 }
 
 // ── Service object ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 package com.example.realtime_service.config;
 
 import com.example.realtime_service.chat.ChatTokenVerifier;
+import com.example.realtime_service.chat.ChatProjectAccess;
 import com.example.realtime_service.chat.SendChatMessageRequest;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -13,17 +14,24 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class ChatChannelInterceptor implements ChannelInterceptor {
     private static final String SESSION_TENANT = "authenticatedTenant";
-    private static final String TOPIC_PREFIX = "/topic/tenant/";
+    private static final String SESSION_EMAIL = "authenticatedEmail";
+    private static final Pattern PROJECT_TOPIC = Pattern.compile(
+            "^/topic/tenant/([a-z0-9_]+)/project/([0-9a-fA-F-]{36})$");
 
     private final ChatTokenVerifier verifier;
+    private final ChatProjectAccess projectAccess;
     private final ObjectMapper json;
 
-    public ChatChannelInterceptor(ChatTokenVerifier verifier, ObjectMapper json) {
+    public ChatChannelInterceptor(ChatTokenVerifier verifier, ChatProjectAccess projectAccess, ObjectMapper json) {
         this.verifier = verifier;
+        this.projectAccess = projectAccess;
         this.json = json;
     }
 
@@ -37,15 +45,17 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
         if (session == null) throw new IllegalArgumentException("STOMP session required");
 
         if (command == StompCommand.CONNECT) {
-            String tenant = verifier.verifyBearer(headers.getFirstNativeHeader("Authorization"))
-                    .get("tenant", String.class);
-            session.put(SESSION_TENANT, tenant);
+            var claims = verifier.verifyBearer(headers.getFirstNativeHeader("Authorization"));
+            session.put(SESSION_TENANT, claims.get("tenant", String.class));
+            session.put(SESSION_EMAIL, claims.getSubject());
         } else if (command == StompCommand.SUBSCRIBE) {
             String tenant = authenticatedTenant(session);
-            String destination = headers.getDestination();
-            if (destination == null || !destination.startsWith(TOPIC_PREFIX)
-                    || !destination.startsWith(TOPIC_PREFIX + tenant.substring(4) + "/project/")) {
-                throw new IllegalArgumentException("Subscription belongs to a different tenant");
+            Matcher topic = PROJECT_TOPIC.matcher(headers.getDestination() == null ? "" : headers.getDestination());
+            if (!topic.matches() || !topic.group(1).equals(tenant.substring(4))) {
+                throw new IllegalArgumentException("Subscription belongs to a different tenant or project");
+            }
+            if (!projectAccess.canAccess(tenant, authenticatedEmail(session), UUID.fromString(topic.group(2)))) {
+                throw new IllegalArgumentException("Project access denied");
             }
         } else if (command == StompCommand.SEND) {
             String tenant = authenticatedTenant(session);
@@ -60,6 +70,9 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
                 if (!tenant.equals(verifier.schemaFor(request.tenantId()))) {
                     throw new IllegalArgumentException("Message belongs to a different tenant");
                 }
+                if (!projectAccess.canAccess(tenant, authenticatedEmail(session), request.projectId())) {
+                    throw new IllegalArgumentException("Project access denied");
+                }
             } catch (JacksonException e) {
                 throw new IllegalArgumentException("Invalid chat message", e);
             }
@@ -70,6 +83,12 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
     private String authenticatedTenant(Map<String, Object> session) {
         Object tenant = session.get(SESSION_TENANT);
         if (!(tenant instanceof String value)) throw new IllegalArgumentException("Authentication required");
+        return value;
+    }
+
+    private String authenticatedEmail(Map<String, Object> session) {
+        Object email = session.get(SESSION_EMAIL);
+        if (!(email instanceof String value)) throw new IllegalArgumentException("Authentication required");
         return value;
     }
 }

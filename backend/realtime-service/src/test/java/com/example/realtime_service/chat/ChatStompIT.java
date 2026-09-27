@@ -55,28 +55,35 @@ class ChatStompIT {
     @Test
     void deliversOnlyToTheMatchingTenantAndStoresEachMessageSeparately() throws Exception {
         UUID senderId = UUID.randomUUID();
+        UUID outsiderId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
         String senderEmail = senderId + "@example.test";
+        String outsiderEmail = outsiderId + "@example.test";
 
         WebSocketStompClient client = new WebSocketStompClient(
                 new SockJsClient(List.of(new WebSocketTransport(new StandardWebSocketClient()))));
         StompSession first = null;
         StompSession second = null;
         StompSession intruder = null;
+        StompSession outsider = null;
         try {
             insertFixtures(FIRST_TENANT, senderId, projectId, senderEmail);
             insertFixtures(SECOND_TENANT, senderId, projectId, senderEmail);
+            jdbc.update("INSERT INTO org_integration_lab.users (id, email, password_hash, role, status) "
+                    + "VALUES (?, ?, 'test-only', 'MEMBER', 'ACTIVE')", outsiderId, outsiderEmail);
             client.start();
             String endpoint = "http://127.0.0.1:" + environment.getRequiredProperty("local.server.port") + "/ws";
             first = connect(client, endpoint, FIRST_TENANT, senderEmail);
             second = connect(client, endpoint, SECOND_TENANT, senderEmail);
             intruder = connect(client, endpoint, FIRST_TENANT, senderEmail);
+            outsider = connect(client, endpoint, FIRST_TENANT, outsiderEmail);
 
             BlockingQueue<String> firstMessages = new LinkedBlockingQueue<>();
             BlockingQueue<String> secondMessages = new LinkedBlockingQueue<>();
             subscribe(first, FIRST_TENANT, projectId, firstMessages);
             subscribe(second, SECOND_TENANT, projectId, secondMessages);
             BlockingQueue<String> unauthorizedMessages = new LinkedBlockingQueue<>();
+            BlockingQueue<String> outsiderMessages = new LinkedBlockingQueue<>();
             intruder.subscribe("/topic/tenant/" + SECOND_TENANT + "/project/" + projectId,
                     new StompFrameHandler() {
                         @Override public Type getPayloadType(StompHeaders headers) { return byte[].class; }
@@ -84,10 +91,18 @@ class ChatStompIT {
                             unauthorizedMessages.add(new String((byte[]) payload, StandardCharsets.UTF_8));
                         }
                     });
+            outsider.subscribe("/topic/tenant/" + FIRST_TENANT + "/project/" + projectId,
+                    new StompFrameHandler() {
+                        @Override public Type getPayloadType(StompHeaders headers) { return byte[].class; }
+                        @Override public void handleFrame(StompHeaders headers, Object payload) {
+                            outsiderMessages.add(new String((byte[]) payload, StandardCharsets.UTF_8));
+                        }
+                    });
 
             send(first, FIRST_TENANT, projectId, senderEmail, "First tenant message");
             assertThat(firstMessages.poll(10, TimeUnit.SECONDS)).contains("First tenant message");
             assertThat(secondMessages.poll(500, TimeUnit.MILLISECONDS)).isNull();
+            assertThat(outsiderMessages.poll(500, TimeUnit.MILLISECONDS)).isNull();
             assertThat(messageCount(FIRST_TENANT, projectId)).isEqualTo(1);
             assertThat(messageCount(SECOND_TENANT, projectId)).isZero();
 
@@ -108,11 +123,15 @@ class ChatStompIT {
             assertThat(historyStatus(SECOND_TENANT, projectId, null)).isEqualTo(401);
             assertThat(historyStatus(SECOND_TENANT, projectId, token(FIRST_TENANT, senderEmail)))
                     .isEqualTo(403);
+            assertThat(historyStatus(FIRST_TENANT, projectId, token(FIRST_TENANT, outsiderEmail)))
+                    .isEqualTo(403);
         } finally {
             if (first != null) first.disconnect();
             if (second != null) second.disconnect();
             if (intruder != null && intruder.isConnected()) intruder.disconnect();
+            if (outsider != null && outsider.isConnected()) outsider.disconnect();
             client.stop();
+            jdbc.update("DELETE FROM org_integration_lab.users WHERE id = ?", outsiderId);
             removeFixtures(FIRST_TENANT, senderId, projectId);
             removeFixtures(SECOND_TENANT, senderId, projectId);
         }

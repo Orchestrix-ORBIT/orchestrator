@@ -16,6 +16,7 @@ async function postJson(path: string, tenant: string | null, body: unknown) {
     headers: {
       "Content-Type": "application/json",
       ...(tenant ? { "X-Tenant-ID": tenant } : {}),
+      ...(path === "/api/admin/tenants" ? { "X-Bootstrap-Key": process.env.TENANT_BOOTSTRAP_KEY ?? "" } : {}),
     },
     body: JSON.stringify(body),
   });
