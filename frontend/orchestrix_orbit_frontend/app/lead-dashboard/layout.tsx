@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { getRole } from "@/lib/auth";
+import { getRole, getEmail, logout } from "@/lib/auth";
 
 export default function LeadDashboardLayout({
   children,
@@ -11,10 +11,28 @@ export default function LeadDashboardLayout({
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    
+    if (menuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [menuOpen]);
 
   if (!mounted) {
     return <div style={{ minHeight: "100vh", background: "#f5f5f5" }} suppressHydrationWarning />;
@@ -32,18 +50,36 @@ export default function LeadDashboardLayout({
         {/* Topbar matching Researcher Dashboard */}
         <header style={s.topbar}>
           <div style={s.topbarRight}>
-            <button id="btn-lock" style={s.iconBtn} title="End-to-end encrypted">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="7" width="10" height="8" rx="1.5" />
-                <path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round" />
-              </svg>
-            </button>
-            <button id="btn-user" style={s.iconBtn} title="Research Lead (DK)">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="8" cy="5" r="3" />
-                <path d="M2 14c0-3.31 2.69-6 6-6s6 2.69 6 6" strokeLinecap="round" />
-              </svg>
-            </button>
+            <div style={s.profileContainer} ref={dropdownRef}>
+              <button 
+                onClick={() => setMenuOpen(!menuOpen)}
+                style={s.avatarBtn}
+              >
+                {getEmail()?.charAt(0).toUpperCase() || "U"}
+              </button>
+
+              {menuOpen && (
+                <div style={s.dropdownMenu}>
+                  <div style={s.dropdownHeader}>
+                    <span style={s.dropdownEmail}>{getEmail() || "user@example.com"}</span>
+                  </div>
+                  <button 
+                    style={s.dropdownLogout}
+                    onClick={() => {
+                      logout();
+                      router.push("/");
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+                      <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
+                      <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M12.5 7H4.5" strokeLinecap="round" />
+                    </svg>
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -89,18 +125,64 @@ const s: Record<string, React.CSSProperties> = {
   topbarRight: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
   },
-  iconBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 6,
-    color: "#9e9e9e",
+  profileContainer: {
+    position: "relative",
+  },
+  avatarBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    background: "#1976d2",
+    color: "#fff",
     display: "flex",
     alignItems: "center",
-    borderRadius: 4,
-    transition: "color 0.15s",
+    justifyContent: "center",
+    fontSize: 16,
+    fontWeight: "bold",
+    cursor: "pointer",
+    border: "2px solid transparent",
+    outline: "none",
+    transition: "border 0.2s",
+  },
+  dropdownMenu: {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    right: 0,
+    width: 220,
+    background: "#fff",
+    border: "1px solid #e0e0e0",
+    borderRadius: 8,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    zIndex: 20,
+  },
+  dropdownHeader: {
+    padding: "12px 16px",
+    borderBottom: "1px solid #f0f0f0",
+    background: "#f9fafb",
+  },
+  dropdownEmail: {
+    fontSize: 13,
+    color: "#424242",
+    fontWeight: 500,
+    wordBreak: "break-all",
+  },
+  dropdownLogout: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "12px 16px",
+    border: "none",
+    background: "transparent",
+    color: "#d32f2f",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "background 0.15s",
   },
   content: {
     flex: 1,

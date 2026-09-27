@@ -64,7 +64,17 @@ export function getDashboardPath(role: string, email?: string): string {
   const normRole = (role || "").toUpperCase();
   const normEmail = (email || "").toLowerCase();
 
-  // 1. Resource Manager check (email or specific role)
+  // 1. Researcher check (highest priority if email explicitly contains researcher)
+  if (
+    normEmail.includes("researcher") ||
+    normRole === "ROLE_MEMBER" ||
+    normRole === "MEMBER" ||
+    normRole === "RESEARCHER"
+  ) {
+    return "/dashboard/researcher";
+  }
+
+  // 2. Resource Manager check
   if (
     normEmail.includes("resource.manager") ||
     normEmail.includes("resource_manager") ||
@@ -74,14 +84,17 @@ export function getDashboardPath(role: string, email?: string): string {
     return "/resource-dashboard";
   }
 
-  if (normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
-    return "/admin-dashboard";
-  }
-  if (normRole === "ROLE_LEAD" || normRole === "LEAD") {
+  // 3. Research Lead check
+  if (normEmail.includes("lead") || normRole === "ROLE_LEAD" || normRole === "LEAD") {
     return "/lead-dashboard";
   }
 
-  // 3. Default fallback for MEMBER / GUEST
+  // 4. Admin / Owner check
+  if (normEmail.includes("admin") || normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
+    return "/admin-dashboard";
+  }
+
+  // 5. Default fallback for GUEST or any other role
   return "/dashboard/researcher";
 }
 

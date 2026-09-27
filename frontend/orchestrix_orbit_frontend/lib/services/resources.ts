@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 // ── Types matching Spring Boot DTOs ─────────────────────────────────────────
 export type ResourceType   = "GPU" | "CPU" | "STORAGE" | "DATASET" | "API_KEY" | "COMPUTE" | "INSTRUMENT" | "ROOM" | "SOFTWARE";
 export type ResourceStatus = "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "DECOMMISSIONED";
-export type BookingStatus  = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type BookingStatus  = "PENDING" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
 
 export interface Resource {
   id: string;
@@ -34,6 +34,7 @@ export interface Booking {
   resourceName: string;
   userId: string;
   projectId?: string;
+  projectName?: string;
   startTime: string;
   endTime: string;
   purpose?: string;

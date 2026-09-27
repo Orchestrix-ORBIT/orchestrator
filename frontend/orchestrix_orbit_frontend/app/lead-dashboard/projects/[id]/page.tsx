@@ -22,11 +22,6 @@ type ProjectMeta = {
   status: "ACTIVE" | "COMPLETED";
 };
 
-const PROJECTS_MAP: Record<string, ProjectMeta> = {
-  "1": { id: "1", name: "Project Alpha Core", status: "ACTIVE" },
-  "2": { id: "2", name: "Nexus Protocol", status: "ACTIVE" },
-  "3": { id: "3", name: "Beta Synthesis", status: "COMPLETED" },
-};
 
 import { useEffect } from "react";
 import { ProjectsService } from "@/lib/services/projects";
@@ -180,6 +175,19 @@ export default function ProjectWorkspacePage({
       await TasksService.update(projectId, taskId, { status: backendStatus as any });
     } catch (err) {
       console.warn("Could not update task status on backend:", err);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (isCompletedProject) return;
+    if (!window.confirm("Are you sure you want to delete this task? This action cannot be undone.")) return;
+    
+    try {
+      await TasksService.delete(projectId, taskId);
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      if (selectedTask?.id === taskId) setSelectedTask(null);
+    } catch (err) {
+      alert("Failed to delete task: " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -640,7 +648,17 @@ export default function ProjectWorkspacePage({
               </div>
             </div>
 
-            <div style={{ ...m.footer, padding: "14px 24px 18px", borderTop: "1px solid #eee" }}>
+            <div style={{ ...m.footer, padding: "14px 24px 18px", borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between" }}>
+              {!isCompletedProject ? (
+                <button
+                  onClick={() => handleDeleteTask(selectedTask.id)}
+                  style={{ ...m.btnSecondary, color: "#d32f2f", borderColor: "#ef5350", background: "#ffebee" }}
+                >
+                  Delete Task
+                </button>
+              ) : (
+                <div />
+              )}
               <button
                 onClick={() => setSelectedTask(null)}
                 style={m.btnPrimary}

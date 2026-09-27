@@ -24,6 +24,7 @@ public class DocumentResponse {
     private UUID projectId;
     private UUID authorId;
     private String title;
+    private String category;
 
     // Raw (currently unencrypted in MVP) text content; null for file-based documents
     private String contentEncrypted;
@@ -54,6 +55,7 @@ public class DocumentResponse {
                 .projectId(document.getProjectId())
                 .authorId(document.getAuthorId())
                 .title(document.getTitle())
+                .category(document.getCategory() != null ? document.getCategory() : "OTHER")
                 .contentEncrypted(document.getContentEncrypted())
                 .fileStorageKey(document.getFileStorageKey())
                 .version(document.getVersion())

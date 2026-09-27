@@ -12,6 +12,8 @@ public class BookingResponse {
     private UUID resourceId;
     private String resourceName;
     private UUID userId;
+    private UUID projectId;
+    private String projectName;
     private String userEmail;
     private OffsetDateTime startTime;
     private OffsetDateTime endTime;
