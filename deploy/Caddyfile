@@ -1,0 +1,10 @@
+orchestrix.mrt.lk {
+    @realtime path /ws /ws/* /api/chat /api/chat/*
+    @core path /health /api /api/*
+
+    route {
+        reverse_proxy @realtime realtime:8082
+        reverse_proxy @core core-api:8080
+        reverse_proxy frontend:3000
+    }
+}

@@ -16,7 +16,7 @@ services:
     environment:
       CONTEXT_ENGINE_URL: http://context-engine:8083
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     restart: unless-stopped
     networks:
       - private
@@ -25,7 +25,7 @@ services:
     image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/orchestrix-realtime:${IMAGE_TAG:?Set IMAGE_TAG}
     env_file: ./shared.env
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     restart: unless-stopped
     networks:
       - private
@@ -33,7 +33,20 @@ services:
   frontend:
     image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/orchestrix-frontend:${IMAGE_TAG:?Set IMAGE_TAG}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    networks:
+      - private
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     restart: unless-stopped
     networks:
       - private
@@ -41,3 +54,7 @@ services:
 networks:
   private:
     driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

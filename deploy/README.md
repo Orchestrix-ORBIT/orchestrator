@@ -1,6 +1,6 @@
 # EC2 continuous deployment
 
-`.github/workflows/deploy-ec2.yml` builds four commit-SHA-tagged images, pushes them to four ECR repositories, and deploys `compose.ec2.yml` to `ubuntu@13.50.236.34`. It runs on pushes to `containerization` and by manual dispatch. Deployment is disabled until the GitHub repository variable `DEPLOY_ENABLED` is set to `true`.
+`.github/workflows/deploy-ec2.yml` builds four commit-SHA-tagged images, pushes them to four ECR repositories, and deploys `compose.ec2.yml` and `Caddyfile` to `ubuntu@13.50.236.34`. Caddy serves `orchestrix.mrt.lk` over HTTPS and routes requests to the four application containers. The workflow runs on pushes to `containerization` and by manual dispatch. Deployment is disabled until the GitHub repository variable `DEPLOY_ENABLED` is set to `true`.
 
 ## Set up once
 
@@ -25,8 +25,8 @@
    GOOGLE_API_KEY=<gemini-api-key>
    ```
 
-6. Set GitHub repository variables `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_CHAT_API_URL`, `NEXT_PUBLIC_CHAT_WS_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. For one HTTPS hostname, use `https://app.example.com` for both API URLs and `https://app.example.com/ws` for the SockJS URL. These values are embedded in the frontend image at build time.
-7. Set the EC2 security group so ports `3000`, `8080`, and `8082` accept traffic only from the ALB security group. Keep port `8083` closed publicly. Configure ALB rules in this order: `/ws` and `/ws/*` plus `/api/chat/*` to Realtime; `/api/*` plus `/health` to Core API; default to frontend. Use health paths `/ws/info`, `/health`, and `/`. The Context Engine is reachable only on the Compose network.
+6. Set GitHub repository variables `NEXT_PUBLIC_API_URL=https://orchestrix.mrt.lk`, `NEXT_PUBLIC_CHAT_API_URL=https://orchestrix.mrt.lk`, and `NEXT_PUBLIC_CHAT_WS_URL=https://orchestrix.mrt.lk/ws`, along with the existing Supabase public variables. These values are embedded in the frontend image at build time.
+7. Point the DNS A record for `orchestrix.mrt.lk` to the instance and allow inbound TCP ports `80` and `443` in its security group. Caddy obtains and renews a public TLS certificate automatically. Application ports `3000`, `8080`, and `8082` bind only to loopback; port `8083` stays on the private Compose network. Keep the instance address stable, preferably with an Elastic IP.
 8. Back up the existing PostgreSQL database, review pending Core API Flyway migrations, and verify both Java services can reach that host over TLS. Then set `DEPLOY_ENABLED=true`. Core API applies migrations when it starts; this workflow does not create a database backup.
 
 The workflow deploys one Realtime container because its current message broker is in memory. It does not launch the PostgreSQL service from `backend/docker-compose.yml`.

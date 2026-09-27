@@ -118,6 +118,8 @@ jobs:
             "ubuntu@$EC2_HOST" 'mkdir -p "$HOME/orchestrix"'
           scp -i "$key" -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes \
             deploy/compose.ec2.yml "ubuntu@$EC2_HOST:orchestrix/compose.yml"
+          scp -i "$key" -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes \
+            deploy/Caddyfile "ubuntu@$EC2_HOST:orchestrix/Caddyfile"
 
           ssh -i "$key" -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes \
             "ubuntu@$EC2_HOST" \
@@ -163,5 +165,7 @@ jobs:
           wait_http http://127.0.0.1:8082/ws/info
           "${compose[@]}" up -d --no-deps frontend
           wait_http http://127.0.0.1:3000/
+          "${compose[@]}" up -d --no-deps caddy
+          wait_http https://orchestrix.mrt.lk/
           "${compose[@]}" ps
           REMOTE
