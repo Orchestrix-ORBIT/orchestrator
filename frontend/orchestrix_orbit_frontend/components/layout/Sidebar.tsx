@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { getTenantSlug } from "@/lib/auth";
+import { getTenantSlug, getToken } from "@/lib/auth";
 
 const NAV = [
   {
@@ -97,7 +97,9 @@ export function Sidebar() {
 
   useEffect(() => {
     const slug = getTenantSlug() || "myorg";
-    fetch(`http://localhost:8080/api/admin/tenants/${slug}`)
+    fetch(`http://localhost:8080/api/admin/tenants/${slug}`, {
+      headers: { Authorization: `Bearer ${getToken() ?? ""}`, "X-Tenant-ID": slug },
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.name) setOrgName(data.name);

@@ -54,6 +54,11 @@ public class ResearchTeamService {
         memberRepository.save(member);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isLeader(UUID teamId, UUID userId) {
+        return teamRepository.findById(teamId).map(team -> userId.equals(team.getLeaderId())).orElse(false);
+    }
+
     public void removeMemberFromTeam(UUID teamId, UUID userId) {
         TeamMemberId id = new TeamMemberId(teamId, userId);
         if (!memberRepository.existsById(id)) {

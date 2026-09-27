@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getTenantSlug } from "@/lib/auth";
+import { getTenantSlug, getToken } from "@/lib/auth";
 import { ProjectsService, type Project } from "@/lib/services/projects";
 import { ResourcesService, type Resource } from "@/lib/services/resources";
 import { TeamsService, type TeamMember } from "@/lib/services/teams";
@@ -23,7 +23,9 @@ export default function LeadDashboardPage() {
   const tenantSlug = getTenantSlug() || "myorg";
 
   useEffect(() => {
-    fetch(`http://localhost:8080/api/admin/tenants/${tenantSlug}`)
+    fetch(`http://localhost:8080/api/admin/tenants/${tenantSlug}`, {
+      headers: { Authorization: `Bearer ${getToken() ?? ""}`, "X-Tenant-ID": tenantSlug },
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.name) setOrgName(data.name);

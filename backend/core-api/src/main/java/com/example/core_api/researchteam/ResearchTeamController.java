@@ -1,6 +1,8 @@
 package com.example.core_api.researchteam;
 
 import com.example.core_api.auth.User;
+import com.example.core_api.auth.UserRole;
+import org.springframework.security.access.AccessDeniedException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -34,9 +36,12 @@ public class ResearchTeamController {
     }
 
     @PostMapping("/{teamId}/members")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void addMemberToTeam(
             @PathVariable UUID teamId,
+            @AuthenticationPrincipal User currentUser,
             @Valid @RequestBody AddTeamMemberRequest request) {
+        requireManager(teamId, currentUser);
         teamService.addMemberToTeam(teamId, request);
     }
 
@@ -44,7 +49,16 @@ public class ResearchTeamController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeMemberFromTeam(
             @PathVariable UUID teamId,
+            @AuthenticationPrincipal User currentUser,
             @PathVariable UUID userId) {
+        requireManager(teamId, currentUser);
         teamService.removeMemberFromTeam(teamId, userId);
+    }
+
+    private void requireManager(UUID teamId, User user) {
+        if (user == null || (!(user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.OWNER
+                || user.getRole() == UserRole.ROLE_ADMIN) && !teamService.isLeader(teamId, user.getId()))) {
+            throw new AccessDeniedException("Only a team leader or administrator can change membership.");
+        }
     }
 }

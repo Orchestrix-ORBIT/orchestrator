@@ -5,6 +5,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -12,6 +15,33 @@ import java.util.Map;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationException(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .findFirst().orElse("Invalid request");
+        return error(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleMalformedRequest(HttpMessageNotReadableException ex) {
+        return error(HttpStatus.BAD_REQUEST, "Malformed request body");
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthenticationException(AuthenticationException ex) {
+        return error(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+    }
+
+    private ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
+        Map<String, Object> details = new HashMap<>();
+        details.put("timestamp", LocalDateTime.now());
+        details.put("status", status.value());
+        details.put("error", status.getReasonPhrase());
+        details.put("message", message);
+        return new ResponseEntity<>(details, status);
+    }
 
     @ExceptionHandler(ResourceBookingConflictException.class)
     public ResponseEntity<Map<String, Object>> handleResourceBookingConflictException(ResourceBookingConflictException ex) {

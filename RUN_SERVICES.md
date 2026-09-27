@@ -30,6 +30,22 @@ docker compose up -d
 ```
 > **Note**: To stop containers later, run `docker compose down`.
 
+### Supabase database on an IPv4-only network
+
+The direct Supabase database host (`db.<project-ref>.supabase.co`) uses IPv6 unless the project has the IPv4 add-on. If the machine running the Java services has no IPv6 route, set these values in both `backend/core-api/.env` and `backend/realtime-service/.env` using the **Session pooler** host shown in the Supabase Dashboard's Connect dialog:
+
+```dotenv
+SPRING_DATASOURCE_URL=jdbc:postgresql://<session-pooler-host>:5432/postgres?sslmode=require
+SPRING_DATASOURCE_USERNAME=postgres.<project-ref>
+SPRING_DATASOURCE_PASSWORD=<database-password>
+```
+
+The pooler host cannot be derived reliably from the project region; copy the exact host from the dashboard. Keep these `.env` files local because they contain credentials. The local Docker database above is a separate alternative and uses its own connection settings.
+
+Core API and Realtime must use the same `JWT_SECRET`. Core API also requires a 32-byte `ENCRYPTION_SECRET_KEY`. Set a separate `TENANT_BOOTSTRAP_KEY` on Core API to provision the first tenant with the `X-Bootstrap-Key` header; later tenant creation accepts an administrator JWT. These secrets have no application defaults. Users with tokens issued before a JWT secret change must sign in again.
+
+Both services default to a three-connection Hikari pool so they can share a small Supabase session pooler. Set `DB_POOL_MAX_SIZE` and `DB_POOL_MIN_IDLE` in each service's environment if a larger pool is available.
+
 ---
 
 ## 2. Core API Service (Spring Boot)
@@ -160,7 +176,7 @@ Once all services are running, verify them in your browser or terminal:
 | Service | Endpoint | Expected Result |
 |---|---|---|
 | **Frontend App** | [http://localhost:3000](http://localhost:3000) | Orchestrix Orbit Dashboard |
-| **Core API** | [http://localhost:8080/api/admin/tenants](http://localhost:8080/api/admin/tenants) | Tenant API Response |
+| **Core API** | [http://localhost:8080/api/admin/tenants](http://localhost:8080/api/admin/tenants) | HTTP 403 without an administrator token; HTTP 200 with one |
 | **Realtime Service** | [http://localhost:8082/ws-chat](http://localhost:8082/ws-chat) | WebSocket Endpoint |
 | **Context Engine** | [http://localhost:8083/docs](http://localhost:8083/docs) | FastAPI OpenAPI Documentation |
 | **MinIO Console** | [http://localhost:9001](http://localhost:9001) | Object Storage Admin Console |

@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TenantMigrationIT {
 
     static final String SCHEMA = "org_integration_lab";
+    static final String OTHER_SCHEMA = "org_integration_other";
 
     @Autowired private TenantMigrationService migrationService;
     @Autowired private JdbcTemplate jdbc;
@@ -23,6 +24,7 @@ class TenantMigrationIT {
     @Test
     void createsTenantSchemaAndAppliesChatMigrations() {
         migrationService.provisionTenantSchema(SCHEMA);
+        migrationService.provisionTenantSchema(OTHER_SCHEMA);
 
         Integer tableCount = jdbc.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
@@ -33,5 +35,9 @@ class TenantMigrationIT {
 
         assertThat(tableCount).isEqualTo(3);
         assertThat(migrationCount).isGreaterThanOrEqualTo(8);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_schema = ? AND table_name IN ('users', 'projects', 'chat_messages')
+                """, Integer.class, OTHER_SCHEMA)).isEqualTo(3);
     }
 }

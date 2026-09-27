@@ -1,6 +1,7 @@
 package com.example.core_api.resource;
 
 import com.example.core_api.auth.User;
+import org.springframework.security.access.AccessDeniedException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,6 +25,8 @@ public class ResourceController {
     public ResourceResponse createResource(
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @Valid @RequestBody CreateResourceRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        ResourceAccess.requireManager(authentication != null && authentication.getPrincipal() instanceof User user ? user : null);
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
@@ -63,8 +66,10 @@ public class ResourceController {
 
     @PatchMapping("/{id}/status")
     public ResourceResponse updateResourceStatus(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateResourceStatusRequest request) {
+        ResourceAccess.requireManager(currentUser);
         return resourceService.updateResourceStatus(id, request.getStatus());
     }
 
@@ -75,12 +80,18 @@ public class ResourceController {
 
     @PostMapping("/maintenance")
     @ResponseStatus(HttpStatus.CREATED)
-    public ResourceMaintenance createMaintenance(@RequestBody ResourceMaintenance maintenance) {
+    public ResourceMaintenance createMaintenance(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody ResourceMaintenance maintenance) {
+        ResourceAccess.requireManager(currentUser);
         return resourceService.createMaintenance(maintenance);
     }
 
     private UUID getAuthenticatedUserId() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            throw new AccessDeniedException("Authentication required");
+        }
         return user.getId();
     }
 }
