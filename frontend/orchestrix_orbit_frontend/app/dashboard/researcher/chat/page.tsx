@@ -96,7 +96,7 @@ export default function ChatPage() {
       setSelectionMode(false);
       setSelectedIds(new Set());
     } catch (err: any) {
-      setSummaryError(err.message ?? "Summarization failed. Is the Context Engine running?");
+      setSummaryError(err.message ?? "Summarization failed.");
     } finally {
       setSummarizing(false);
     }

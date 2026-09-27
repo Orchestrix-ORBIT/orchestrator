@@ -46,13 +46,10 @@ realtime_pid=$!
 (cd "$project_root/backend/context-engine" && "$context_python" -m uvicorn integration_stub:app --app-dir tests --host 127.0.0.1 --port 8083) >"$log_dir/context.log" 2>&1 &
 context_pid=$!
 
-for url in 'http://127.0.0.1:8080/api/admin/tenants' 'http://127.0.0.1:8082/ws/info' 'http://127.0.0.1:8083/'; do
+for url in 'http://127.0.0.1:8080/health' 'http://127.0.0.1:8082/ws/info' 'http://127.0.0.1:8083/'; do
   ready=0
   for attempt in {1..90}; do
-    if [[ "$url" == *'/api/admin/tenants' ]]; then
-      code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)"
-      if [[ "$code" == '403' || "$code" == '200' ]]; then ready=1; break; fi
-    elif curl -fsS "$url" >/dev/null 2>&1; then ready=1; break; fi
+    if curl -fsS "$url" >/dev/null 2>&1; then ready=1; break; fi
     sleep 1
   done
   if [[ $ready -ne 1 ]]; then echo "Service did not become ready: $url" >&2; exit 1; fi
@@ -63,5 +60,4 @@ CROSS_SERVICE_INTEGRATION=1 \
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8080 \
 NEXT_PUBLIC_CHAT_API_URL=http://127.0.0.1:8082 \
 NEXT_PUBLIC_CHAT_WS_URL=http://127.0.0.1:8082/ws \
-NEXT_PUBLIC_CONTEXT_ENGINE_URL=http://127.0.0.1:8083 \
 npm run test:run -- integration/crossServices.it.test.ts

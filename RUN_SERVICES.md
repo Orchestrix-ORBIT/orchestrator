@@ -176,7 +176,7 @@ Once all services are running, verify them in your browser or terminal:
 | Service | Endpoint | Expected Result |
 |---|---|---|
 | **Frontend App** | [http://localhost:3000](http://localhost:3000) | Orchestrix Orbit Dashboard |
-| **Core API** | [http://localhost:8080/api/admin/tenants](http://localhost:8080/api/admin/tenants) | HTTP 403 without an administrator token; HTTP 200 with one |
+| **Core API** | [http://localhost:8080/health](http://localhost:8080/health) | HTTP 200 with `{"status":"ok"}` |
 | **Realtime Service** | [http://localhost:8082/ws-chat](http://localhost:8082/ws-chat) | WebSocket Endpoint |
 | **Context Engine** | [http://localhost:8083/docs](http://localhost:8083/docs) | FastAPI OpenAPI Documentation |
 | **MinIO Console** | [http://localhost:9001](http://localhost:9001) | Object Storage Admin Console |

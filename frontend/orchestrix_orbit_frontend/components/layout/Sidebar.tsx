@@ -97,7 +97,7 @@ export function Sidebar() {
 
   useEffect(() => {
     const slug = getTenantSlug() || "myorg";
-    fetch(`http://localhost:8080/api/admin/tenants/${slug}`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/api/admin/tenants/${slug}`, {
       headers: { Authorization: `Bearer ${getToken() ?? ""}`, "X-Tenant-ID": slug },
     })
       .then((res) => (res.ok ? res.json() : null))

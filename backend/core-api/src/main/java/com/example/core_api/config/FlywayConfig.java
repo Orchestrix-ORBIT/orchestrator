@@ -42,8 +42,7 @@ public class FlywayConfig {
                 .ignoreMigrationPatterns("*:missing")
                 .load();
 
-        // Repair and run migrations — this updates schema history and creates public tables
-        flyway.repair();
+        // Failed migrations require an explicit operator review before repair.
         flyway.migrate();
 
         return flyway;
