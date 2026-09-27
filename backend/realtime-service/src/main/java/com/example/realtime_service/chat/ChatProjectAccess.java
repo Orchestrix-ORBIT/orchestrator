@@ -20,6 +20,7 @@ public class ChatProjectAccess {
         String sql = "SELECT EXISTS (SELECT 1 FROM " + schema + ".projects p "
                 + "JOIN " + schema + ".users u ON lower(u.email) = lower(?) "
                 + "WHERE p.id = ? AND u.status = 'ACTIVE' AND (p.owner_id = u.id "
+                + "OR u.role IN ('ADMIN', 'OWNER') "
                 + "OR (p.team_id IS NOT NULL AND EXISTS (SELECT 1 FROM " + schema
                 + ".team_members tm WHERE tm.team_id = p.team_id AND tm.user_id = u.id))))";
         return Boolean.TRUE.equals(jdbc.queryForObject(sql, Boolean.class, email, projectId));
