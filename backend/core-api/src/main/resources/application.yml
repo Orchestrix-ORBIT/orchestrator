@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: core-api
+
+  datasource:
+    # Reads database connection parameters with explicit SPRING_DATASOURCE_* overrides to avoid OS env collisions
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:3}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      data-source-properties:
+        sslmode: require
+
+  flyway:
+    enabled: false                             # ← Managed manually in FlywayConfig.java
+    locations: classpath:db/migration/public   # ← Read by FlywayConfig via @Value
+    schemas: public                            # ← Read by FlywayConfig via @Value
+    baseline-on-migrate: true
+
+  jpa:
+    hibernate:
+      ddl-auto: "none"          # Flyway owns schema changes; HibernateConfig also sets none.
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public  # Overridden per-request by TenantSchemaResolver
+
+multitenancy:
+  tenant-migrations-path: classpath:db/tenant
+
+# Production secrets must be supplied by the deployment environment.
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # Default: 24 hours (86400000 ms)
+
+# AES-256 Encryption Configuration
+encryption:
+  secret-key: ${ENCRYPTION_SECRET_KEY}
+
+context-engine:
+  url: ${CONTEXT_ENGINE_URL:http://localhost:8083}

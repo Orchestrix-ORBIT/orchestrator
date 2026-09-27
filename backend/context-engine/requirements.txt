@@ -1,3 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
 langchain
+langchain-google-genai
+python-dotenv
+pydantic

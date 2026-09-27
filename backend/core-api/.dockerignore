@@ -1,0 +1,12 @@
+.env*
+target
+.git
+.idea
+.vscode
+*.log
+README.md
+run.sh
+run.ps1
+mvnw
+mvnw.cmd
+.mvn

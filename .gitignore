@@ -24,3 +24,16 @@ env/
 
 # Docker
 .docker/
+
+# Node & Frontend Build Artifacts
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Agent Skills
+.agents/
+skills-lock.json
+
+# Local Notes
+.project_notes/
