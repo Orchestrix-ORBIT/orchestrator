@@ -2,7 +2,7 @@ server:
   port: 8082
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: b1a04bc7-496f-46fd-9372-352a16b9c473
 
 spring:
   application:

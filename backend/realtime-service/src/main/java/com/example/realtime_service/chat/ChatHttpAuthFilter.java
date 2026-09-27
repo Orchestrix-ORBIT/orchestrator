@@ -27,7 +27,7 @@ public class ChatHttpAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/chat/");
+        return !request.getRequestURI().startsWith("/api/chat/") || "OPTIONS".equalsIgnoreCase(request.getMethod());
     }
 
     @Override
