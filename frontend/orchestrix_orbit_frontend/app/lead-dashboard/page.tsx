@@ -23,7 +23,7 @@ export default function LeadDashboardPage() {
   const tenantSlug = getTenantSlug() || "myorg";
 
   useEffect(() => {
-    fetch(`http://localhost:8080/api/admin/tenants/${tenantSlug}`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/api/admin/tenants/${tenantSlug}`, {
       headers: { Authorization: `Bearer ${getToken() ?? ""}`, "X-Tenant-ID": tenantSlug },
     })
       .then((res) => (res.ok ? res.json() : null))
