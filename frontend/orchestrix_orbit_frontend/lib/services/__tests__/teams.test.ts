@@ -46,7 +46,7 @@ describe("TeamsService.createTeam", () => {
 describe("TeamsService.addMember", () => {
   it("calls api.post with the team members URL and body", async () => {
     vi.mocked(apiModule.api.post).mockResolvedValue(undefined);
-    const body = { userId: USER_ID, role: "MEMBER" as const };
+    const body = { userId: USER_ID, roleInTeam: "MEMBER" as const };
     await TeamsService.addMember(TEAM_ID, body);
     expect(apiModule.api.post).toHaveBeenCalledWith(
       `/api/research-teams/${TEAM_ID}/members`,

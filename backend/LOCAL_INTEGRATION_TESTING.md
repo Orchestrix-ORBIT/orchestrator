@@ -29,7 +29,7 @@ export SPRING_DATASOURCE_HIKARI_DATA_SOURCE_PROPERTIES_SSLMODE=disable
 Run Core API first so Flyway creates public tables and the tenant schema, then run realtime:
 
 ```bash
-(cd core-api && ./mvnw test && ./mvnw -Dtest=TenantMigrationIT,CoreApiHttpIT test)
+(cd core-api && ./mvnw test && ./mvnw -Dtest=TenantMigrationIT,DatabaseIntegrityIT,CoreApiHttpIT test)
 (cd realtime-service && ./mvnw test && ./mvnw -Dtest=ChatDatabaseIT,ChatStompIT test)
 ```
 
@@ -53,15 +53,17 @@ When finished:
 docker stop orchestrix-integration-pg
 ```
 
-`TenantMigrationIT`, `CoreApiHttpIT`, `ChatDatabaseIT`, and `ChatStompIT` are opt-in tests. They run only when `SPRING_DATASOURCE_URL` points at `127.0.0.1` or `localhost` on port `55432` with database `orchestrix_test`. They are excluded from the regular Maven test naming pattern, and the test data is isolated from Supabase.
+`TenantMigrationIT`, `DatabaseIntegrityIT`, `CoreApiHttpIT`, `ChatDatabaseIT`, `ChatStompIT`, and `ChatProjectAccessIT` are opt-in tests. They run only when `SPRING_DATASOURCE_URL` points at `127.0.0.1` or `localhost` on port `55432` with database `orchestrix_test`. They are excluded from the regular Maven test naming pattern, and the test data is isolated from Supabase.
 
 ## What the checks establish
 
 - `CoreApiApplicationTests` starts Core API and applies its public Flyway migrations to PostgreSQL.
 - `TenantMigrationIT` calls `TenantMigrationService`, checks that `users`, `projects`, and `chat_messages` exist in two tenant schemas, and checks that tenant migrations were recorded. The run applied 13 migrations in each schema.
-- `CoreApiHttpIT` starts the Core API on a random local port, sends real HTTP requests for registration/login, project and task creation, reads and deletion, verifies role and tenant boundaries, checks database rows, and drops its temporary tenant schemas.
+- `DatabaseIntegrityIT` checks migrated tables, required columns and foreign keys, duplicate email and orphan rejection, booking time checks, project child-row cascade, and rollback after a failed multi-statement transaction.
+- `CoreApiHttpIT` starts the Core API on a random local port, sends real HTTP requests for tenant provisioning, registration/login, project, task, and resource operations, verifies response fields and database rows, and drops its temporary tenant schemas.
 - `ChatDatabaseIT` creates a tenant user and project, sends a message through the realtime controller, reads it back through the controller, checks the tenant table, and removes its fixtures.
-- `ChatStompIT` connects two live SockJS/STOMP clients to the running realtime service, sends a message for each tenant using the same project ID, verifies delivery to the correct topic, checks HTTP history and database rows, and removes its fixtures.
+- `ChatStompIT` connects live SockJS/STOMP clients to the running realtime service, verifies tenant and project access, checks HTTP history and database rows, and removes its fixtures.
+- `ChatProjectAccessIT` checks database-backed owner and team membership rules for chat.
 - `crossServices.it.test.ts` uses frontend service modules over live HTTP to create and read a project, sends chat over live STOMP, reads it from realtime history, and sends that exact message to the context-engine route. The model call is deterministic; no Gemini key or Supabase connection is used.
 
-On 25 September 2026, `TenantMigrationIT`, `CoreApiHttpIT`, `ChatDatabaseIT`, and `ChatStompIT` passed against a temporary PostgreSQL 16 container. Earlier local runs also passed the complete Core API suite (117 tests) and realtime suite (22 tests). These checks do not prove authenticated STOMP subscriptions or complete browser-to-backend workflows.
+On 26 September 2026, the expanded Core API HTTP, database integrity, realtime project-access, and authenticated cross-service checks passed locally against a temporary PostgreSQL 16 container. The detailed data and function cases are in [DATA_AND_FUNCTION_TESTING_REPORT.md](../DATA_AND_FUNCTION_TESTING_REPORT.md). A separate opt-in live smoke test passed against Supabase through the Java services and verified cleanup; run it with both Java services started using their local `.env` files: `python3 backend/run_live_supabase_smoke.py`. A complete browser journey remains untested.

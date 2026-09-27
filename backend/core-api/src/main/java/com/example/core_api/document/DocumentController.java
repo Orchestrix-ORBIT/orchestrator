@@ -1,6 +1,8 @@
 package com.example.core_api.document;
 
 import com.example.core_api.auth.User;
+import com.example.core_api.exception.ResourceNotFoundException;
+import org.springframework.security.access.AccessDeniedException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -52,8 +54,7 @@ public class DocumentController {
      * @ResponseStatus(CREATED) sets the HTTP response code to 201 instead of the
      * default 200. This signals to the client that a resource was created.
      *
-     * TODO: Replace the hardcoded STUB_AUTHOR_ID with the real authenticated
-     * user's UUID once JWT authentication is wired up (SecurityContext).
+     * Uses the authenticated user's UUID as the author.
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -62,8 +63,7 @@ public class DocumentController {
             @AuthenticationPrincipal User currentUser,
             @Valid @RequestBody CreateDocumentRequest request) {
 
-        // STUB: hardcoded author ID until auth is implemented.
-        // In production this will be: SecurityContextHolder → JWT claims → user UUID
+        requireAuthenticated(currentUser);
         UUID authorId = currentUser.getId();
         return documentService.createDocument(projectId, authorId, request);
     }
@@ -90,7 +90,11 @@ public class DocumentController {
     public DocumentResponse getDocumentById(
             @PathVariable UUID projectId,
             @PathVariable UUID documentId) {
-        return documentService.getDocumentById(documentId);
+        DocumentResponse document = documentService.getDocumentById(documentId);
+        if (!projectId.equals(document.getProjectId())) {
+            throw new ResourceNotFoundException("Document not found in project: " + projectId);
+        }
+        return document;
     }
 
     // ── PUT /api/projects/{projectId}/documents/{documentId} ──────────────────
@@ -104,9 +108,11 @@ public class DocumentController {
      */
     @PutMapping("/{documentId}")
     public DocumentResponse updateDocument(
+            @AuthenticationPrincipal User currentUser,
             @PathVariable UUID projectId,
             @PathVariable UUID documentId,
             @RequestBody UpdateDocumentRequest request) {
+        requireAuthenticated(currentUser);
         return documentService.updateDocument(projectId, documentId, request);
     }
 
@@ -121,8 +127,14 @@ public class DocumentController {
     @DeleteMapping("/{documentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteDocument(
+            @AuthenticationPrincipal User currentUser,
             @PathVariable UUID projectId,
             @PathVariable UUID documentId) {
+        requireAuthenticated(currentUser);
         documentService.deleteDocument(projectId, documentId);
+    }
+
+    private void requireAuthenticated(User currentUser) {
+        if (currentUser == null) throw new AccessDeniedException("Authentication required");
     }
 }

@@ -1,6 +1,7 @@
 package com.example.core_api.resource;
 
 import com.example.core_api.auth.User;
+import org.springframework.security.access.AccessDeniedException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -50,9 +51,11 @@ public class ResourceBookingController {
 
     @PatchMapping("/bookings/{bookingId}/status")
     public BookingResponse updateBookingStatus(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID bookingId,
             @Valid @RequestBody UpdateBookingStatusRequest request) {
+        ResourceAccess.requireManager(currentUser);
         String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
         com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
         try {
@@ -76,7 +79,10 @@ public class ResourceBookingController {
     }
 
     private UUID getAuthenticatedUserId() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            throw new AccessDeniedException("Authentication required");
+        }
         return user.getId();
     }
 }

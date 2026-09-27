@@ -1,3 +1,5 @@
+import { getToken } from "@/lib/auth";
+
 export interface ChatMessageItem {
   id: string;
   projectId: string;
@@ -24,7 +26,7 @@ export async function fetchProjectMessages(
 ): Promise<ChatMessageItem[]> {
   const res = await fetch(
     `${API_BASE}/api/chat/projects/${encodeURIComponent(projectId)}/messages?page=${page}&size=${size}`,
-    { headers: { "X-Tenant-ID": tenant } }
+    { headers: { "X-Tenant-ID": tenant, Authorization: `Bearer ${getToken() ?? ""}` } }
   );
   if (!res.ok) throw new Error(`Chat history request failed (${res.status})`);
   return res.json() as Promise<ChatMessageItem[]>;

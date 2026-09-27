@@ -52,7 +52,8 @@ export default function LeadProjectsPage() {
           const role = String(m.role || "").toUpperCase();
           const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
           const email = String(m.email || m.userEmail || "").toLowerCase();
-          return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
+          return ["MEMBER", "ROLE_MEMBER", "RESEARCHER", "ROLE_RESEARCHER"].includes(role)
+            || name.includes("researcher") || email.includes("researcher");
         });
         setAvailableMembers(researchers);
 
@@ -82,7 +83,17 @@ export default function LeadProjectsPage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const body: CreateProjectBody = { name: newName.trim(), description: newDesc.trim() || undefined };
+      let teamId: string | undefined;
+      if (selectedMemberIds.length > 0) {
+        const team = await TeamsService.createTeam({ name: `${newName.trim()} team` });
+        await Promise.all(selectedMemberIds.map(userId =>
+          TeamsService.addMember(team.id, { userId, roleInTeam: "MEMBER" })));
+        teamId = team.id;
+      }
+      const body: CreateProjectBody = {
+        name: newName.trim(), description: newDesc.trim() || undefined,
+        ...(teamId ? { teamId } : {}),
+      };
       const created = await ProjectsService.create(body);
 
       // Save assigned member IDs to localStorage mapping
