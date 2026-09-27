@@ -22,7 +22,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: "update"        # Auto-create missing tables like resource_maintenance in PostgreSQL
+      ddl-auto: "none"          # Flyway owns schema changes; HibernateConfig also sets none.
     show-sql: false
     properties:
       hibernate:
@@ -40,3 +40,6 @@ jwt:
 # AES-256 Encryption Configuration
 encryption:
   secret-key: ${ENCRYPTION_SECRET_KEY}
+
+context-engine:
+  url: ${CONTEXT_ENGINE_URL:http://localhost:8083}

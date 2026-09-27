@@ -92,6 +92,22 @@ describe.skipIf(!enabled)("frontend to backend and chat to context engine", () =
       const selected = messages
         .filter((item) => item.content === content)
         .map(({ senderName, content, createdAt }) => ({ senderName, content, createdAt }));
+      const outsider = await postJson("/api/auth/register", tenant, {
+        email: `outsider-${crypto.randomUUID().slice(0, 8)}@example.test`,
+        password: "IntegrationPass123!",
+        displayName: "Unassigned Member",
+      });
+      const denied = await fetch(`${coreUrl}/api/ai/summarize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-ID": tenant,
+          Authorization: `Bearer ${outsider.token}`,
+        },
+        body: JSON.stringify({ messages: selected, projectId: project.id }),
+      });
+      expect(denied.status).toBe(403);
+
       const summary = await summarizeMessages(selected, project.id, tenant);
       expect(summary.message_count).toBe(1);
       expect(summary.summary).toBe(content);

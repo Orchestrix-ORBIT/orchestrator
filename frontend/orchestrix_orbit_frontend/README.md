@@ -6,17 +6,16 @@ Build from this directory with browser-accessible service URLs:
 
 ```bash
 docker build -t orchestrix-frontend:local \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
-  --build-arg NEXT_PUBLIC_CHAT_API_URL=https://chat.example.com \
-  --build-arg NEXT_PUBLIC_CHAT_WS_URL=https://chat.example.com/ws \
-  --build-arg NEXT_PUBLIC_CONTEXT_ENGINE_URL=https://ai.example.com \
+  --build-arg NEXT_PUBLIC_API_URL=https://app.example.com \
+  --build-arg NEXT_PUBLIC_CHAT_API_URL=https://app.example.com \
+  --build-arg NEXT_PUBLIC_CHAT_WS_URL=https://app.example.com/ws \
   --build-arg NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co \
   --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key \
   .
 docker run --rm -p 3000:3000 orchestrix-frontend:local
 ```
 
-The standalone Next.js server listens on port 3000. `NEXT_PUBLIC_*` values are embedded in browser code during the image build, so rebuild when one changes. These values are public; do not pass database passwords, JWT secrets, or other private keys as build arguments. The context engine URL currently goes directly to the browser and needs an authenticated public route or application proxy before production use.
+The standalone Next.js server listens on port 3000. `NEXT_PUBLIC_*` values are embedded in browser code during the image build, so rebuild when one changes. These values are public; do not pass database passwords, JWT secrets, or other private keys as build arguments. Summarization uses the authenticated Core API endpoint; the Context Engine URL stays private to Core API.
 
 ## Getting Started
 

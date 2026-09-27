@@ -2,6 +2,7 @@
 // Unit tests for summarizeMessages — mocks global fetch directly
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { getTenantSlug, getToken } from "@/lib/auth";
 import { summarizeMessages } from "../summarize";
 import type { ChatMessageForSummary, SummaryResult } from "../summarize";
 
@@ -18,8 +19,15 @@ const mockSummaryResult: SummaryResult = {
   strategy: "stuff",
 };
 
+vi.mock("@/lib/auth", () => ({
+  getToken: vi.fn(),
+  getTenantSlug: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
+  vi.mocked(getToken).mockReturnValue("test-token");
+  vi.mocked(getTenantSlug).mockReturnValue("stored-tenant");
 });
 
 afterEach(() => {
@@ -37,12 +45,15 @@ describe("summarizeMessages", () => {
 
     expect(fetch).toHaveBeenCalledOnce();
     const [url, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/summarize");
+    expect(url).toContain("/api/ai/summarize");
     expect(options.method).toBe("POST");
+    expect(options.headers).toMatchObject({
+      Authorization: "Bearer test-token",
+      "X-Tenant-ID": "tenant-1",
+    });
     expect(JSON.parse(options.body as string)).toEqual({
       messages: mockMessages,
       projectId: "proj-1",
-      tenantId: "tenant-1",
     });
     expect(result).toEqual(mockSummaryResult);
   });
@@ -55,7 +66,7 @@ describe("summarizeMessages", () => {
       json: () => Promise.resolve({ detail: "Model overloaded" }),
     } as unknown as Response);
 
-    await expect(summarizeMessages(mockMessages)).rejects.toThrow(
+    await expect(summarizeMessages(mockMessages, "proj-1")).rejects.toThrow(
       "Model overloaded"
     );
   });
@@ -68,8 +79,16 @@ describe("summarizeMessages", () => {
       json: () => Promise.resolve({}),
     } as unknown as Response);
 
-    await expect(summarizeMessages(mockMessages)).rejects.toThrow(
-      "Context Engine error: 503 Service Unavailable"
+    await expect(summarizeMessages(mockMessages, "proj-1")).rejects.toThrow(
+      "Summarization request failed: 503 Service Unavailable"
     );
+  });
+
+  it("does not send messages without a login token", async () => {
+    vi.mocked(getToken).mockReturnValue(null);
+    await expect(summarizeMessages(mockMessages, "proj-1")).rejects.toThrow(
+      "Please sign in"
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
