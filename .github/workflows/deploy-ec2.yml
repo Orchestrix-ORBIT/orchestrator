@@ -1,0 +1,167 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [containerization]
+  workflow_dispatch:
+
+concurrency:
+  group: orchestrix-ec2-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: core-api
+            context: backend/core-api
+          - service: realtime
+            context: backend/realtime-service
+          - service: context-engine
+            context: backend/context-engine
+          - service: frontend
+            context: frontend/orchestrix_orbit_frontend
+    env:
+      ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_CHAT_API_URL: ${{ vars.NEXT_PUBLIC_CHAT_API_URL }}
+      NEXT_PUBLIC_CHAT_WS_URL: ${{ vars.NEXT_PUBLIC_CHAT_WS_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check deployment settings
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+        run: |
+          set -euo pipefail
+          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
+          [[ "$AWS_REGION" =~ ^[a-z0-9-]+$ ]]
+          [[ -n "$AWS_ROLE_TO_ASSUME" ]]
+          if [[ '${{ matrix.service }}' == frontend ]]; then
+            for name in NEXT_PUBLIC_API_URL NEXT_PUBLIC_CHAT_API_URL NEXT_PUBLIC_CHAT_WS_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY; do
+              [[ -n "${!name}" ]] || { echo "Missing GitHub variable: $name" >&2; exit 1; }
+            done
+          fi
+
+      - name: Authenticate to AWS with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and push backend image
+        if: matrix.service != 'frontend'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/orchestrix-${{ matrix.service }}:${{ github.sha }}
+
+      - name: Build and push frontend image
+        if: matrix.service == 'frontend'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/orchestrix-frontend:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_CHAT_API_URL=${{ env.NEXT_PUBLIC_CHAT_API_URL }}
+            NEXT_PUBLIC_CHAT_WS_URL=${{ env.NEXT_PUBLIC_CHAT_WS_URL }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ env.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      EC2_HOST: 13.50.236.34
+      ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+      EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Copy Compose file and deploy the release
+        run: |
+          set -euo pipefail
+          [[ -n "$EC2_SSH_PRIVATE_KEY" && -n "$EC2_KNOWN_HOSTS" ]]
+          [[ "$AWS_REGION" =~ ^[a-z0-9-]+$ ]]
+          [[ "$ECR_REGISTRY" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com$ ]]
+
+          key="$RUNNER_TEMP/orchestrix-ec2-key"
+          known_hosts="$RUNNER_TEMP/orchestrix-known-hosts"
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > "$known_hosts"
+          chmod 600 "$key" "$known_hosts"
+
+          ssh -i "$key" -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes \
+            "ubuntu@$EC2_HOST" 'mkdir -p "$HOME/orchestrix"'
+          scp -i "$key" -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes \
+            deploy/compose.ec2.yml "ubuntu@$EC2_HOST:orchestrix/compose.yml"
+
+          ssh -i "$key" -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes \
+            "ubuntu@$EC2_HOST" \
+            "IMAGE_TAG='$GITHUB_SHA' ECR_REGISTRY='$ECR_REGISTRY' AWS_REGION='$AWS_REGION' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$HOME/orchestrix"
+          for file in shared.env core.env context.env; do
+            test -s "$file" || { echo "Missing $HOME/orchestrix/$file" >&2; exit 1; }
+          done
+
+          printf 'ECR_REGISTRY=%s\nIMAGE_TAG=%s\n' "$ECR_REGISTRY" "$IMAGE_TAG" > .release.env.tmp
+          chmod 600 .release.env.tmp
+          mv .release.env.tmp .release.env
+
+          compose=(docker compose --env-file .release.env -f compose.yml)
+          "${compose[@]}" config --quiet
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          "${compose[@]}" pull
+
+          wait_http() {
+            local url="$1"
+            for attempt in {1..90}; do
+              if curl --fail --silent --output /dev/null --max-time 3 "$url"; then return 0; fi
+              sleep 2
+            done
+            echo "Service did not become ready: $url" >&2
+            return 1
+          }
+
+          "${compose[@]}" up -d --no-deps context-engine
+          context_id="$("${compose[@]}" ps -q context-engine)"
+          for attempt in {1..90}; do
+            if [[ "$(docker inspect --format '{{.State.Health.Status}}' "$context_id")" == healthy ]]; then break; fi
+            if (( attempt == 90 )); then echo 'Context Engine did not become healthy' >&2; exit 1; fi
+            sleep 2
+          done
+
+          # Core API applies Flyway migrations on startup. Back up and review the database before enabling this workflow.
+          "${compose[@]}" up -d --no-deps core-api
+          wait_http http://127.0.0.1:8080/health
+          "${compose[@]}" up -d --no-deps realtime
+          wait_http http://127.0.0.1:8082/ws/info
+          "${compose[@]}" up -d --no-deps frontend
+          wait_http http://127.0.0.1:3000/
+          "${compose[@]}" ps
+          REMOTE

@@ -1,0 +1,43 @@
+services:
+  context-engine:
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/orchestrix-context-engine:${IMAGE_TAG:?Set IMAGE_TAG}
+    env_file: ./context.env
+    expose:
+      - "8083"
+    restart: unless-stopped
+    networks:
+      - private
+
+  core-api:
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/orchestrix-core-api:${IMAGE_TAG:?Set IMAGE_TAG}
+    env_file:
+      - ./shared.env
+      - ./core.env
+    environment:
+      CONTEXT_ENGINE_URL: http://context-engine:8083
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - private
+
+  realtime:
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/orchestrix-realtime:${IMAGE_TAG:?Set IMAGE_TAG}
+    env_file: ./shared.env
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    networks:
+      - private
+
+  frontend:
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/orchestrix-frontend:${IMAGE_TAG:?Set IMAGE_TAG}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - private
+
+networks:
+  private:
+    driver: bridge
