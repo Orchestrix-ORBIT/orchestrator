@@ -1,0 +1,5 @@
+ALTER TABLE ai_summaries
+    ADD COLUMN title VARCHAR(255),
+    ADD COLUMN key_points JSONB NOT NULL DEFAULT '[]',
+    ADD COLUMN message_count INT NOT NULL DEFAULT 0,
+    ADD COLUMN strategy VARCHAR(32) NOT NULL DEFAULT 'none';

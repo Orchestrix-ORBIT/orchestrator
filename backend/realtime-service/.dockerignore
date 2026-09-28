@@ -1,0 +1,12 @@
+.env*
+target
+.git
+.idea
+.vscode
+*.log
+README.md
+REALTIME_SERVICE_TESTING.md
+run.sh
+mvnw
+mvnw.cmd
+.mvn

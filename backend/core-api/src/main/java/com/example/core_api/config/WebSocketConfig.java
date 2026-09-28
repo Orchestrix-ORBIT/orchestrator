@@ -14,7 +14,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Register /ws as the STOMP endpoint. SockJS is enabled for fallback options.
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
+                .setAllowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*", "https://orchestrix.mrt.lk")
                 .withSockJS();
     }
 

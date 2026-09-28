@@ -43,6 +43,11 @@ export default function Home() {
 
   const router = useRouter();
 
+  function changeTab(nextTab: Tab) {
+    setTab(nextTab);
+    setError(null);
+  }
+
   /* ── Sign In ──────────────────────────────────────────────────────────── */
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -132,8 +137,7 @@ export default function Home() {
       }
 
       // Registration succeeded — redirect to sign-in so user can log in
-      setTab("signin");
-      setError(null);
+      changeTab("signin");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
@@ -166,20 +170,33 @@ export default function Home() {
         <div style={s.formBox}>
 
           {/* Tabs */}
-          <div style={s.tabRow}>
+          <div style={s.tabRow} role="tablist" aria-label="Account access">
+            <span
+              aria-hidden="true"
+              className="auth-tab-indicator"
+              style={{ ...s.tabIndicator, transform: tab === "signup" ? "translateX(100%)" : "translateX(0)" }}
+            />
             <button
               type="button"
               id="tab-signin"
+              className="auth-tab-button"
+              role="tab"
+              aria-selected={tab === "signin"}
+              aria-controls="form-signin"
               style={tab === "signin" ? s.tabOn : s.tabOff}
-              onClick={() => setTab("signin")}
+              onClick={() => changeTab("signin")}
             >
               Sign in
             </button>
             <button
               type="button"
               id="tab-signup"
+              className="auth-tab-button"
+              role="tab"
+              aria-selected={tab === "signup"}
+              aria-controls="form-signup"
               style={tab === "signup" ? s.tabOn : s.tabOff}
-              onClick={() => setTab("signup")}
+              onClick={() => changeTab("signup")}
             >
               Sign up
             </button>
@@ -187,7 +204,7 @@ export default function Home() {
 
           {/* ── Sign in ── */}
           {tab === "signin" && (
-            <form id="form-signin" onSubmit={handleSignIn} style={s.form}>
+            <form id="form-signin" role="tabpanel" aria-labelledby="tab-signin" className="auth-form-enter" onSubmit={handleSignIn} style={s.form}>
               <div>
                 <h1 style={s.heading}>Welcome back</h1>
                 <p style={s.sub}>Sign in to continue to your workspace</p>
@@ -221,19 +238,12 @@ export default function Home() {
                 {loading ? "Signing in…" : "Sign in"}
               </button>
 
-              <p style={s.switchLine}>
-                Don&apos;t have an account?{" "}
-                <button type="button" id="switch-signup" style={s.switchBtn}
-                  onClick={() => { setTab("signup"); setError(null); }}>
-                  Sign up
-                </button>
-              </p>
             </form>
           )}
 
           {/* ── Sign up ── */}
           {tab === "signup" && (
-            <form id="form-signup" onSubmit={handleSignUp} style={s.form}>
+            <form id="form-signup" role="tabpanel" aria-labelledby="tab-signup" className="auth-form-enter" onSubmit={handleSignUp} style={s.form}>
               <div>
                 <h1 style={s.heading}>Create account</h1>
                 <p style={s.sub}>Join your research workspace</p>
@@ -269,13 +279,6 @@ export default function Home() {
                 {loading ? "Creating account…" : "Create account"}
               </button>
 
-              <p style={s.switchLine}>
-                Already have an account?{" "}
-                <button type="button" id="switch-signin" style={s.switchBtn}
-                  onClick={() => { setTab("signin"); setError(null); }}>
-                  Sign in
-                </button>
-              </p>
             </form>
           )}
 
@@ -402,36 +405,51 @@ const s: Record<string, React.CSSProperties> = {
 
   /* Tabs */
   tabRow: {
-    display: "flex",
-    borderBottom: "2px solid #161616",
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    position: "relative",
+    padding: 4,
+    background: "#f4f4f4",
+    border: "1px solid #dedede",
+    borderRadius: 10,
     marginBottom: 32,
   },
+  tabIndicator: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    left: 4,
+    width: "calc((100% - 8px) / 2)",
+    background: "#161616",
+    borderRadius: 7,
+    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.16)",
+    transition: "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+  },
   tabOn: {
-    flex: 1,
-    padding: "10px 0",
-    fontSize: 13,
+    position: "relative",
+    zIndex: 1,
+    padding: "11px 0",
+    fontSize: 14,
     fontWeight: 700,
-    color: "#161616",
+    color: "#ffffff",
     background: "none",
-    borderTop: "none",
-    borderLeft: "none",
-    borderRight: "none",
-    borderBottom: "2px solid #161616",
-    marginBottom: -2,
+    border: "none",
+    borderRadius: 7,
     cursor: "pointer",
+    transition: "color 180ms ease",
   },
   tabOff: {
-    flex: 1,
-    padding: "10px 0",
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#9e9e9e",
+    position: "relative",
+    zIndex: 1,
+    padding: "11px 0",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#555555",
     background: "none",
-    borderTop: "none",
-    borderLeft: "none",
-    borderRight: "none",
-    borderBottom: "2px solid transparent",
+    border: "none",
+    borderRadius: 7,
     cursor: "pointer",
+    transition: "color 180ms ease",
   },
 
   /* Form */
@@ -463,21 +481,6 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     marginTop: 4,
     letterSpacing: "0.1px",
-  },
-  switchLine: {
-    fontSize: 13,
-    color: "#888888",
-    textAlign: "center" as const,
-  },
-  switchBtn: {
-    background: "none",
-    border: "none",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#161616",
-    cursor: "pointer",
-    textDecoration: "underline",
-    padding: 0,
   },
 };
 

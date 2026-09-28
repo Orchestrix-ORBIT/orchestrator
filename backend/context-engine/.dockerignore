@@ -1,0 +1,12 @@
+.env*
+venv
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+requirements-test.txt
+CONTEXT_ENGINE_TESTING.md
+run.sh
+README.md
+.git

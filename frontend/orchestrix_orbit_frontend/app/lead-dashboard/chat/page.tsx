@@ -6,6 +6,7 @@ import { useWebSocketChat } from "@/lib/useWebSocketChat";
 import { getEmail, getTenantSlug } from "@/lib/auth";
 import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
 import { saveAiSummary } from "@/lib/services/aiSummaries";
+import { SavedSummariesService } from "@/lib/services/savedSummaries";
 
 interface Channel {
   id: string;
@@ -49,6 +50,9 @@ export default function ChatPage() {
   const [summarizing, setSummarizing] = useState(false);
   const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryProject, setSummaryProject] = useState<{ id: string; name: string } | null>(null);
+  const [savingSummary, setSavingSummary] = useState(false);
+  const [summarySaved, setSummarySaved] = useState(false);
   const [aiTriggered, setAiTriggered] = useState(false);
 
   // ── Industry Standard Chat state ──────────────────────────────────────────
@@ -210,6 +214,7 @@ export default function ChatPage() {
     setSelectedIds(new Set());
     setSummaryResult(null);
     setSummaryError(null);
+    setSummarySaved(false);
     setAiTriggered(false);
   };
 
@@ -233,6 +238,7 @@ export default function ChatPage() {
     setSummarizing(true);
     setSummaryError(null);
     setSummaryResult(null);
+    setSummarySaved(false);
     try {
       const result = await summarizeMessages(
         selected,
@@ -240,6 +246,7 @@ export default function ChatPage() {
         getTenantSlug() || "myorg"
       );
       setSummaryResult(result);
+      setSummaryProject({ id: activeProjectId, name: selectedChannel?.project || "Chat" });
       setSelectionMode(false);
       setSelectedIds(new Set());
 
@@ -264,9 +271,24 @@ export default function ChatPage() {
 
       setToastMessage("✓ AI Summary saved to AI Summaries for Lead Approval!");
     } catch (err: any) {
-      setSummaryError(err.message ?? "Summarization failed. Is the Context Engine running?");
+      setSummaryError(err.message ?? "Summarization failed.");
     } finally {
       setSummarizing(false);
+    }
+  };
+
+  const handleSaveSummary = async () => {
+    if (!summaryResult || !summaryProject || savingSummary || summarySaved) return;
+    setSavingSummary(true);
+    setSummaryError(null);
+    try {
+      await SavedSummariesService.save(summaryProject.id, `${summaryProject.name} chat summary`, summaryResult);
+      setSummarySaved(true);
+      showToast("Added to summaries");
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : "Could not save summary.");
+    } finally {
+      setSavingSummary(false);
     }
   };
 
@@ -752,6 +774,7 @@ export default function ChatPage() {
                 </div>
               )}
             </div>
+            {summaryError && <p role="alert" style={{ color: "#b42318", padding: "0 20px" }}>{summaryError}</p>}
             <div style={s.modalFooter}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 11, color: "#2e7d32", background: "#e8f5e9", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }}>
@@ -759,6 +782,9 @@ export default function ChatPage() {
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button style={s.modalCopyBtn} onClick={handleSaveSummary} disabled={savingSummary || summarySaved}>
+                  {summarySaved ? "✓ Added to summaries" : savingSummary ? "Adding..." : "Add to summaries"}
+                </button>
                 <button
                   style={s.modalCopyBtn}
                   onClick={() => navigator.clipboard.writeText(
@@ -1151,4 +1177,3 @@ const s: Record<string, React.CSSProperties> = {
     color: "#ef4444",
   },
 };
-
