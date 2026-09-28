@@ -12,6 +12,13 @@ interface Channel {
   name: string;
 }
 
+function getSenderColor(name: string): string {
+  const colors = ["#2563eb", "#7c3aed", "#d97706", "#059669", "#dc2626", "#0891b2"];
+  let hash = 0;
+  for (const character of name) hash = character.charCodeAt(0) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 import { ProjectsService } from "@/lib/services/projects";
 import { TeamsService } from "@/lib/services/teams";
 
@@ -118,9 +125,13 @@ export default function ChatPage() {
 
   return (
     <div style={s.root}>
+      <div style={s.pageHeader}>
+        <h1 style={s.pageTitle}>Project Chat</h1>
+      </div>
+      <div style={s.chatLayout}>
       {/* ── Channels sidebar ─────────────────────────────────────────────── */}
       <aside style={s.channelsSidebar}>
-        <h2 style={s.channelsTitle}>Channels ({channels.length})</h2>
+        <h2 style={s.channelsTitle}>Project channels ({channels.length})</h2>
         <div style={s.channelList}>
           {channels.length === 0 ? (
             <div style={{ padding: "20px 16px", fontSize: 12, color: "#9e9e9e", textAlign: "center" }}>
@@ -131,6 +142,7 @@ export default function ChatPage() {
               <button
                 key={ch.id}
                 id={ch.id}
+                aria-pressed={activeChannelId === ch.id}
                 style={{
                   ...s.channelItem,
                   ...(activeChannelId === ch.id ? s.channelItemActive : {}),
@@ -138,7 +150,7 @@ export default function ChatPage() {
                 onClick={() => setActiveChannelId(ch.id)}
               >
                 <div style={s.channelTop}>
-                  <span style={s.channelName}>{ch.name}</span>
+                  <span style={{ ...s.channelName, ...(activeChannelId === ch.id ? s.channelNameActive : {}) }}>{ch.name}</span>
                 </div>
               </button>
             ))
@@ -152,7 +164,7 @@ export default function ChatPage() {
         <div style={s.chatHeader}>
           <div style={s.chatHeaderLeft}>
             <span style={s.chatChannelName}>{activeProject ? activeProject.name : "No Channel Selected"}</span>
-            <span style={s.encryptedBadge}>
+            <span style={{ ...s.encryptedBadge, ...(!isConnected ? s.connectingBadge : {}) }}>
               <span style={{ fontSize: 8, color: isConnected ? "#2e7d32" : "#ed6c02", marginRight: 5 }}>●</span>
               {isConnected ? "STOMP WebSocket Live" : "Connecting..."}
             </span>
@@ -188,7 +200,7 @@ export default function ChatPage() {
             </div>
           ) : (
             allDisplayMessages.map((msg) => {
-              const isMe = msg.senderName === currentUserEmail || msg.senderName === "You" || msg.senderName === "ME";
+              const isMe = msg.senderName.toLowerCase() === currentUserEmail.toLowerCase() || msg.senderName === "You" || msg.senderName === "ME";
               const isSelected = selectedIds.has(msg.id);
               const rowStyle: React.CSSProperties = {
                 ...(isMe ? s.msgRowMe : s.msgRow),
@@ -200,12 +212,13 @@ export default function ChatPage() {
                     {selectionMode && (
                       <input type="checkbox" checked={isSelected} readOnly style={{ marginLeft: 4, accentColor: "#4f46e5" }} />
                     )}
-                    <div style={s.msgMetaMe}>
-                      <span style={s.msgTimeMe}>{msg.createdAt}</span>
-                      <span style={s.msgSenderMe}>{msg.senderName}</span>
+                    <div style={s.msgContentMe}>
+                      <div style={s.msgMetaMe}>
+                        <span style={s.msgSenderMe}>You</span>
+                        <span style={s.msgTimeMe}>{msg.createdAt}</span>
+                      </div>
+                      <div style={s.bubbleMe}>{msg.content}</div>
                     </div>
-                    <div style={s.bubbleMe}>{msg.content}</div>
-                    <div style={s.avatarMe}>{msg.initials || "ME"}</div>
                   </div>
                 );
               }
@@ -214,10 +227,10 @@ export default function ChatPage() {
                   {selectionMode && (
                     <input type="checkbox" checked={isSelected} readOnly style={{ marginRight: 4, accentColor: "#4f46e5" }} />
                   )}
-                  <div style={s.avatarOther}>{msg.initials}</div>
+                  <div style={{ ...s.avatarOther, background: getSenderColor(msg.senderName) }}>{msg.initials}</div>
                   <div style={s.msgContent}>
                     <div style={s.msgMeta}>
-                      <span style={s.msgSender}>{msg.senderName}</span>
+                      <span style={{ ...s.msgSender, color: getSenderColor(msg.senderName) }}>{msg.senderName}</span>
                       <span style={s.msgTime}>{msg.createdAt}</span>
                     </div>
                     <div style={s.bubbleOther}>{msg.content}</div>
@@ -250,6 +263,7 @@ export default function ChatPage() {
             </div>
           </form>
         )}
+      </div>
       </div>
 
       {/* ── Floating selection toolbar ──────────────────────────────────── */}
@@ -334,47 +348,71 @@ export default function ChatPage() {
 const s: Record<string, React.CSSProperties> = {
   root: {
     display: "flex",
+    flexDirection: "column",
     height: "calc(100vh - 48px)",
     width: "100%",
     overflow: "hidden" as const,
+    padding: "24px 28px 28px",
+    background: "#f5f5f5",
+    gap: 16,
+  },
+  pageHeader: {
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  pageTitle: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "#161616",
+  },
+  chatLayout: {
+    display: "flex",
+    flex: 1,
+    minHeight: 0,
+    gap: 20,
   },
   channelsSidebar: {
-    width: 210,
-    minWidth: 210,
-    borderRight: "1px solid #e8e8e8",
+    width: 280,
+    minWidth: 240,
+    border: "1px solid #e0e0e0",
+    borderRadius: 8,
     background: "#ffffff",
     display: "flex",
     flexDirection: "column" as const,
-    padding: "20px 0 0",
-    overflowY: "auto" as const,
+    overflow: "hidden" as const,
   },
   channelsTitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-0.1px",
-    padding: "0 16px 12px",
+    color: "#64748b",
+    letterSpacing: "0.6px",
+    textTransform: "uppercase" as const,
+    padding: "16px 20px 12px",
+    borderBottom: "1px solid #eeeeee",
   },
   channelList: {
     display: "flex",
     flexDirection: "column" as const,
     gap: 0,
+    overflowY: "auto" as const,
   },
   channelItem: {
     display: "flex",
     flexDirection: "column" as const,
     gap: 3,
-    padding: "12px 16px",
-    background: "transparent",
+    padding: "14px 18px",
+    background: "#ffffff",
     border: "none",
     borderLeft: "3px solid transparent",
+    borderBottom: "1px solid #f0f0f0",
     cursor: "pointer",
     textAlign: "left" as const,
     transition: "background 0.1s",
   },
   channelItemActive: {
-    background: "#f5f5f5",
-    borderLeft: "3px solid #161616",
+    background: "#eff6ff",
+    borderLeft: "3px solid #2563eb",
   },
   channelTop: {
     display: "flex",
@@ -391,11 +429,18 @@ const s: Record<string, React.CSSProperties> = {
     textOverflow: "ellipsis" as const,
     whiteSpace: "nowrap" as const,
   },
+  channelNameActive: {
+    color: "#1d4ed8",
+    fontWeight: 700,
+  },
   chatArea: {
     flex: 1,
+    minWidth: 0,
     display: "flex",
     flexDirection: "column" as const,
-    background: "#f9f9f9",
+    background: "#ffffff",
+    border: "1px solid #e0e0e0",
+    borderRadius: 8,
     overflow: "hidden" as const,
   },
   chatHeader: {
@@ -403,7 +448,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "14px 24px",
-    background: "#ffffff",
+    background: "#fafafa",
     borderBottom: "1px solid #e8e8e8",
     flexShrink: 0,
   },
@@ -411,6 +456,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 12,
+    flexWrap: "wrap" as const,
   },
   chatChannelName: {
     fontSize: 15,
@@ -420,23 +466,28 @@ const s: Record<string, React.CSSProperties> = {
   encryptedBadge: {
     display: "flex",
     alignItems: "center",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#616161",
-    background: "#f5f5f5",
-    border: "1px solid #e0e0e0",
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#15803d",
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
     borderRadius: 20,
     padding: "3px 10px",
+  },
+  connectingBadge: {
+    color: "#c2410c",
+    background: "#fff7ed",
+    borderColor: "#fed7aa",
   },
   summarizeBtn: {
     display: "flex",
     alignItems: "center",
     padding: "7px 14px",
     fontSize: 13,
-    fontWeight: 500,
-    color: "#424242",
-    background: "#ffffff",
-    border: "1px solid #d0d0d0",
+    fontWeight: 600,
+    color: "#6d28d9",
+    background: "#f5f3ff",
+    border: "1px solid #ddd6fe",
     borderRadius: 6,
     cursor: "pointer",
   },
@@ -447,6 +498,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column" as const,
     gap: 20,
+    background: "#fafafa",
   },
   dateSeparator: {
     display: "flex",
@@ -474,14 +526,15 @@ const s: Record<string, React.CSSProperties> = {
     width: 32,
     height: 32,
     borderRadius: "50%",
-    background: "#e0e0e0",
+    background: "#2563eb",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontSize: 11,
     fontWeight: 700,
-    color: "#616161",
+    color: "#ffffff",
     flexShrink: 0,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
   },
   msgContent: {
     display: "flex",
@@ -505,37 +558,32 @@ const s: Record<string, React.CSSProperties> = {
   },
   bubbleOther: {
     fontSize: 13,
-    color: "#161616",
+    color: "#0f172a",
     lineHeight: 1.6,
     background: "#ffffff",
-    border: "1px solid #e8e8e8",
-    borderRadius: "0 8px 8px 8px",
-    padding: "10px 14px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "16px 16px 16px 2px",
+    padding: "10px 16px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
   },
   msgRowMe: {
     display: "flex",
     alignItems: "flex-end",
+    justifyContent: "flex-end",
     gap: 10,
-    flexDirection: "row-reverse" as const,
   },
-  avatarMe: {
-    width: 32,
-    height: 32,
-    borderRadius: "50%",
-    background: "#161616",
+  msgContentMe: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#ffffff",
-    flexShrink: 0,
+    flexDirection: "column" as const,
+    alignItems: "flex-end",
+    gap: 4,
+    maxWidth: "68%",
   },
   msgMetaMe: {
     display: "flex",
     alignItems: "baseline",
     gap: 8,
-    flexDirection: "row-reverse" as const,
+    justifyContent: "flex-end",
   },
   msgSenderMe: {
     fontSize: 13,
@@ -550,10 +598,11 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     color: "#ffffff",
     lineHeight: 1.6,
-    background: "#161616",
-    borderRadius: "8px 0 8px 8px",
-    padding: "10px 14px",
+    background: "#2563eb",
+    borderRadius: "16px 16px 2px 16px",
+    padding: "10px 16px",
     maxWidth: 520,
+    boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)",
   },
   inputArea: {
     padding: "16px 28px 12px",
@@ -565,9 +614,9 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    background: "#ffffff",
-    border: "1px solid #d0d0d0",
-    borderRadius: 8,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 20,
     padding: "8px 10px 8px 14px",
   },
   messageInput: {
@@ -583,11 +632,12 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 600,
     color: "#ffffff",
-    background: "#161616",
+    background: "#2563eb",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 20,
     cursor: "pointer",
     flexShrink: 0,
+    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
   },
   inputFooter: {
     display: "flex",
