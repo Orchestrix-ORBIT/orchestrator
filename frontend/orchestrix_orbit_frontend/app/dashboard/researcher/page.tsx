@@ -201,7 +201,6 @@ function ErrorState({ message }: { message: string }) {
 function statusStyle(status: string): React.CSSProperties {
   switch (status) {
     case "IN_PROGRESS": return { background: "#161616", color: "#ffffff", border: "none" };
-    case "BLOCKED":     return { background: "#fde8e8", color: "#c62828", border: "none" };
     default:            return { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" };
   }
 }

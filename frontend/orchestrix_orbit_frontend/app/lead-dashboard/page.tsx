@@ -134,7 +134,7 @@ export default function LeadDashboardPage() {
             <tbody>
               {activeProjects.map(p => {
                 const pTasks  = allTasks.filter(t => t.projectId === p.id);
-                const done    = pTasks.filter(t => t.status === "DONE").length;
+                const done    = pTasks.filter(t => t.status === "ACCEPTED").length;
                 return (
                   <tr key={p.id}>
                     <td style={s.td}>
@@ -142,7 +142,7 @@ export default function LeadDashboardPage() {
                         {p.name}
                       </Link>
                     </td>
-                    <td style={s.td}>{done}/{pTasks.length} done</td>
+                    <td style={s.td}>{done}/{pTasks.length} accepted</td>
                     <td style={s.td}><span style={s.activeBadge}>{p.status}</span></td>
                     <td style={s.td}>{new Date(p.createdAt).toLocaleDateString()}</td>
                   </tr>

@@ -41,6 +41,37 @@ function parseMaintenanceDates(maint: any) {
   };
 }
 
+// Normalizes booking timestamps that may have been stored with the UTC :00Z skew bug
+function normalizeBooking(b: any): any {
+  if (!b || !b.startTime) return b;
+  const startObj = new Date(b.startTime);
+  if (isNaN(startObj.getTime())) return b;
+
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
+  if (tzOffsetMinutes === 0) return b; // In UTC, no offset distortion
+
+  const tzOffsetMs = tzOffsetMinutes * 60 * 1000;
+  const startMs = startObj.getTime();
+  const createdMs = b.createdAt ? new Date(b.createdAt).getTime() : null;
+
+  // If created recently and shifted forward by approximately the timezone offset (e.g. +5.5 hours in UTC+5:30)
+  const isShiftedFromCreated = createdMs !== null && Math.abs((startMs - createdMs) - (-tzOffsetMs)) < 30 * 60 * 1000;
+  const isShiftedFromNow = Math.abs((startMs - Date.now()) - (-tzOffsetMs)) < 3 * 3600 * 1000;
+
+  if (isShiftedFromCreated || isShiftedFromNow) {
+    const fixedStart = new Date(startMs + tzOffsetMs).toISOString();
+    const durMs = b.endTime ? (new Date(b.endTime).getTime() - startMs) : 3 * 3600 * 1000;
+    const fixedEnd = new Date(new Date(fixedStart).getTime() + durMs).toISOString();
+    return {
+      ...b,
+      startTime: fixedStart,
+      endTime: fixedEnd,
+    };
+  }
+
+  return b;
+}
+
 function computeDynamicStatus(resource: any, allBookings: any[], maintenanceLogs: any[] = []) {
   const now = new Date();
 
@@ -54,7 +85,7 @@ function computeDynamicStatus(resource: any, allBookings: any[], maintenanceLogs
   let activeMaintenance = false;
   let maintEndDate: Date | null = null;
 
-  // 1. Check if ANY maintenance log is currently active (start <= now <= end)
+  // Check if ANY maintenance log is currently active (start <= now <= end)
   const activeLog = assetLogs.find((m) => {
     const dates = parseMaintenanceDates(m);
     if (!dates || !dates.end) return false;
@@ -90,23 +121,27 @@ function computeDynamicStatus(resource: any, allBookings: any[], maintenanceLogs
   }
 
   // 1. Check if currently in use (startTime <= now <= endTime)
-  const resBookings = (allBookings || []).filter((b) => {
-    const isIdMatch = String(b.resourceId) === String(resource.id);
-    const isNameMatch = b.resourceName && resource.name && String(b.resourceName).trim().toLowerCase() === String(resource.name).trim().toLowerCase();
-    return (isIdMatch || isNameMatch) && b.status !== "CANCELLED" && b.status !== "REJECTED";
-  });
+  const resBookings = (allBookings || [])
+    .map(normalizeBooking)
+    .filter((b) => {
+      const isIdMatch = String(b.resourceId) === String(resource.id);
+      const isNameMatch = b.resourceName && resource.name && String(b.resourceName).trim().toLowerCase() === String(resource.name).trim().toLowerCase();
+      return (isIdMatch || isNameMatch) && b.status !== "CANCELLED" && b.status !== "REJECTED";
+    });
 
   const activeBooking = resBookings.find((b) => {
     const start = new Date(b.startTime);
     const end = new Date(b.endTime);
-    return now >= start && now <= end;
+    // Treat as active if currently between start and end, or starting in the next 5 minutes
+    const isStartedOrImminent = (now >= start || (start.getTime() - now.getTime() <= 5 * 60 * 1000));
+    return isStartedOrImminent && now <= end;
   });
 
   if (activeBooking) {
     const endTimeObj = new Date(activeBooking.endTime);
     const isToday = endTimeObj.toDateString() === now.toDateString();
     const timeLabel = endTimeObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const dateLabel = isToday ? "Today" : endTimeObj.toLocaleDateString();
+    const dateLabel = isToday ? "Today" : endTimeObj.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
     return {
       status: "In Use" as const,
@@ -124,12 +159,12 @@ function computeDynamicStatus(resource: any, allBookings: any[], maintenanceLogs
   if (upcomingBooking) {
     const startDate = new Date(upcomingBooking.startTime);
     const isToday = startDate.toDateString() === now.toDateString();
-    const dateLabel = isToday ? "Today" : startDate.toLocaleDateString();
+    const dateLabel = isToday ? "Today" : startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const timeLabel = startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     return {
       status: "Reserved" as const,
-      availableSlot: `Available Now (Reserved ${dateLabel} at ${timeLabel})`,
+      availableSlot: `Reserved ${dateLabel} at ${timeLabel}`,
       bookedBy: upcomingBooking.bookedBy || upcomingBooking.userName || "Lab Researcher",
       project: upcomingBooking.project || upcomingBooking.projectName || "Scheduled Project",
     };
@@ -145,7 +180,9 @@ function computeDynamicStatus(resource: any, allBookings: any[], maintenanceLogs
 }
 
 function getSlotStartEndDates(dateStr: string, startTimeStr: string, durationHours: string | number) {
-  const dateVal = dateStr || "2026-09-02";
+  const now = new Date();
+  const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const dateVal = dateStr || defaultDate;
   const [hStr, mStr] = (startTimeStr || "14:00").split(":");
   let startH = parseInt(hStr || "14", 10);
   let startM = parseInt(mStr || "0", 10);
@@ -155,7 +192,9 @@ function getSlotStartEndDates(dateStr: string, startTimeStr: string, durationHou
   if (isNaN(startM)) startM = 0;
   if (isNaN(durH) || durH <= 0) durH = 1;
 
-  const slotStart = new Date(`${dateVal}T${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}:00Z`);
+  // Construct in local time (NOT UTC with :00Z) so that .toISOString() converts accurately to UTC
+  const [y, m, d] = dateVal.split("-").map((v) => parseInt(v, 10));
+  const slotStart = new Date(y, (m || 1) - 1, d || 1, startH, startM, 0);
   const slotEnd = new Date(slotStart.getTime() + Math.round(durH * 60 * 60 * 1000));
 
   return { slotStart, slotEnd };
@@ -241,7 +280,7 @@ export default function ResourcesPage() {
   useEffect(() => {
     setMounted(true);
     const now = new Date();
-    const dateStr = now.toISOString().split("T")[0];
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const hoursStr = String(now.getHours()).padStart(2, "0");
     const minsStr = String(now.getMinutes()).padStart(2, "0");
     setDateInput(dateStr);
@@ -284,35 +323,59 @@ export default function ResourcesPage() {
           localBookings = JSON.parse(localStorage.getItem("resource_bookings_ledger") || "[]");
         } catch (e) {}
 
+        const normalizedLocal = localBookings.map(normalizeBooking);
+        const normalizedDb = (fetchedMyBookings || []).map(normalizeBooking);
+
         // Filter out DB bookings that are CANCELLED, REJECTED, or locally cancelled by user
-        const dbBookings = (fetchedMyBookings || []).filter(
-          (b: any) =>
-            b.status !== "CANCELLED" &&
-            b.status !== "REJECTED" &&
-            !cancelledIds.includes(String(b.id || ""))
-        );
+        const dbBookings = normalizedDb
+          .filter(
+            (b: any) =>
+              b.status !== "CANCELLED" &&
+              b.status !== "REJECTED" &&
+              !cancelledIds.includes(String(b.id || ""))
+          )
+          .map((b: any) => ({
+            ...b,
+            bookedBy: b.bookedBy || "Dinuka K. (Lead)",
+            project: b.project || b.projectName || "Genomic Sequence Alignment & Variant Calling",
+          }));
 
         // Also filter local ledger to exclude cancelled ones
-        const filteredLocalBookings = localBookings.filter(
-          (b: any) => !cancelledIds.includes(String(b.id || ""))
-        );
+        const filteredLocalBookings = normalizedLocal
+          .filter((b: any) => !cancelledIds.includes(String(b.id || "")))
+          .map((lb: any) => {
+            const dbMatch = dbBookings.find(
+              (db: any) => String(db.resourceId) === String(lb.resourceId) && db.startTime === lb.startTime
+            );
+            return dbMatch && dbMatch.status ? { ...lb, status: dbMatch.status } : lb;
+          });
 
-        // Deduplicate: if DB already has a booking matching a local BK- entry (same resource + time), skip local
+        // Deduplicate: merge matching entries so bookedBy and project are preserved
         const allBookings = [
-          ...dbBookings,
+          ...dbBookings.map((db: any) => {
+            const localMatch = filteredLocalBookings.find(
+              (lb: any) => String(lb.resourceId) === String(db.resourceId) && lb.startTime === db.startTime
+            );
+            return {
+              ...db,
+              bookedBy: localMatch?.bookedBy || db.bookedBy || "Dinuka K. (Lead)",
+              project: localMatch?.project || db.project || db.projectName || "Active Project",
+            };
+          }),
           ...filteredLocalBookings.filter(
-            (lb: any) => !dbBookings.some(
-              (db: any) =>
-                String(db.resourceId) === String(lb.resourceId) &&
-                db.startTime === lb.startTime
-            )
+            (lb: any) =>
+              !dbBookings.some(
+                (db: any) =>
+                  String(db.resourceId) === String(lb.resourceId) &&
+                  db.startTime === lb.startTime
+              )
           ),
         ];
 
         setAllBookingsState(allBookings);
         setMyBookingsCount(allBookings.length);
 
-        // Sync cleaned ledger back
+        // Sync cleaned & normalized ledger back
         try {
           localStorage.setItem("resource_bookings_ledger", JSON.stringify(filteredLocalBookings));
         } catch (e) {}
@@ -368,13 +431,25 @@ export default function ResourcesPage() {
         purpose: `Reservation for ${projNameVal}`,
       });
 
+      // Auto-approve the booking since the user is Team Lead (ROLE_ADMIN)
+      let finalStatus = createdBooking.status || "APPROVED";
+      try {
+        if (createdBooking.id && !createdBooking.id.startsWith("BK-")) {
+          await ResourcesService.updateBookingStatus(createdBooking.id, "APPROVED");
+          finalStatus = "APPROVED";
+        }
+      } catch (err) {
+        console.warn("Auto-approve failed, using created status:", err);
+      }
+
       const newBooking = {
         ...createdBooking,
         project: projNameVal,
         projectName: projNameVal,
         bookedBy: "Dinuka K. (Lead)",
-        // Override the hardcoded status from the mock with the actual DB status
-        status: createdBooking.status || "PENDING_APPROVAL",
+        startTime,
+        endTime,
+        status: finalStatus,
       };
 
       // Save to local ledger
@@ -482,9 +557,60 @@ export default function ResourcesPage() {
     }
   };
 
+  const executeApproveBooking = async (targetBooking: any) => {
+    try {
+      const bookingId = String(targetBooking.id || "");
+      if (bookingId && !bookingId.startsWith("BK-")) {
+        try {
+          await ResourcesService.updateBookingStatus(bookingId, "APPROVED");
+        } catch (err) {
+          console.warn("Backend approve failed, updating locally:", err);
+        }
+      }
+
+      // Update in state
+      const updatedAll = allBookingsState.map((b) =>
+        String(b.id || "") === bookingId ? { ...b, status: "APPROVED" } : b
+      );
+      setAllBookingsState(updatedAll);
+
+      // Update in local ledger
+      let localBookings: any[] = [];
+      try {
+        localBookings = JSON.parse(localStorage.getItem("resource_bookings_ledger") || "[]");
+      } catch (e) {}
+      const updatedLedger = localBookings.map((b: any) =>
+        String(b.id || "") === bookingId ? { ...b, status: "APPROVED" } : b
+      );
+      try {
+        localStorage.setItem("resource_bookings_ledger", JSON.stringify(updatedLedger));
+      } catch (e) {}
+
+      // Re-calculate dynamic resource statuses
+      setResources((prev) =>
+        prev.map((r) => {
+          const computed = computeDynamicStatus(r, updatedAll, dbMaintenanceLogs);
+          return {
+            ...r,
+            status: computed.status,
+            bookedBy: computed.bookedBy,
+            project: computed.project,
+            availableSlot: computed.availableSlot,
+          };
+        })
+      );
+
+      const targetResName = targetBooking.resourceName || "Lab Resource";
+      setCancelSuccessMsg(`Reservation for ${targetResName} approved successfully.`);
+      setTimeout(() => { setCancelSuccessMsg(null); }, 3000);
+    } catch (err) {
+      console.error("Failed to approve booking:", err);
+    }
+  };
+
   const openBookingFor = (resourceId?: string) => {
     const now = new Date();
-    const dateStr = now.toISOString().split("T")[0];
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const hoursStr = String(now.getHours()).padStart(2, "0");
     const minsStr = String(now.getMinutes()).padStart(2, "0");
     setDateInput(dateStr);
@@ -556,15 +682,6 @@ export default function ResourcesPage() {
           <span style={s.statLabel}>TOTAL ASSETS</span>
           <span style={s.statValue}>{resources.length}</span>
           <span style={s.statSub}>Managed hardware & nodes</span>
-        </div>
-        <div style={s.statCard}>
-          <span style={s.statLabel}>GPU UTILIZATION</span>
-          <span style={s.statValue}>
-            {resources.length > 0
-              ? `${Math.round((resources.filter(r => r.status === "In Use" || r.status === "Reserved").length / resources.length) * 100)}%`
-              : "0%"}
-          </span>
-          <span style={s.statSub}>Active compute & hardware nodes</span>
         </div>
         <div
           onClick={() => myBookingsCount > 0 && setShowMyBookingsModal(true)}
@@ -672,7 +789,7 @@ export default function ResourcesPage() {
                     >
                       Book Slot
                     </button>
-                  ) : r.bookedBy.includes("Dinuka") ? (
+                  ) : (r.bookedBy && (r.bookedBy.includes("Dinuka") || r.bookedBy.includes("(Lead)"))) ? (
                     <span style={{ fontSize: 12, color: "#2e7d32", fontWeight: 600 }}>
                       Your Booking
                     </span>
@@ -748,9 +865,9 @@ export default function ResourcesPage() {
                           <span style={{
                             fontSize: 10,
                             padding: "2px 8px",
-                            background: isPending ? "#fffbe6" : "#f3f4f6",
-                            color: isPending ? "#92400e" : "#111827",
-                            border: `1px solid ${isPending ? "#ffe58f" : "#e5e7eb"}`,
+                            background: isPending ? "#fffbe6" : "#ecfdf5",
+                            color: isPending ? "#92400e" : "#065f46",
+                            border: `1px solid ${isPending ? "#ffe58f" : "#a7f3d0"}`,
                             borderRadius: 4,
                             fontWeight: 700,
                             letterSpacing: "0.3px",
@@ -765,22 +882,42 @@ export default function ResourcesPage() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => setBookingToCancel({ ...b, resourceName: resName })}
-                        style={{
-                          padding: "6px 14px",
-                          background: "#ffffff",
-                          color: "#dc2626",
-                          border: "1px solid #fee2e2",
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Cancel Booking
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {isPending && (
+                          <button
+                            onClick={() => executeApproveBooking({ ...b, resourceName: resName })}
+                            style={{
+                              padding: "6px 14px",
+                              background: "#161616",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Approve Booking
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setBookingToCancel({ ...b, resourceName: resName })}
+                          style={{
+                            padding: "6px 14px",
+                            background: "#ffffff",
+                            color: "#dc2626",
+                            border: "1px solid #fee2e2",
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Cancel Booking
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -1296,7 +1433,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   statGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: 16,
     marginBottom: 32,
   },

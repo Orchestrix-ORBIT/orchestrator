@@ -45,6 +45,8 @@ public class ResourceService {
     }
 
     public ResourceMaintenance createMaintenance(ResourceMaintenance maintenance) {
+        validateNoMaintenanceConflict(maintenance, null);
+
         ResourceMaintenance saved = maintenanceRepository.save(maintenance);
         // Automatically set resource status to MAINTENANCE ONLY if maintenance is active ("In Progress")
         if (maintenance.getResourceId() != null && "In Progress".equalsIgnoreCase(maintenance.getStatus())) {
@@ -54,6 +56,82 @@ public class ResourceService {
             });
         }
         return saved;
+    }
+
+    public ResourceMaintenance updateMaintenance(UUID id, ResourceMaintenance updates) {
+        ResourceMaintenance maintenance = maintenanceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Maintenance log not found with id: " + id));
+        if (updates.getAssetName() != null) maintenance.setAssetName(updates.getAssetName());
+        if (updates.getResourceId() != null) maintenance.setResourceId(updates.getResourceId());
+        if (updates.getCategory() != null) maintenance.setCategory(updates.getCategory());
+        if (updates.getStartDate() != null) maintenance.setStartDate(updates.getStartDate());
+        if (updates.getEndDate() != null) maintenance.setEndDate(updates.getEndDate());
+        if (updates.getDowntimeType() != null) maintenance.setDowntimeType(updates.getDowntimeType());
+        if (updates.getTechnician() != null) maintenance.setTechnician(updates.getTechnician());
+        if (updates.getNotes() != null) maintenance.setNotes(updates.getNotes());
+        
+        String oldStatus = maintenance.getStatus();
+        if (updates.getStatus() != null) {
+            maintenance.setStatus(updates.getStatus());
+        }
+
+        validateNoMaintenanceConflict(maintenance, id);
+        
+        ResourceMaintenance saved = maintenanceRepository.save(maintenance);
+        
+        // Sync resource status if linked
+        if (saved.getResourceId() != null) {
+            if ("In Progress".equalsIgnoreCase(saved.getStatus())) {
+                resourceRepository.findById(saved.getResourceId()).ifPresent(res -> {
+                    res.setStatus(ResourceStatus.MAINTENANCE);
+                    resourceRepository.save(res);
+                });
+            } else if ("Completed".equalsIgnoreCase(saved.getStatus()) || "Scheduled".equalsIgnoreCase(saved.getStatus())) {
+                if ("In Progress".equalsIgnoreCase(oldStatus)) {
+                    boolean hasOtherInProgress = maintenanceRepository.findAll().stream()
+                            .anyMatch(m -> !m.getId().equals(saved.getId()) && saved.getResourceId().equals(m.getResourceId()) && "In Progress".equalsIgnoreCase(m.getStatus()));
+                    if (!hasOtherInProgress) {
+                        resourceRepository.findById(saved.getResourceId()).ifPresent(res -> {
+                            if (res.getStatus() == ResourceStatus.MAINTENANCE) {
+                                res.setStatus(ResourceStatus.AVAILABLE);
+                                resourceRepository.save(res);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        return saved;
+    }
+
+    public ResourceMaintenance updateMaintenance(UUID id, String endDate, String status) {
+        ResourceMaintenance updates = new ResourceMaintenance();
+        updates.setEndDate(endDate);
+        updates.setStatus(status);
+        return updateMaintenance(id, updates);
+    }
+
+    public void deleteMaintenance(UUID id) {
+        ResourceMaintenance maintenance = maintenanceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Maintenance log not found with id: " + id));
+        UUID resourceId = maintenance.getResourceId();
+        String status = maintenance.getStatus();
+        maintenanceRepository.delete(maintenance);
+
+        // If deleted maintenance was in progress, release resource if no other active maintenance exists
+        if (resourceId != null && "In Progress".equalsIgnoreCase(status)) {
+            boolean hasOtherInProgress = maintenanceRepository.findAll().stream()
+                    .anyMatch(m -> resourceId.equals(m.getResourceId()) && "In Progress".equalsIgnoreCase(m.getStatus()));
+            if (!hasOtherInProgress) {
+                resourceRepository.findById(resourceId).ifPresent(res -> {
+                    if (res.getStatus() == ResourceStatus.MAINTENANCE) {
+                        res.setStatus(ResourceStatus.AVAILABLE);
+                        resourceRepository.save(res);
+                    }
+                });
+            }
+        }
     }
 
     public ResourceResponse createResource(CreateResourceRequest request, UUID ownerId) {
@@ -233,5 +311,64 @@ public class ResourceService {
                 .purpose(booking.getPurpose())
                 .createdAt(booking.getCreatedAt())
                 .build();
+    }
+
+    private void validateNoMaintenanceConflict(ResourceMaintenance target, UUID excludeId) {
+        if (target.getResourceId() == null && target.getAssetName() == null) {
+            return;
+        }
+        List<ResourceMaintenance> existing = maintenanceRepository.findAll();
+        for (ResourceMaintenance em : existing) {
+            if (excludeId != null && em.getId() != null && em.getId().equals(excludeId)) {
+                continue;
+            }
+            if ("Completed".equalsIgnoreCase(em.getStatus())) {
+                continue;
+            }
+            boolean sameAsset = (target.getResourceId() != null && target.getResourceId().equals(em.getResourceId()))
+                    || (target.getAssetName() != null && target.getAssetName().trim().equalsIgnoreCase(em.getAssetName().trim()));
+            if (sameAsset) {
+                if ("In Progress".equalsIgnoreCase(em.getStatus()) && "In Progress".equalsIgnoreCase(target.getStatus())) {
+                    throw new IllegalArgumentException("Asset '" + em.getAssetName() + "' already has an active maintenance window in progress.");
+                }
+                if (target.getStartDate() != null && target.getEndDate() != null &&
+                        em.getStartDate() != null && em.getEndDate() != null) {
+                    if (datesOverlap(target.getStartDate(), target.getEndDate(), em.getStartDate(), em.getEndDate())) {
+                        throw new IllegalArgumentException("Asset '" + em.getAssetName() + "' already has a conflicting maintenance schedule during that timeframe (" + em.getStartDate() + " to " + em.getEndDate() + ").");
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean datesOverlap(String start1, String end1, String start2, String end2) {
+        if (start1 == null || end1 == null || start2 == null || end2 == null) {
+            return false;
+        }
+        try {
+            java.time.Instant s1 = parseToInstant(start1);
+            java.time.Instant e1 = parseToInstant(end1);
+            java.time.Instant s2 = parseToInstant(start2);
+            java.time.Instant e2 = parseToInstant(end2);
+            if (s1 != null && e1 != null && s2 != null && e2 != null) {
+                return s1.isBefore(e2) && e1.isAfter(s2);
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private java.time.Instant parseToInstant(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) return null;
+        try {
+            String clean = dateStr.trim();
+            if (clean.length() == 16) {
+                return java.time.LocalDateTime.parse(clean).toInstant(java.time.ZoneOffset.UTC);
+            }
+            if (clean.length() == 10) {
+                return java.time.LocalDate.parse(clean).atStartOfDay().toInstant(java.time.ZoneOffset.UTC);
+            }
+            return java.time.OffsetDateTime.parse(clean).toInstant();
+        } catch (Exception ignored) {}
+        return null;
     }
 }

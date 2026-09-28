@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useWebSocketChat } from "@/lib/useWebSocketChat";
 import { getEmail, getTenantSlug } from "@/lib/auth";
 import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
+import { saveAiSummary } from "@/lib/services/aiSummaries";
 import { SavedSummariesService } from "@/lib/services/savedSummaries";
 
 interface Channel {
@@ -248,6 +249,27 @@ export default function ChatPage() {
       setSummaryProject({ id: activeProjectId, name: selectedChannel?.project || "Chat" });
       setSelectionMode(false);
       setSelectedIds(new Set());
+
+      // Persist directly to backend database for lead review & approval
+      const currentProjectName = selectedChannel?.name || "Research Project";
+      const topic = result.summary.length > 70 ? result.summary.slice(0, 67) + "..." : result.summary;
+
+      await saveAiSummary({
+        projectId: activeProjectId,
+        projectName: currentProjectName,
+        topic: topic || "Discussion Summary",
+        summary: result.summary,
+        keyFindings: result.key_points || [],
+        actionItems: result.action_items || [],
+        deadlineSuggestions: [],
+        confidence: 100,
+        model: "LangChain Context Engine",
+        status: "Pending Approval",
+        createdBy: currentUserEmail,
+        messageCount: selected.length,
+      });
+
+      setToastMessage("✓ AI Summary saved to AI Summaries for Lead Approval!");
     } catch (err: any) {
       setSummaryError(err.message ?? "Summarization failed.");
     } finally {
@@ -754,16 +776,37 @@ export default function ChatPage() {
             </div>
             {summaryError && <p role="alert" style={{ color: "#b42318", padding: "0 20px" }}>{summaryError}</p>}
             <div style={s.modalFooter}>
-              <button style={s.modalCopyBtn} onClick={handleSaveSummary} disabled={savingSummary || summarySaved}>
-                {summarySaved ? "✓ Added to summaries" : savingSummary ? "Adding..." : "Add to summaries"}
-              </button>
-              <button
-                style={s.modalCopyBtn}
-                onClick={() => navigator.clipboard.writeText(
-                  `Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`
-                )}
-              >📋 Copy</button>
-              <button style={s.modalCloseBtn} onClick={() => setSummaryResult(null)}>Close</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: "#2e7d32", background: "#e8f5e9", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }}>
+                  ✓ Saved for Lead Approval
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button style={s.modalCopyBtn} onClick={handleSaveSummary} disabled={savingSummary || summarySaved}>
+                  {summarySaved ? "✓ Added to summaries" : savingSummary ? "Adding..." : "Add to summaries"}
+                </button>
+                <button
+                  style={s.modalCopyBtn}
+                  onClick={() => navigator.clipboard.writeText(
+                    `Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`
+                  )}
+                >📋 Copy</button>
+                <Link
+                  href="/lead-dashboard/ai-insights"
+                  style={{
+                    padding: "6px 12px",
+                    background: "#161616",
+                    color: "#ffffff",
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  Review in AI Summaries →
+                </Link>
+                <button style={s.modalCloseBtn} onClick={() => setSummaryResult(null)}>Close</button>
+              </div>
             </div>
           </div>
         </div>

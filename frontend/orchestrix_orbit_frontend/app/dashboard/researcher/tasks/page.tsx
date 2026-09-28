@@ -21,7 +21,6 @@ const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: "IN_PROGRESS", label: "In Progress" },
   { id: "DONE",        label: "Completed (Pending Review)" },
   { id: "ACCEPTED",    label: "Accepted ✓" },
-  { id: "BLOCKED",     label: "Blocked" },
 ];
 
 export default function ResearcherTasksPage() {

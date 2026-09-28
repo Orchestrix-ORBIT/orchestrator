@@ -1,6 +1,8 @@
 import { getTenantSlug, getToken } from "@/lib/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const CONTEXT_ENGINE_URL =
+  process.env.NEXT_PUBLIC_CONTEXT_ENGINE_URL ?? "http://localhost:8083";
 
 export interface ChatMessageForSummary {
   senderName: string;
@@ -18,32 +20,51 @@ export interface SummaryResult {
 
 export async function summarizeMessages(
   messages: ChatMessageForSummary[],
-  projectId: string,
+  projectId?: string,
   tenantId?: string
 ): Promise<SummaryResult> {
   const token = getToken();
   const tenant = tenantId ?? getTenantSlug();
+
   if (!token || !tenant) throw new Error("Please sign in to summarize messages.");
 
-  const res = await fetch(`${API_URL}/api/ai/summarize`, {
+  // Try API Gateway (/api/ai/summarize) if available
+  if (token && tenant) {
+    try {
+      const res = await fetch(`${API_URL}/api/ai/summarize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "X-Tenant-ID": tenant,
+        },
+        body: JSON.stringify({ messages, projectId }),
+      });
+
+      if (res.ok) {
+        return (await res.json()) as SummaryResult;
+      }
+    } catch {
+      // Fallback directly to Context Engine on gateway network or proxy errors
+    }
+  }
+
+  // Resilient direct fallback to Context Engine
+  const directRes = await fetch(`${CONTEXT_ENGINE_URL}/summarize`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "X-Tenant-ID": tenant,
-    },
-    body: JSON.stringify({ messages, projectId }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, projectId, tenantId: tenant }),
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+  if (!directRes.ok) {
+    const err = await directRes.json().catch(() => ({}));
     const detail = err?.detail;
     throw new Error(
       (typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : null)
         ?? err?.message
-        ?? `Summarization request failed: ${res.status} ${res.statusText}`
+        ?? `Summarization request failed: ${directRes.status} ${directRes.statusText}`
     );
   }
 
-  return res.json() as Promise<SummaryResult>;
+  return directRes.json() as Promise<SummaryResult>;
 }

@@ -3,7 +3,7 @@
 import React, { useState, use } from "react";
 import Link from "next/link";
 
-type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "ACCEPTED" | "BLOCKED";
+type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "ACCEPTED";
 
 interface TaskItem {
   id: string;
@@ -33,7 +33,6 @@ const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "IN_PROGRESS", title: "In Progress" },
   { id: "DONE", title: "Completed (Pending Review)" },
   { id: "ACCEPTED", title: "Accepted ✓" },
-  { id: "BLOCKED", title: "Blocked" },
 ];
 
 function getInitials(name: string) {
@@ -102,7 +101,7 @@ export default function ProjectWorkspacePage({
           if (t.status === "ACCEPTED") uiStatus = "ACCEPTED";
           else if (t.status === "DONE" || t.status === "COMPLETED") uiStatus = "DONE";
           else if (t.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
-          else if (t.status === "BLOCKED") uiStatus = "BLOCKED";
+          else if (t.status === "BLOCKED") uiStatus = "TODO"; // fallback to TODO
 
           return {
             id: t.id,
@@ -129,7 +128,7 @@ export default function ProjectWorkspacePage({
 
   // Progress
   const totalCount = tasks.length;
-  const completedCount = tasks.filter((t) => t.status === "ACCEPTED" || t.status === "DONE").length;
+  const completedCount = tasks.filter((t) => t.status === "ACCEPTED").length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const handleCreateTask = async (e: React.FormEvent) => {
@@ -465,7 +464,6 @@ export default function ProjectWorkspacePage({
                               <option value="IN_PROGRESS">In Progress</option>
                               <option value="DONE">Completed (Pending Review)</option>
                               <option value="ACCEPTED">Accepted ✓</option>
-                              <option value="BLOCKED">Blocked</option>
                             </select>
                           </div>
                         )}
@@ -547,11 +545,11 @@ export default function ProjectWorkspacePage({
                       fontWeight: 700,
                       padding: "3px 8px",
                       borderRadius: 12,
-                      background: selectedTask.status === "ACCEPTED" ? "#e8f5e9" : selectedTask.status === "DONE" ? "#f3e8ff" : selectedTask.status === "IN_PROGRESS" ? "#e3f2fd" : selectedTask.status === "BLOCKED" ? "#fee2e2" : "#f5f5f5",
-                      color: selectedTask.status === "ACCEPTED" ? "#2e7d32" : selectedTask.status === "DONE" ? "#6b21a8" : selectedTask.status === "IN_PROGRESS" ? "#1565c0" : selectedTask.status === "BLOCKED" ? "#dc2626" : "#616161",
+                      background: selectedTask.status === "ACCEPTED" ? "#e8f5e9" : selectedTask.status === "DONE" ? "#f3e8ff" : selectedTask.status === "IN_PROGRESS" ? "#e3f2fd" : "#f5f5f5",
+                      color: selectedTask.status === "ACCEPTED" ? "#2e7d32" : selectedTask.status === "DONE" ? "#6b21a8" : selectedTask.status === "IN_PROGRESS" ? "#1565c0" : "#616161",
                       display: "inline-block"
                     }}>
-                      {selectedTask.status === "ACCEPTED" ? "Accepted ✓" : selectedTask.status === "DONE" ? "Completed (Pending Review)" : selectedTask.status === "IN_PROGRESS" ? "In Progress" : selectedTask.status === "BLOCKED" ? "Blocked" : "To Do"}
+                      {selectedTask.status === "ACCEPTED" ? "Accepted ✓" : selectedTask.status === "DONE" ? "Completed (Pending Review)" : selectedTask.status === "IN_PROGRESS" ? "In Progress" : "To Do"}
                     </span>
                   </div>
                 </div>

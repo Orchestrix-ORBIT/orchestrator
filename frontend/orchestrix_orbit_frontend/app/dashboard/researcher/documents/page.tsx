@@ -219,7 +219,7 @@ const s: Record<string, React.CSSProperties> = {
   modalForm: { display: "flex", flexDirection: "column", gap: 14 },
   modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
-  input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
-  errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
+  input: { padding: "9px 12px", border: "1.5px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontFamily: "inherit" },
+  label: { fontSize: 11, fontWeight: 700, color: "#444", textTransform: "uppercase" as const, letterSpacing: "0.5px" },
+  errorBanner: { padding: "8px 12px", background: "#ffebee", color: "#c62828", borderRadius: 6, fontSize: 12 },
 };
