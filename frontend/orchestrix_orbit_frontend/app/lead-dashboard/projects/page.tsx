@@ -291,7 +291,7 @@ export default function LeadProjectsPage() {
         {filteredProjects.map(p => {
           const projectMembers = getProjectMembers(p.id);
           const pTasks = allTasks.filter(t => t.projectId === p.id);
-          const doneCount = pTasks.filter(t => t.status === "DONE").length;
+          const doneCount = pTasks.filter(t => t.status === "ACCEPTED").length;
 
           return (
             <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
@@ -326,7 +326,7 @@ export default function LeadProjectsPage() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#374151", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
-                    📋 {doneCount}/{pTasks.length} tasks completed
+                    📋 {doneCount}/{pTasks.length} tasks accepted
                   </span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4 }}>
                     👥 {projectMembers.length} member{projectMembers.length !== 1 ? "s" : ""}

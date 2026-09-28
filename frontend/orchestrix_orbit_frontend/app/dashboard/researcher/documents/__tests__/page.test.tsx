@@ -12,8 +12,18 @@ vi.mock("@/lib/services/documents", () => ({
 }));
 
 const project = { id: "p1", name: "Alpha", status: "ACTIVE" as const, description: "", createdAt: "2026-01-01", createdByUserId: "u1" };
-const doc = { id: "d1", projectId: "p1", title: "Methods", accessLevel: "TEAM" as const,
-  authorId: "author-123", createdAt: "2026-01-01", updatedAt: "2026-01-01" };
+const doc = {
+  id: "d1",
+  projectId: "p1",
+  title: "Methods",
+  category: "OTHER",
+  contentEncrypted: null,
+  fileStorageKey: null,
+  version: 1,
+  authorId: "author-123",
+  createdAt: "2026-01-01",
+  updatedAt: "2026-01-01"
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,7 +33,7 @@ beforeEach(() => {
 
 describe("researcher documents page", () => {
   it("creates a private document in its project", async () => {
-    vi.mocked(DocumentsService.create).mockResolvedValue({ ...doc, id: "d2", title: "Private notes", accessLevel: "PRIVATE" });
+    vi.mocked(DocumentsService.create).mockResolvedValue({ ...doc, id: "d2", title: "Private notes" });
     render(<ResearcherDocumentsPage />);
     const user = userEvent.setup();
     await screen.findByText("Methods");

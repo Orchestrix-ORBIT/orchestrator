@@ -87,6 +87,53 @@ public class ResourceController {
         return resourceService.createMaintenance(maintenance);
     }
 
+    @PatchMapping("/maintenance/{id}")
+    public ResourceMaintenance updateMaintenance(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id,
+            @RequestBody java.util.Map<String, Object> request) {
+        ResourceAccess.requireManager(currentUser);
+        ResourceMaintenance updates = new ResourceMaintenance();
+        if (request.containsKey("assetName") && request.get("assetName") != null) {
+            updates.setAssetName(request.get("assetName").toString());
+        }
+        if (request.containsKey("resourceId") && request.get("resourceId") != null) {
+            updates.setResourceId(UUID.fromString(request.get("resourceId").toString()));
+        }
+        if (request.containsKey("category") && request.get("category") != null) {
+            updates.setCategory(request.get("category").toString());
+        }
+        if (request.containsKey("startDate") && request.get("startDate") != null) {
+            updates.setStartDate(request.get("startDate").toString());
+        }
+        if (request.containsKey("endDate") && request.get("endDate") != null) {
+            updates.setEndDate(request.get("endDate").toString());
+        }
+        if (request.containsKey("downtimeType") && request.get("downtimeType") != null) {
+            updates.setDowntimeType(request.get("downtimeType").toString());
+        }
+        if (request.containsKey("technician") && request.get("technician") != null) {
+            updates.setTechnician(request.get("technician").toString());
+        }
+        if (request.containsKey("status") && request.get("status") != null) {
+            updates.setStatus(request.get("status").toString());
+        }
+        if (request.containsKey("notes") && request.get("notes") != null) {
+            updates.setNotes(request.get("notes").toString());
+        }
+
+        return resourceService.updateMaintenance(id, updates);
+    }
+
+    @DeleteMapping("/maintenance/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMaintenance(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id) {
+        ResourceAccess.requireManager(currentUser);
+        resourceService.deleteMaintenance(id);
+    }
+
     private UUID getAuthenticatedUserId() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {

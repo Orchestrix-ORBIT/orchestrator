@@ -116,4 +116,12 @@ export const ResourcesService = {
   /** POST /api/resources/maintenance — create a new maintenance log */
   createMaintenance: (body: any) =>
     api.post<any>("/api/resources/maintenance", body),
+
+  /** PATCH /api/resources/maintenance/{id} — update a maintenance log */
+  updateMaintenance: (id: string, body: any) =>
+    api.patch<any>(`/api/resources/maintenance/${id}`, body),
+
+  /** DELETE /api/resources/maintenance/{id} — delete a maintenance log */
+  deleteMaintenance: (id: string) =>
+    api.delete(`/api/resources/maintenance/${id}`),
 };

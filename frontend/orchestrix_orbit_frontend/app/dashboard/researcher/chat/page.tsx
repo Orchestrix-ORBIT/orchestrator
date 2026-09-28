@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useWebSocketChat } from "@/lib/useWebSocketChat";
 import { getEmail, getTenantSlug } from "@/lib/auth";
 import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
+import { saveAiSummary } from "@/lib/services/aiSummaries";
 
 interface Channel {
   id: string;
@@ -95,6 +96,25 @@ export default function ChatPage() {
       setSummaryResult(result);
       setSelectionMode(false);
       setSelectedIds(new Set());
+
+      // Persist directly to backend database for lead approval
+      const currentProj = projects.find((p) => p.id === activeProjectId);
+      const topic = result.summary.length > 70 ? result.summary.slice(0, 67) + "..." : result.summary;
+
+      await saveAiSummary({
+        projectId: activeProjectId,
+        projectName: currentProj ? currentProj.name : "Research Project",
+        topic: topic || "Discussion Summary",
+        summary: result.summary,
+        keyFindings: result.key_points || [],
+        actionItems: result.action_items || [],
+        deadlineSuggestions: [],
+        confidence: 100,
+        model: "LangChain Context Engine",
+        status: "Pending Approval",
+        createdBy: currentUserEmail,
+        messageCount: selected.length,
+      });
     } catch (err: any) {
       setSummaryError(err.message ?? "Summarization failed. Is the Context Engine running?");
     } finally {

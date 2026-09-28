@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ProjectsService, type Project } from "@/lib/services/projects";
-import { DocumentsService, type Document, type CreateDocumentBody, type DocumentAccess } from "@/lib/services/documents";
+import { DocumentsService, type Document, type CreateDocumentBody } from "@/lib/services/documents";
 
 export default function ResearcherDocumentsPage() {
   const [projects, setProjects]         = useState<Project[]>([]);
@@ -16,7 +16,7 @@ export default function ResearcherDocumentsPage() {
   const [modalProjectId, setModalProjectId] = useState("");
   const [newTitle, setNewTitle]         = useState("");
   const [newContent, setNewContent]     = useState("");
-  const [newAccess, setNewAccess]       = useState<DocumentAccess>("TEAM");
+  const [newCategory, setNewCategory]   = useState<string>("OTHER");
   const [creating, setCreating]         = useState(false);
   const [createError, setCreateError]   = useState<string | null>(null);
 
@@ -54,8 +54,8 @@ export default function ResearcherDocumentsPage() {
     try {
       const body: CreateDocumentBody = {
         title: newTitle.trim(),
-        content: newContent.trim() || undefined,
-        accessLevel: newAccess,
+        contentEncrypted: newContent.trim() || undefined,
+        category: newCategory,
       };
       const created = await DocumentsService.create(modalProjectId, body);
       setDocuments(prev => [created, ...prev]);
@@ -120,7 +120,7 @@ export default function ResearcherDocumentsPage() {
               </span>
               <span style={s.td}>{projName}</span>
               <span style={s.td}>
-                <span style={{ ...s.accessBadge, ...accessStyle(doc.accessLevel) }}>{doc.accessLevel}</span>
+                <span style={{ ...s.accessBadge, background: "#f1f5f9", color: "#161616" }}>{doc.category || "OTHER"}</span>
               </span>
               <span style={s.td}>{doc.authorId.slice(0, 8)}…</span>
               <span style={s.td}>{new Date(doc.updatedAt).toLocaleDateString()}</span>
@@ -162,12 +162,14 @@ export default function ResearcherDocumentsPage() {
                   onChange={e => setNewTitle(e.target.value)} placeholder="e.g. Methodology Draft" required />
               </div>
               <div style={s.field}>
-                <label style={s.label}>Access level</label>
-                <select id="select-doc-access" style={s.input} value={newAccess}
-                  onChange={e => setNewAccess(e.target.value as DocumentAccess)}>
-                  <option value="PRIVATE">Private (only me)</option>
-                  <option value="TEAM">Team (all team members)</option>
-                  <option value="PUBLIC">Public (all in tenant)</option>
+                <label style={s.label}>Category</label>
+                <select id="select-doc-access" style={s.input} value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}>
+                  <option value="MEETING_MINUTES">Meeting Minutes</option>
+                  <option value="EXPERIMENTAL_PROTOCOL">Experimental Protocol</option>
+                  <option value="PRE_PRINT_PAPER">Pre-print Paper</option>
+                  <option value="ARCHIVED_DATASET">Archived Dataset</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
               <div style={s.field}>
@@ -191,7 +193,7 @@ export default function ResearcherDocumentsPage() {
   );
 }
 
-function accessStyle(access: DocumentAccess): React.CSSProperties {
+function accessStyle(access?: string): React.CSSProperties {
   switch (access) {
     case "PRIVATE": return { background: "#fce4ec", color: "#880e4f" };
     case "TEAM":    return { background: "#e3f2fd", color: "#1565c0" };
