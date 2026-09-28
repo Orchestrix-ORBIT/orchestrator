@@ -5,6 +5,7 @@ import Link from "next/link";
 import LoadingState from "@/components/ui/LoadingState";
 import { ProjectsService, type Project } from "@/lib/services/projects";
 import { TasksService, type Task } from "@/lib/services/tasks";
+import SavedChatSummaries from "@/components/SavedChatSummaries";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface InsightItem {
@@ -195,6 +196,8 @@ export default function AiInsightsPage() {
           ⚠ Failed to load insights: {error}
         </div>
       )}
+
+      <SavedChatSummaries />
 
       {/* ── Stat Cards ───────────────────────────────────────────────────────── */}
       <div style={s.statGrid}>
