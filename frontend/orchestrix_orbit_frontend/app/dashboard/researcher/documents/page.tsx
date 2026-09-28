@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ProjectsService, type Project } from "@/lib/services/projects";
-import { DocumentsService, type Document, type CreateDocumentBody, type DocumentAccess } from "@/lib/services/documents";
+import { DocumentsService, type Document, type CreateDocumentBody } from "@/lib/services/documents";
 
 export default function ResearcherDocumentsPage() {
   const [projects, setProjects]         = useState<Project[]>([]);
@@ -16,7 +16,7 @@ export default function ResearcherDocumentsPage() {
   const [modalProjectId, setModalProjectId] = useState("");
   const [newTitle, setNewTitle]         = useState("");
   const [newContent, setNewContent]     = useState("");
-  const [newAccess, setNewAccess]       = useState<DocumentAccess>("TEAM");
+  const [newCategory, setNewCategory]   = useState("OTHER");
   const [creating, setCreating]         = useState(false);
   const [createError, setCreateError]   = useState<string | null>(null);
 
@@ -54,8 +54,8 @@ export default function ResearcherDocumentsPage() {
     try {
       const body: CreateDocumentBody = {
         title: newTitle.trim(),
-        content: newContent.trim() || undefined,
-        accessLevel: newAccess,
+        contentEncrypted: newContent.trim() || undefined,
+        category: newCategory,
       };
       const created = await DocumentsService.create(modalProjectId, body);
       setDocuments(prev => [created, ...prev]);
@@ -87,7 +87,7 @@ export default function ResearcherDocumentsPage() {
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Documents</h1>
-          <p style={s.sub}>{documents.length} document{documents.length !== 1 ? "s" : ""} (AES-256 encrypted at rest)</p>
+          <p style={s.sub}>{documents.length} document{documents.length !== 1 ? "s" : ""}</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <select id="select-doc-project" style={s.select} value={selectedProject}
@@ -103,7 +103,7 @@ export default function ResearcherDocumentsPage() {
 
       <div style={s.table}>
         <div style={s.thead}>
-          {["Name", "Project", "Access", "Author", "Last Modified"].map(h => (
+          {["Name", "Project", "Category", "Author", "Last Modified"].map(h => (
             <span key={h} style={s.th}>{h}</span>
           ))}
           <span style={s.th}></span>
@@ -120,7 +120,7 @@ export default function ResearcherDocumentsPage() {
               </span>
               <span style={s.td}>{projName}</span>
               <span style={s.td}>
-                <span style={{ ...s.accessBadge, ...accessStyle(doc.accessLevel) }}>{doc.accessLevel}</span>
+                <span style={s.categoryBadge}>{doc.category}</span>
               </span>
               <span style={s.td}>{doc.authorId.slice(0, 8)}…</span>
               <span style={s.td}>{new Date(doc.updatedAt).toLocaleDateString()}</span>
@@ -162,19 +162,21 @@ export default function ResearcherDocumentsPage() {
                   onChange={e => setNewTitle(e.target.value)} placeholder="e.g. Methodology Draft" required />
               </div>
               <div style={s.field}>
-                <label style={s.label}>Access level</label>
-                <select id="select-doc-access" style={s.input} value={newAccess}
-                  onChange={e => setNewAccess(e.target.value as DocumentAccess)}>
-                  <option value="PRIVATE">Private (only me)</option>
-                  <option value="TEAM">Team (all team members)</option>
-                  <option value="PUBLIC">Public (all in tenant)</option>
+                <label style={s.label}>Category</label>
+                <select id="select-doc-category" style={s.input} value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}>
+                  <option value="OTHER">Other</option>
+                  <option value="MEETING_MINUTES">Meeting minutes</option>
+                  <option value="EXPERIMENTAL_PROTOCOL">Experimental protocol</option>
+                  <option value="PRE_PRINT_PAPER">Pre-print paper</option>
+                  <option value="ARCHIVED_DATASET">Archived dataset</option>
                 </select>
               </div>
               <div style={s.field}>
                 <label style={s.label}>Content</label>
                 <textarea id="input-doc-content" style={{ ...s.input, minHeight: 100, resize: "vertical" as const }}
                   value={newContent} onChange={e => setNewContent(e.target.value)}
-                  placeholder="Document content (will be encrypted at rest)" />
+                  placeholder="Document content" />
               </div>
               <div style={s.modalActions}>
                 <button type="button" style={s.btnSecondary} onClick={() => { setShowModal(false); setCreateError(null); }}>Cancel</button>
@@ -189,14 +191,6 @@ export default function ResearcherDocumentsPage() {
       )}
     </div>
   );
-}
-
-function accessStyle(access: DocumentAccess): React.CSSProperties {
-  switch (access) {
-    case "PRIVATE": return { background: "#fce4ec", color: "#880e4f" };
-    case "TEAM":    return { background: "#e3f2fd", color: "#1565c0" };
-    default:        return { background: "#e8f5e9", color: "#2e7d32" };
-  }
 }
 
 /* ── Styles ─────────────────────────────────────────────────────────────── */
@@ -214,7 +208,7 @@ const s: Record<string, React.CSSProperties> = {
   td: { fontSize: 13, color: "#424242" },
   docName: { fontSize: 13, fontWeight: 500, color: "#161616", display: "flex", alignItems: "center", gap: 6 },
   lockIcon: { fontSize: 11 },
-  accessBadge: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.3px" },
+  categoryBadge: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.3px", background: "#e3f2fd", color: "#1565c0" },
   deleteBtn: { background: "none", border: "none", fontSize: 18, color: "#bbb", cursor: "pointer", padding: "0 4px" },
   empty: { padding: "40px 20px", textAlign: "center" as const, color: "#888", fontSize: 13 },
   overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
