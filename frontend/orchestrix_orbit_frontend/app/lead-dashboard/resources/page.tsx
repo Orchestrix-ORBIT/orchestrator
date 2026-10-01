@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 import { ResourcesService, type Resource } from "@/lib/services/resources";
 import { ProjectsService, type Project } from "@/lib/services/projects";
 
@@ -635,24 +636,10 @@ export default function ResourcesPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: "100px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{
-          width: 36,
-          height: 36,
-          border: "3px solid #e5e7eb",
-          borderTop: "3px solid #161616",
-          borderRadius: "50%",
-          animation: "spin 0.8s linear infinite",
-          marginBottom: 16,
-        }} />
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-        <p style={{ fontSize: 14, color: "#161616", fontWeight: 600, margin: 0 }}>
-          Loading Resources & Compute…
-        </p>
-        <p style={{ fontSize: 12, color: "#888888", margin: 0, marginTop: 4 }}>
-          Fetching lab hardware, compute clusters, and equipment schedules
-        </p>
-      </div>
+      <LoadingState 
+        title="Loading Resources & Compute…" 
+        subtitle="Fetching lab hardware, compute clusters, and equipment schedules" 
+      />
     );
   }
 

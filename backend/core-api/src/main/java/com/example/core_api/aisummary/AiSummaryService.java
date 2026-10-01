@@ -28,13 +28,14 @@ public class AiSummaryService {
     }
 
     @Transactional
-    public AiSummaryResponse createSummary(CreateAiSummaryRequest req) {
+    public AiSummaryResponse createSummary(CreateAiSummaryRequest req, UUID createdBy) {
         String actionItemsJson = toJson(req.getActionItems());
         String keyFindingsJson = toJson(req.getKeyFindings());
         String deadlineSuggestionsJson = toJson(req.getDeadlineSuggestions());
 
         AiSummary entity = AiSummary.builder()
                 .projectId(req.getProjectId())
+                .createdBy(createdBy)
                 .topic(req.getTopic() != null && !req.getTopic().isBlank() ? req.getTopic() : "Chat Discussion Summary")
                 .summaryText(req.getSummaryText())
                 .actionItems(actionItemsJson)
@@ -54,6 +55,22 @@ public class AiSummaryService {
     @Transactional(readOnly = true)
     public List<AiSummaryResponse> getAllSummaries() {
         return repository.findAllByOrderByProcessedAtDesc()
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AiSummaryResponse> getSummariesByUser(UUID createdBy) {
+        return repository.findByCreatedByOrderByProcessedAtDesc(createdBy)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AiSummaryResponse> getSummariesByUserAndProject(UUID createdBy, UUID projectId) {
+        return repository.findByCreatedByAndProjectIdOrderByProcessedAtDesc(createdBy, projectId)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -95,6 +112,7 @@ public class AiSummaryService {
         return AiSummaryResponse.builder()
                 .id(s.getId())
                 .projectId(s.getProjectId())
+                .createdBy(s.getCreatedBy())
                 .topic(s.getTopic() != null ? s.getTopic() : "Chat Discussion Summary")
                 .summaryText(s.getSummaryText())
                 .actionItems(fromJson(s.getActionItems()))

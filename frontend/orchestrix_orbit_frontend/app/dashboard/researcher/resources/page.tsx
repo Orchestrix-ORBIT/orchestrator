@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 import {
   ResourcesService,
   type Resource,
@@ -82,7 +83,7 @@ export default function ResearcherResourcesPage() {
     setShowBookingModal(true);
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading resources…</p>;
+  if (loading) return <LoadingState title="Loading Resources..." subtitle="Fetching available resources and your bookings" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (

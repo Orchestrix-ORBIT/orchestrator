@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface AiSummaryRepository extends JpaRepository<AiSummary, UUID> {
     List<AiSummary> findByProjectIdOrderByProcessedAtDesc(UUID projectId);
     List<AiSummary> findAllByOrderByProcessedAtDesc();
+    List<AiSummary> findByCreatedByOrderByProcessedAtDesc(UUID createdBy);
+    List<AiSummary> findByCreatedByAndProjectIdOrderByProcessedAtDesc(UUID createdBy, UUID projectId);
 }

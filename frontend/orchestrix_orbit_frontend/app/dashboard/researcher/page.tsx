@@ -51,12 +51,13 @@ export default function ResearcherHomePage() {
           projectList.map((p) => TasksService.getByProject(p.id).catch(() => [] as Task[]))
         );
         const flatTasks = taskResults.flat();
+        // Read the userId persisted to localStorage during login (see app/page.tsx)
         let currentUserId = "";
         try {
-          const userStr = localStorage.getItem("user") || "{}";
-          currentUserId = JSON.parse(userStr).id || "";
+          currentUserId = localStorage.getItem("userId") || "";
         } catch (e) {}
 
+        // Only show tasks assigned to this researcher, or tasks with no assignee yet
         const myTasksOnly = flatTasks.filter(
           (t) => !t.assigneeId || t.assigneeId === currentUserId
         );

@@ -38,6 +38,11 @@ export default function LeadProjectsPage() {
 
   const [selectedProjectForMembersModal, setSelectedProjectForMembersModal] = useState<Project | null>(null);
   const [memberModalSearchQuery, setMemberModalSearchQuery]                 = useState("");
+  const [memberModalMembers, setMemberModalMembers]                         = useState<any[]>([]);
+  const [memberModalLoading, setMemberModalLoading]                         = useState(false);
+
+  // Per-project member counts fetched from /api/projects/{id}/summary
+  const [projectMemberCounts, setProjectMemberCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     async function loadData() {
@@ -50,10 +55,7 @@ export default function LeadProjectsPage() {
 
         const researchers = (members as any[]).filter((m: any) => {
           const role = String(m.role || "").toUpperCase();
-          const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
-          const email = String(m.email || m.userEmail || "").toLowerCase();
-          return ["MEMBER", "ROLE_MEMBER", "RESEARCHER", "ROLE_RESEARCHER"].includes(role)
-            || name.includes("researcher") || email.includes("researcher");
+          return ["MEMBER", "ROLE_MEMBER", "RESEARCHER", "ROLE_RESEARCHER", "LEAD", "ROLE_LEAD"].includes(role);
         });
         setAvailableMembers(researchers);
 
@@ -62,6 +64,18 @@ export default function LeadProjectsPage() {
           projectList.map(p => TasksService.getByProject(p.id).catch(() => [] as Task[]))
         );
         setAllTasks(taskResults.flat());
+
+        // Fetch member counts for all projects that have a teamId
+        const memberCountEntries = await Promise.all(
+          projectList
+            .filter(p => p.teamId)
+            .map(p =>
+              ProjectsService.getSummary(p.id)
+                .then(s => [p.id, s.teamMemberCount] as [string, number])
+                .catch(() => [p.id, 0] as [string, number])
+            )
+        );
+        setProjectMemberCounts(Object.fromEntries(memberCountEntries));
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -96,19 +110,7 @@ export default function LeadProjectsPage() {
       };
       const created = await ProjectsService.create(body);
 
-      // Save assigned member IDs to localStorage mapping
-      try {
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        storedMap[created.id] = selectedMemberIds;
-        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
-      } catch (err) {
-        console.error("Failed to save project member assignments:", err);
-      }
-
-      const assigned = availableMembers.filter(m => selectedMemberIds.includes(m.id || m.userId));
-      const createdWithMembers = { ...created, assignedMembers: assigned };
-
-      setProjects(prev => [createdWithMembers, ...prev]);
+      setProjects(prev => [created, ...prev]);
       setShowModal(false);
       setNewName(""); setNewDesc(""); setSelectedMemberIds([]);
     } catch (err: unknown) {
@@ -125,11 +127,15 @@ export default function LeadProjectsPage() {
     setEditMemberSearchQuery("");
     setUpdateError(null);
 
-    try {
-      const assignmentsMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-      const assignedIds: string[] = assignmentsMap[p.id] || [];
-      setEditMemberIds(assignedIds);
-    } catch (e) {
+    if (p.teamId) {
+      // Fetch current team members from the real API
+      TeamsService.getTeamMembers(p.teamId)
+        .then(members => {
+          const ids = members.map((m: any) => (m.userId || m.id) as string).filter(Boolean);
+          setEditMemberIds(ids);
+        })
+        .catch(() => setEditMemberIds([]));
+    } else {
       setEditMemberIds([]);
     }
   }
@@ -147,29 +153,45 @@ export default function LeadProjectsPage() {
     setUpdateError(null);
 
     try {
-      const body: CreateProjectBody = {
-        name: editName.trim(),
-        description: editDesc.trim() || undefined,
-      };
+      let teamId = projectToEdit.teamId;
 
-      await ProjectsService.update(projectToEdit.id, body);
-
-      // Save updated member assignments to localStorage mapping
-      try {
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        storedMap[projectToEdit.id] = editMemberIds;
-        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
-      } catch (err) {
-        console.error("Failed to save project member assignments:", err);
+      if (editMemberIds.length > 0 && !teamId) {
+        // Project has no team yet — create one and link it
+        const team = await TeamsService.createTeam({ name: `${editName.trim()} Team` });
+        teamId = team.id;
       }
 
-      setProjects(prev =>
-        prev.map(p =>
-          p.id === projectToEdit.id
-            ? { ...p, name: editName.trim(), description: editDesc.trim() || "" }
-            : p
-        )
-      );
+      if (teamId) {
+        // Sync member list with the team
+        const currentMembers = await TeamsService.getTeamMembers(teamId).catch(() => []);
+        const currentIds = new Set(currentMembers.map((m: any) => (m.userId || m.id) as string).filter(Boolean));
+        const targetIds  = new Set(editMemberIds);
+
+        const toAdd    = editMemberIds.filter(id => !currentIds.has(id));
+        const toRemove = [...currentIds].filter(id => !targetIds.has(id));
+
+        await Promise.all([
+          ...toAdd.map(userId => TeamsService.addMember(teamId!, { userId, roleInTeam: "MEMBER" })),
+          ...toRemove.map(userId => TeamsService.removeMember(teamId!, userId)),
+        ]);
+      }
+
+      // Persist project fields (name, description) AND teamId to the backend
+      const updated = await ProjectsService.update(projectToEdit.id, {
+        name:        editName.trim(),
+        description: editDesc.trim() || undefined,
+        ...(teamId ? { teamId } : {}),
+      });
+
+      // Update local state with fresh server data
+      setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+
+      // Refresh member count for this project
+      if (teamId) {
+        ProjectsService.getSummary(updated.id)
+          .then(s => setProjectMemberCounts(prev => ({ ...prev, [updated.id]: s.teamMemberCount })))
+          .catch(() => {});
+      }
 
       setProjectToEdit(null);
     } catch (err: unknown) {
@@ -185,14 +207,7 @@ export default function LeadProjectsPage() {
     try {
       await ProjectsService.delete(projectToDelete.id);
       setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
-
-      // Clean up project assignment mapping from localStorage
-      try {
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        delete storedMap[projectToDelete.id];
-        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
-      } catch (e) {}
-
+      setProjectMemberCounts(prev => { const copy = { ...prev }; delete copy[projectToDelete.id]; return copy; });
       setProjectToDelete(null);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Delete failed");
@@ -202,12 +217,25 @@ export default function LeadProjectsPage() {
   }
 
   function getProjectMembers(projectId: string) {
-    try {
-      const assignmentsMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-      const assignedIds: string[] = assignmentsMap[projectId] || [];
-      return availableMembers.filter(m => assignedIds.includes(m.id || m.userId));
-    } catch (e) {
-      return [];
+    // Members are now fetched live in the modal via memberModalMembers state
+    // This function returns the cached modal members when called from the members modal
+    return memberModalMembers;
+  }
+
+  async function openMembersModal(project: Project) {
+    setSelectedProjectForMembersModal(project);
+    setMemberModalSearchQuery("");
+    setMemberModalMembers([]);
+    if (project.teamId) {
+      setMemberModalLoading(true);
+      try {
+        const members = await TeamsService.getTeamMembers(project.teamId);
+        setMemberModalMembers(members);
+      } catch {
+        setMemberModalMembers([]);
+      } finally {
+        setMemberModalLoading(false);
+      }
     }
   }
 
@@ -289,9 +317,9 @@ export default function LeadProjectsPage() {
       {/* ── Projects Grid ────────────────────────────────────────────────────── */}
       <div style={s.grid}>
         {filteredProjects.map(p => {
-          const projectMembers = getProjectMembers(p.id);
           const pTasks = allTasks.filter(t => t.projectId === p.id);
-          const doneCount = pTasks.filter(t => t.status === "ACCEPTED").length;
+          const doneCount = pTasks.filter(t => t.status === "DONE").length;
+          const memberCount = projectMemberCounts[p.id] ?? 0;
 
           return (
             <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
@@ -326,10 +354,14 @@ export default function LeadProjectsPage() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#374151", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
-                    📋 {doneCount}/{pTasks.length} tasks accepted
+                    📋 {doneCount}/{pTasks.length} tasks done
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4 }}>
-                    👥 {projectMembers.length} member{projectMembers.length !== 1 ? "s" : ""}
+                  <span
+                    style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4, cursor: p.teamId ? "pointer" : "default" }}
+                    onClick={() => p.teamId && openMembersModal(p)}
+                    title={p.teamId ? "Click to view members" : "No team assigned"}
+                  >
+                    {p.teamId ? `👥 ${memberCount} member${memberCount !== 1 ? "s" : ""}` : "⚠️ No team assigned"}
                   </span>
                 </div>
               </div>
@@ -337,37 +369,14 @@ export default function LeadProjectsPage() {
               {/* ── Card Footer: Team Avatars & Date ───────────────────────────── */}
               <div style={s.cardFooter}>
                 <div
-                  style={{ ...s.avatarStack, cursor: "pointer" }}
-                  onClick={() => {
-                    setSelectedProjectForMembersModal(p);
-                    setMemberModalSearchQuery("");
-                  }}
-                  title="Click to view all project members"
+                  style={{ ...s.avatarStack, cursor: p.teamId ? "pointer" : "default" }}
+                  onClick={() => p.teamId && openMembersModal(p)}
+                  title={p.teamId ? "Click to view all project members" : "No team assigned"}
                 >
-                  {projectMembers.length > 0 ? (
-                    projectMembers.slice(0, 3).map((m, idx) => {
-                      const name = m.displayName || m.userDisplayName || m.email || "Researcher";
-                      const initial = name.charAt(0).toUpperCase();
-                      return (
-                        <div
-                          key={m.id || m.userId || idx}
-                          title={`Assigned: ${name}`}
-                          style={{
-                            ...s.avatarCircle,
-                            marginLeft: idx > 0 ? -8 : 0,
-                          }}
-                        >
-                          {initial}
-                        </div>
-                      );
-                    })
+                  {p.teamId ? (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4 }}>👥 Members</span>
                   ) : (
                     <span style={s.unassignedText}>Unassigned</span>
-                  )}
-                  {projectMembers.length > 3 && (
-                    <span style={s.moreMembersTag}>
-                      +{projectMembers.length - 3}
-                    </span>
                   )}
                 </div>
 
@@ -618,7 +627,7 @@ export default function LeadProjectsPage() {
                   {selectedProjectForMembersModal.name} Members
                 </h3>
                 <p style={{ fontSize: 12, color: "#6b7280", margin: 0, marginTop: 2 }}>
-                  {getProjectMembers(selectedProjectForMembersModal.id).length} assigned researcher(s)
+                  {memberModalLoading ? "Loading…" : `${memberModalMembers.length} assigned researcher(s)`}
                 </p>
               </div>
               <button style={s.closeBtn} onClick={() => setSelectedProjectForMembersModal(null)}>✕</button>
@@ -643,70 +652,76 @@ export default function LeadProjectsPage() {
             </div>
 
             <div style={{ padding: "12px 24px 20px", maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-              {getProjectMembers(selectedProjectForMembersModal.id)
-                .filter((m) => {
-                  const q = memberModalSearchQuery.toLowerCase();
-                  const name = (m.displayName || m.userDisplayName || "").toLowerCase();
-                  const email = (m.email || m.userEmail || "").toLowerCase();
-                  return name.includes(q) || email.includes(q);
-                })
-                .map((m, idx) => {
-                  const name = m.displayName || m.userDisplayName || m.email || "Researcher";
-                  const email = m.email || m.userEmail || "user@myorg.com";
-                  const initial = name.charAt(0).toUpperCase();
+              {memberModalLoading ? (
+                <p style={{ textAlign: "center", fontSize: 13, color: "#888", padding: "20px 0" }}>Loading members…</p>
+              ) : (
+                <>
+                  {memberModalMembers
+                    .filter((m) => {
+                      const q = memberModalSearchQuery.toLowerCase();
+                      const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                      const email = (m.email || m.userEmail || "").toLowerCase();
+                      return name.includes(q) || email.includes(q);
+                    })
+                    .map((m, idx) => {
+                      const name = m.displayName || m.userDisplayName || m.email || "Researcher";
+                      const email = m.email || m.userEmail || "user@myorg.com";
+                      const initial = name.charAt(0).toUpperCase();
 
-                  return (
-                    <div
-                      key={m.id || m.userId || idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 14px",
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 8,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      return (
                         <div
+                          key={m.userId || m.id || idx}
                           style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            background: "#161616",
-                            color: "#ffffff",
-                            fontSize: 12,
-                            fontWeight: 700,
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 14px",
+                            background: "#ffffff",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 8,
                           }}
                         >
-                          {initial}
-                        </div>
-                        <div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block" }}>{name}</span>
-                          <span style={{ fontSize: 11, color: "#6b7280" }}>{email}</span>
-                        </div>
-                      </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                background: "#161616",
+                                color: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              {initial}
+                            </div>
+                            <div>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block" }}>{name}</span>
+                              <span style={{ fontSize: 11, color: "#6b7280" }}>{email}</span>
+                            </div>
+                          </div>
 
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: 4 }}>
-                        Researcher
-                      </span>
-                    </div>
-                  );
-                })}
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: 4 }}>
+                            {m.roleInTeam || "Researcher"}
+                          </span>
+                        </div>
+                      );
+                    })}
 
-              {getProjectMembers(selectedProjectForMembersModal.id).filter((m) => {
-                const q = memberModalSearchQuery.toLowerCase();
-                const name = (m.displayName || m.userDisplayName || "").toLowerCase();
-                const email = (m.email || m.userEmail || "").toLowerCase();
-                return name.includes(q) || email.includes(q);
-              }).length === 0 && (
-                <p style={{ textAlign: "center", fontSize: 13, color: "#888", padding: "20px 0" }}>
-                  No matching members found.
-                </p>
+                  {memberModalMembers.filter((m) => {
+                    const q = memberModalSearchQuery.toLowerCase();
+                    const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                    const email = (m.email || m.userEmail || "").toLowerCase();
+                    return name.includes(q) || email.includes(q);
+                  }).length === 0 && (
+                    <p style={{ textAlign: "center", fontSize: 13, color: "#888", padding: "20px 0" }}>
+                      {selectedProjectForMembersModal.teamId ? "No matching members found." : "No team assigned to this project yet."}
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -735,6 +750,7 @@ export default function LeadProjectsPage() {
       )}
 
       {/* ── Delete Confirmation Modal ────────────────────────────────────────── */}
+
       {projectToDelete && (
         <div style={s.overlay} onClick={() => setProjectToDelete(null)}>
           <div style={{ ...s.modal, maxWidth: 460, borderRadius: 12, padding: 0, overflow: "hidden", boxShadow: "0 20px 40px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>

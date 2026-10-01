@@ -51,6 +51,21 @@ public class ProjectController {
         }
     }
 
+    @PutMapping("/{id}")
+    public ProjectResponse updateProject(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateProjectRequest request) {
+        // Only Leads, Admins, and Owners may update projects
+        if (currentUser == null ||
+                currentUser.getRole() == UserRole.MEMBER ||
+                currentUser.getRole() == UserRole.GUEST ||
+                currentUser.getRole() == UserRole.RESEARCHER) {
+            throw new AccessDeniedException("Only Research Leads or Admins may update projects.");
+        }
+        return projectService.updateProject(id, request);
+    }
+
     @GetMapping("/{id}")
     public ProjectResponse getProjectById(@PathVariable UUID id) {
         return projectService.getProjectById(id);

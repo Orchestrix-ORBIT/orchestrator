@@ -110,6 +110,7 @@ const s: Record<string, React.CSSProperties> = {
     maxHeight: "100vh",
     overflow: "hidden",
     background: "#f5f5f5",
+    position: "relative",
   },
   topbar: {
     height: 48,

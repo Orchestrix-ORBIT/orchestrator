@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useWebSocketChat } from "@/lib/useWebSocketChat";
-import { getEmail, getTenantSlug } from "@/lib/auth";
+import { getEmail, getTenantSlug, getUserId } from "@/lib/auth";
 import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
 import { saveAiSummary } from "@/lib/services/aiSummaries";
 import { SavedSummariesService } from "@/lib/services/savedSummaries";
@@ -33,9 +33,22 @@ function getSenderColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
+/** Convert email/raw string to readable display name.
+ *  1. Roster lookup by email. 2. Humanise local part.
+ */
+function formatSenderName(raw: string, members: any[]): string {
+  if (!raw) return "Unknown";
+  if (!raw.includes("@")) return raw;
+  const member = members.find(
+    (m: any) => (m.email || m.userEmail || "").toLowerCase() === raw.toLowerCase()
+  );
+  if (member) return member.displayName || member.userDisplayName || member.name || raw;
+  const local = raw.split("@")[0];
+  return local.split(/[._\-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 import { ProjectsService } from "@/lib/services/projects";
 import { TeamsService } from "@/lib/services/teams";
-import LoadingState from "@/components/ui/LoadingState";
 
 export default function ChatPage() {
   const [mounted, setMounted] = useState(false);
@@ -54,6 +67,11 @@ export default function ChatPage() {
   const [savingSummary, setSavingSummary] = useState(false);
   const [summarySaved, setSummarySaved] = useState(false);
   const [aiTriggered, setAiTriggered] = useState(false);
+  // Per-user task suggestions (lead only, FR-AI-07/08)
+  interface SuggestedTask { senderName: string; title: string; description: string; priority: string; rejected: boolean; }
+  const [suggestedTasks, setSuggestedTasks] = useState<SuggestedTask[]>([]);
+  const [createdTaskTitles, setCreatedTaskTitles] = useState<Set<string>>(new Set());
+  const [approvingTask, setApprovingTask] = useState<string | null>(null); // senderName being approved
 
   // ── Industry Standard Chat state ──────────────────────────────────────────
   const [replyingTo, setReplyingTo] = useState<{ id: string; senderName: string; content: string } | null>(null);
@@ -129,6 +147,12 @@ export default function ChatPage() {
   }, []);
 
   const currentUserEmail = getEmail() || "Research Admin";
+  const currentUserId = getUserId() || "";
+
+  const currentDisplayName = React.useMemo(() => {
+    if (!teamMembers.length) return formatSenderName(currentUserEmail, []);
+    return formatSenderName(currentUserEmail, teamMembers);
+  }, [currentUserEmail, teamMembers]);
 
   // Load real projects and team members from database API
   useEffect(() => {
@@ -192,21 +216,35 @@ export default function ChatPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <LoadingState
-        title="Loading Realtime Channels & Chat…"
-        subtitle="Connecting to WebSocket STOMP broker and loading project history"
-      />
-    );
-  }
+
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || !selectedChannel) return;
-    sendMessage(inputText, currentUserEmail, replyingTo);
+    sendMessage(inputText, currentDisplayName, replyingTo);
     setInputText("");
     setReplyingTo(null);
+  };
+
+  // Safe clipboard helper — falls back to execCommand for HTTP contexts
+  const copyToClipboard = (text: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+    showToast("✓ Copied to clipboard!");
+  };
+  const fallbackCopy = (text: string) => {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.position = "fixed";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try { document.execCommand("copy"); } catch (_) {}
+    document.body.removeChild(el);
   };
 
   const handleTriggerAiEngine = () => {
@@ -216,6 +254,11 @@ export default function ChatPage() {
     setSummaryError(null);
     setSummarySaved(false);
     setAiTriggered(false);
+  };
+
+  const handleSelectAll = () => {
+    const allIds = new Set(filteredMessages.map((m) => m.id));
+    setSelectedIds(allIds);
   };
 
   const handleToggleMessageSelect = (id: string) => {
@@ -228,48 +271,35 @@ export default function ChatPage() {
 
   const handleSummarize = async () => {
     if (selectedIds.size === 0) return;
-    const selected = liveMessages
-      .filter((m) => selectedIds.has(m.id))
-      .map((m) => ({
-        senderName: m.senderName || "Lead",
-        content: m.content,
-        createdAt: m.createdAt,
-      }));
+    // Capture the selected messages + unique senders BEFORE clearing
+    const selectedMessages = liveMessages.filter((m) => selectedIds.has(m.id));
+    const selected = selectedMessages.map((m) => ({ senderName: m.senderName || "Lead", content: m.content, createdAt: m.createdAt }));
+    // Unique senders (excluding the lead themselves)
+    const uniqueSenders = [...new Set(selectedMessages.map((m) => m.senderName || "Researcher").filter(Boolean))];
     setSummarizing(true);
     setSummaryError(null);
     setSummaryResult(null);
     setSummarySaved(false);
+    setSuggestedTasks([]);
+    setCreatedTaskTitles(new Set());
     try {
-      const result = await summarizeMessages(
-        selected,
-        activeProjectId,
-        getTenantSlug() || "myorg"
-      );
+      const result = await summarizeMessages(selected, activeProjectId, getTenantSlug() || "myorg");
       setSummaryResult(result);
       setSummaryProject({ id: activeProjectId, name: selectedChannel?.project || "Chat" });
       setSelectionMode(false);
       setSelectedIds(new Set());
 
-      // Persist directly to backend database for lead review & approval
-      const currentProjectName = selectedChannel?.name || "Research Project";
-      const topic = result.summary.length > 70 ? result.summary.slice(0, 67) + "..." : result.summary;
-
-      await saveAiSummary({
-        projectId: activeProjectId,
-        projectName: currentProjectName,
-        topic: topic || "Discussion Summary",
-        summary: result.summary,
-        keyFindings: result.key_points || [],
-        actionItems: result.action_items || [],
-        deadlineSuggestions: [],
-        confidence: 100,
-        model: "LangChain Context Engine",
-        status: "Pending Approval",
-        createdBy: currentUserEmail,
-        messageCount: selected.length,
-      });
-
-      setToastMessage("✓ AI Summary saved to AI Summaries for Lead Approval!");
+      // Build one suggested task per unique sender, drawing from action_items
+      if (result.action_items && result.action_items.length > 0 && uniqueSenders.length > 0) {
+        const tasks: SuggestedTask[] = uniqueSenders.map((sender, idx) => ({
+          senderName: sender,
+          title: result.action_items[idx % result.action_items.length],
+          description: `Extracted from chat summary in #${selectedChannel?.project || "project"}.`,
+          priority: "MEDIUM",
+          rejected: false,
+        }));
+        setSuggestedTasks(tasks);
+      }
     } catch (err: any) {
       setSummaryError(err.message ?? "Summarization failed.");
     } finally {
@@ -282,13 +312,60 @@ export default function ChatPage() {
     setSavingSummary(true);
     setSummaryError(null);
     try {
-      await SavedSummariesService.save(summaryProject.id, `${summaryProject.name} chat summary`, summaryResult);
+      const currentProj = projects.find((p: any) => p.id === summaryProject.id);
+      const topic = summaryResult.summary.length > 70 ? summaryResult.summary.slice(0, 67) + "..." : summaryResult.summary;
+      await saveAiSummary({
+        projectId: summaryProject.id,
+        projectName: currentProj?.name || summaryProject.name,
+        topic: topic || "Discussion Summary",
+        summary: summaryResult.summary,
+        keyFindings: summaryResult.key_points || [],
+        actionItems: summaryResult.action_items || [],
+        deadlineSuggestions: [],
+        confidence: 100,
+        model: "LangChain Context Engine",
+        status: "Pending Approval",
+        createdBy: currentUserEmail,
+        messageCount: summaryResult.message_count,
+      });
       setSummarySaved(true);
-      showToast("Added to summaries");
+      showToast("✓ Added to AI Summaries for review!");
     } catch (err) {
       setSummaryError(err instanceof Error ? err.message : "Could not save summary.");
     } finally {
       setSavingSummary(false);
+    }
+  };
+
+  const handleUpdateSuggestedTask = (senderName: string, field: "title" | "description" | "priority", value: string) => {
+    setSuggestedTasks((prev) => prev.map((t) => t.senderName === senderName ? { ...t, [field]: value } : t));
+  };
+
+  const handleRejectTask = (senderName: string) => {
+    setSuggestedTasks((prev) => prev.map((t) => t.senderName === senderName ? { ...t, rejected: true } : t));
+  };
+
+  const handleApproveTask = async (task: SuggestedTask) => {
+    if (!summaryProject || approvingTask) return;
+    setApprovingTask(task.senderName);
+    try {
+      const { TasksService } = await import("@/lib/services/tasks");
+      // Find assignee by name in teamMembers
+      const member = teamMembers.find((m: any) =>
+        (m.displayName || m.userDisplayName || m.name || "").toLowerCase() === task.senderName.toLowerCase()
+      );
+      await TasksService.create(summaryProject.id, {
+        title: task.title,
+        description: task.description,
+        priority: task.priority as any,
+        assigneeId: member?.id || member?.userId || undefined,
+      });
+      setCreatedTaskTitles((prev) => new Set(prev).add(task.senderName));
+      showToast(`✓ Task created for ${task.senderName}!`);
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : "Failed to create task.");
+    } finally {
+      setApprovingTask(null);
     }
   };
 
@@ -338,7 +415,28 @@ export default function ChatPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }} suppressHydrationWarning>
+    <div style={{ position: "relative", flex: 1, width: "100%", display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }} suppressHydrationWarning>
+
+      {/* ── Loading overlay (covers only this white content area) ─────────── */}
+      {loading && (
+        <div style={{ position: "absolute", inset: 0, background: "#ffffff", zIndex: 50, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, minHeight: "100%" }}>
+          <style>{`@keyframes lc-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}} @keyframes lc-pulse{0%,100%{opacity:1}50%{opacity:.35}} .lc-ring{animation:lc-spin .85s linear infinite} .lc-d1{animation:lc-pulse 1.4s ease-in-out 0s infinite} .lc-d2{animation:lc-pulse 1.4s ease-in-out .2s infinite} .lc-d3{animation:lc-pulse 1.4s ease-in-out .4s infinite}`}</style>
+          <div style={{ position: "relative", width: 48, height: 48 }}>
+            <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "3px solid #e5e7eb" }} />
+            <div className="lc-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "3px solid transparent", borderTopColor: "#161616", borderRightColor: "#161616" }} />
+            <div style={{ position: "absolute", inset: "12px", borderRadius: "50%", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#161616" }} />
+            </div>
+          </div>
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#161616", margin: 0, textAlign: "center" }}>Loading Channels &amp; Chat…</p>
+            <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0", textAlign: "center" }}>Connecting to WebSocket STOMP broker</p>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {["lc-d1","lc-d2","lc-d3"].map(c => <div key={c} className={c} style={{ width: 6, height: 6, borderRadius: "50%", background: "#9ca3af" }} />)}
+          </div>
+        </div>
+      )}
       {/* ── Page Header ────────────────────────────────────────────────────── */}
       <div style={s.headerRow}>
         <h1 style={s.pageTitle}>Project Chat</h1>
@@ -486,19 +584,20 @@ export default function ChatPage() {
                       </div>
                     ) : (
                       filteredMessages.map((m) => {
-                        const senderClean = (m.senderName || "").toLowerCase().trim();
-                        const currentClean = (currentUserEmail || "").toLowerCase().trim();
+                        const rawSender = m.senderName || "";
+                        const displaySender = formatSenderName(rawSender, teamMembers);
+                        const senderClean = displaySender.toLowerCase().trim();
+                        const currentClean = currentDisplayName.toLowerCase().trim();
                         const isMe =
                           m.id.startsWith("opt-") ||
                           m.senderId === "me" ||
+                          (currentUserId.length > 0 && m.senderId === currentUserId) ||
                           senderClean === "you" ||
-                          senderClean === "research admin" ||
-                          senderClean === "dk (lead)" ||
                           (currentClean.length > 0 && senderClean === currentClean) ||
                           (currentClean.length > 0 && currentClean.includes(senderClean));
 
                         const isSelected = selectedIds.has(m.id);
-                        const senderColor = getSenderColor(m.senderName);
+                        const senderColor = getSenderColor(displaySender);
                         const isDeleted = deletedIds.has(m.id);
                         const isEditing = editingId === m.id;
                         const displayContent = editedContents[m.id] || m.content;
@@ -581,14 +680,14 @@ export default function ChatPage() {
                                 marginBottom: 2,
                                 boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                               }}>
-                                {getInitials(m.senderName)}
+                                {getInitials(displaySender)}
                               </div>
                             )}
                             <div style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", maxWidth: "68%" }}>
                               <div style={isMe ? s.bubbleMe : s.bubbleThem}>
                                 <div style={s.msgHeader}>
                                   <strong style={{ fontSize: 11, fontWeight: 700, color: isMe ? "#dbeafe" : senderColor }}>
-                                    {isMe ? "You" : m.senderName}
+                                    {isMe ? "You" : displaySender}
                                   </strong>
                                   <span style={{ fontSize: 10, color: isMe ? "#93c5fd" : "#94a3b8" }}>
                                     {m.createdAt} {editedContents[m.id] ? "(edited)" : ""}
@@ -723,23 +822,19 @@ export default function ChatPage() {
       </div>
 
       {/* ── Floating selection toolbar ─────────────────────────────────────── */}
-      {selectionMode && selectedIds.size > 0 && (
+      {selectionMode && (
         <div style={s.selectionToolbar}>
           <span style={s.selectionCount}>{selectedIds.size} message{selectedIds.size > 1 ? "s" : ""} selected</span>
           <button style={s.selectionClearBtn} onClick={() => setSelectedIds(new Set())}>Clear</button>
-          <button
-            id="btn-run-summarize"
-            style={s.selectionSummarizeBtn}
-            onClick={handleSummarize}
-            disabled={summarizing}
-          >
-            {summarizing ? "Summarizing..." : "Summarize →"}
+          <button style={s.selectionClearBtn} onClick={handleSelectAll}>Select All</button>
+          <button id="btn-run-summarize" style={{ ...s.selectionSummarizeBtn, opacity: selectedIds.size === 0 ? 0.5 : 1 }} onClick={handleSummarize} disabled={summarizing || selectedIds.size === 0}>
+            {summarizing ? "Summarizing..." : `Summarize ${selectedIds.size > 0 ? `(${selectedIds.size})` : ""} →`}
           </button>
         </div>
       )}
 
       {/* ── Summary Error Banner ───────────────────────────────────────────── */}
-      {summaryError && (
+      {summaryError && !summaryResult && (
         <div style={s.errorBanner}>
           ⚠️ {summaryError}
           <button style={s.errorClose} onClick={() => setSummaryError(null)}>✕</button>
@@ -748,12 +843,13 @@ export default function ChatPage() {
 
       {/* ── Summary Modal ──────────────────────────────────────────────────── */}
       {summaryResult && (
-        <div style={s.modalOverlay} onClick={() => setSummaryResult(null)}>
-          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={s.modalOverlay} onClick={() => { setSummaryResult(null); setSuggestedTasks([]); }}>
+          <div style={{ ...s.modalBox, maxWidth: 640, maxHeight: "90vh", overflowY: "auto" as const }} onClick={(e) => e.stopPropagation()}>
+
             <div style={s.modalHeader}>
               <div style={s.modalTitle}>📄 AI Summary</div>
               <div style={s.modalMeta}>{summaryResult.message_count} messages · {summaryResult.strategy}</div>
-              <button style={s.modalClose} onClick={() => setSummaryResult(null)}>✕</button>
+              <button style={s.modalClose} onClick={() => { setSummaryResult(null); setSuggestedTasks([]); }}>✕</button>
             </div>
             <div style={s.modalBody}>
               <p style={s.summaryText}>{summaryResult.summary}</p>
@@ -765,52 +861,116 @@ export default function ChatPage() {
                   </ul>
                 </div>
               )}
-              {summaryResult.action_items.length > 0 && (
-                <div style={s.modalSection}>
-                  <div style={s.modalSectionTitle}>✅ Action Items</div>
-                  <ul style={s.modalList}>
-                    {summaryResult.action_items.map((ai, i) => <li key={i} style={s.modalListItem}>{ai}</li>)}
-                  </ul>
+
+              {/* ── Suggested Tasks — one per unique sender ─────────────── */}
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "14px 16px", border: "1px solid #e2e8f0", marginTop: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#161616" }}>
+                    🎯 Suggested Tasks for Approval
+                  </div>
+                  {suggestedTasks.length > 0 && (
+                    <span style={{ fontSize: 11, background: "#dbeafe", color: "#1d4ed8", fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>
+                      {suggestedTasks.filter(t => !t.rejected).length} task{suggestedTasks.filter(t => !t.rejected).length !== 1 ? "s" : ""} pending
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
-            {summaryError && <p role="alert" style={{ color: "#b42318", padding: "0 20px" }}>{summaryError}</p>}
-            <div style={s.modalFooter}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, color: "#2e7d32", background: "#e8f5e9", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }}>
-                  ✓ Saved for Lead Approval
-                </span>
+
+                {suggestedTasks.length === 0 ? (
+                  <div style={{ padding: "14px 0", textAlign: "center", color: "#9e9e9e", fontSize: 12 }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>📋</div>
+                    <div style={{ fontWeight: 600, color: "#616161", marginBottom: 4 }}>No tasks could be identified</div>
+                    <div>The AI did not find any action items in this conversation. Only the summary is available above.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {suggestedTasks.map((task) => (
+                      <div key={task.senderName} style={{
+                        background: task.rejected ? "#f9f9f9" : createdTaskTitles.has(task.senderName) ? "#f0fdf4" : "#fff",
+                        border: task.rejected ? "1px solid #e5e7eb" : createdTaskTitles.has(task.senderName) ? "1px solid #86efac" : "1px solid #e2e8f0",
+                        borderRadius: 8, padding: "12px 14px",
+                        opacity: task.rejected ? 0.55 : 1,
+                        transition: "all 0.2s",
+                      }}>
+                        {/* Header row */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: getSenderColor(task.senderName), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                            {getInitials(task.senderName)}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#161616" }}>{task.senderName}</div>
+                            <div style={{ fontSize: 10, color: "#9e9e9e" }}>Suggested assignee</div>
+                          </div>
+                          {createdTaskTitles.has(task.senderName) && (
+                            <span style={{ fontSize: 11, color: "#059669", fontWeight: 700, background: "#dcfce7", padding: "2px 8px", borderRadius: 10 }}>✓ Created</span>
+                          )}
+                          {task.rejected && (
+                            <span style={{ fontSize: 11, color: "#9e9e9e", fontWeight: 600 }}>Rejected</span>
+                          )}
+                        </div>
+                        {/* Editable fields */}
+                        {!task.rejected && !createdTaskTitles.has(task.senderName) && (
+                          <>
+                            <input
+                              value={task.title}
+                              onChange={e => handleUpdateSuggestedTask(task.senderName, "title", e.target.value)}
+                              placeholder="Task title"
+                              style={{ padding: "6px 10px", fontSize: 12, borderRadius: 6, border: "1px solid #d1d5db", width: "100%", boxSizing: "border-box" as const, marginBottom: 6 }}
+                            />
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", flexShrink: 0 }}>Priority:</label>
+                              <select
+                                value={task.priority}
+                                onChange={e => handleUpdateSuggestedTask(task.senderName, "priority", e.target.value)}
+                                style={{ padding: "4px 7px", fontSize: 11, borderRadius: 5, border: "1px solid #d1d5db", flex: 1 }}
+                              >
+                                <option value="LOW">Low</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="HIGH">High</option>
+                                <option value="CRITICAL">Critical</option>
+                              </select>
+                              <div style={{ flex: 2 }} />
+                              <button
+                                onClick={() => handleRejectTask(task.senderName)}
+                                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280" }}
+                              >✕ Reject</button>
+                              <button
+                                onClick={() => handleApproveTask(task)}
+                                disabled={approvingTask === task.senderName || !task.title.trim()}
+                                style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 5, border: "none", background: "#161616", color: "#fff", cursor: "pointer" }}
+                              >
+                                {approvingTask === task.senderName ? "Creating..." : "✓ Approve & Create"}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button style={s.modalCopyBtn} onClick={handleSaveSummary} disabled={savingSummary || summarySaved}>
-                  {summarySaved ? "✓ Added to summaries" : savingSummary ? "Adding..." : "Add to summaries"}
+            </div>
+            {summaryError && <p role="alert" style={{ color: "#b42318", padding: "0 20px", fontSize: 12 }}>{summaryError}</p>}
+            <div style={s.modalFooter}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const }}>
+                <button style={{ ...s.modalCopyBtn, ...(summarySaved ? { color: "#059669", borderColor: "#bbf7d0", background: "#f0fdf4" } : {}) }} onClick={handleSaveSummary} disabled={savingSummary || summarySaved}>
+                  {summarySaved ? "✓ Added to AI Summaries" : savingSummary ? "Saving..." : "Add to AI Summaries"}
                 </button>
                 <button
                   style={s.modalCopyBtn}
-                  onClick={() => navigator.clipboard.writeText(
-                    `Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`
-                  )}
+                  onClick={() => copyToClipboard(`Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`)}
                 >📋 Copy</button>
-                <Link
-                  href="/lead-dashboard/ai-insights"
-                  style={{
-                    padding: "6px 12px",
-                    background: "#161616",
-                    color: "#ffffff",
-                    borderRadius: 4,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    textDecoration: "none",
-                  }}
-                >
-                  Review in AI Summaries →
-                </Link>
-                <button style={s.modalCloseBtn} onClick={() => setSummaryResult(null)}>Close</button>
+                {summarySaved && (
+                  <Link href="/lead-dashboard/ai-insights" style={{ padding: "6px 12px", background: "#161616", color: "#fff", borderRadius: 5, fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+                    Review in AI Summaries →
+                  </Link>
+                )}
+                <button style={s.modalCloseBtn} onClick={() => { setSummaryResult(null); setSuggestedTasks([]); }}>Close</button>
               </div>
             </div>
           </div>
         </div>
       )}
+
 
       {/* ── Toast Notification Banner ────────────────────────────────────── */}
       {toastMessage && (

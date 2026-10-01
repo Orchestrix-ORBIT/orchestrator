@@ -1,6 +1,8 @@
 package com.example.core_api.researchteam;
 
 import com.example.core_api.exception.ResourceNotFoundException;
+import com.example.core_api.auth.UserRepository;
+import com.example.core_api.auth.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,10 +16,12 @@ public class ResearchTeamService {
 
     private final ResearchTeamRepository teamRepository;
     private final TeamMemberRepository memberRepository;
+    private final UserRepository userRepository;
 
-    public ResearchTeamService(ResearchTeamRepository teamRepository, TeamMemberRepository memberRepository) {
+    public ResearchTeamService(ResearchTeamRepository teamRepository, TeamMemberRepository memberRepository, UserRepository userRepository) {
         this.teamRepository = teamRepository;
         this.memberRepository = memberRepository;
+        this.userRepository = userRepository;
     }
 
     public ResearchTeamResponse createTeam(CreateResearchTeamRequest request, UUID leaderId) {
@@ -74,6 +78,25 @@ public class ResearchTeamService {
                 .map(m -> teamRepository.findById(m.getTeamId()).orElse(null))
                 .filter(t -> t != null)
                 .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TeamMemberDetailResponse> getTeamMembers(UUID teamId) {
+        if (!teamRepository.existsById(teamId)) {
+            throw new ResourceNotFoundException("Team not found: " + teamId);
+        }
+        return memberRepository.findAllByTeamId(teamId).stream()
+                .map(member -> {
+                    User user = userRepository.findById(member.getUserId()).orElse(null);
+                    return TeamMemberDetailResponse.builder()
+                            .userId(member.getUserId())
+                            .teamId(member.getTeamId())
+                            .roleInTeam(member.getRoleInTeam())
+                            .displayName(user != null ? user.getDisplayName() : "Unknown")
+                            .email(user != null ? user.getEmail() : "")
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 

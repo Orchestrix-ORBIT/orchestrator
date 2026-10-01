@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import LoadingState from "@/components/ui/LoadingState";
-import { ProjectsService, type Project } from "@/lib/services/projects";
-import { TasksService, type Task, type TaskStatus, type TaskPriority } from "@/lib/services/tasks";
-import { TeamsService } from "@/lib/services/teams";
+import React, { useState, useEffect, use, useCallback, useRef } from "react";
+import Link from "next/link";
+import { ProjectsService } from "@/lib/services/projects";
+import { TasksService, type TaskStatus } from "@/lib/services/tasks";
 import { getUserId } from "@/lib/auth";
 import { useTasksRealtime } from "@/lib/useTasksRealtime";
+
+type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+interface TaskItem {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  assigneeId?: string;
+  assignee: string;
+  priority: Priority;
+  dueDate: string;
+}
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "TODO",        title: "To Do" },
@@ -15,167 +27,184 @@ const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "ACCEPTED",    title: "Accepted ✓" },
 ];
 
-function getInitials(name?: string): string {
+function getInitials(name: string) {
   if (!name || name === "Unassigned") return "UA";
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function priorityColors(p: TaskPriority): React.CSSProperties {
-  if (p === "URGENT" || p === "CRITICAL" || p === "HIGH") return { background: "#fde8e8", color: "#c62828" };
-  if (p === "MEDIUM") return { background: "#fff8e1", color: "#f57f17" };
-  return { background: "#f5f5f5", color: "#616161" };
-}
+export default function ResearcherProjectWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = use(params);
 
-export default function ResearcherTasksPage() {
-  const [projects, setProjects]     = useState<Project[]>([]);
-  const [tasks, setTasks]           = useState<Task[]>([]);
-  const [members, setMembers]       = useState<any[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
-  const [selectedProject, setSelectedProject] = useState<string>("ALL");
-  const [assignedOnly, setAssignedOnly]       = useState<boolean>(true);
+  const [project, setProject]   = useState<any>(null);
+  const [tasks, setTasks]       = useState<TaskItem[]>([]);
+  const [members, setMembers]   = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Drag & drop
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol]     = useState<TaskStatus | null>(null);
 
-  // Task detail modal
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-
+  // Current user for ownership checks
   const currentUserId = getUserId() || "";
 
-  // Project IDs list for realtime polling
-  const [projectIds, setProjectIds] = useState<string[]>([]);
+  // Task detail modal
+  const [selectedTask, setSelectedTask]   = useState<TaskItem | null>(null);
+
 
   useEffect(() => {
-    async function load() {
+    async function loadData() {
       try {
-        const projectList = await ProjectsService.getAll();
-        setProjects(projectList);
-        setProjectIds(projectList.map(p => p.id));
+        const proj = await ProjectsService.getById(projectId).catch(() => ({
+          id: projectId, name: `Project ${projectId.substring(0, 8)}`,
+          status: "ACTIVE" as const, teamId: undefined as string | undefined,
+        }));
+        setProject(proj);
 
-        // Fetch tasks and team members concurrently
-        const teamRequests = projectList.map(p => p.teamId ? TeamsService.getTeamMembers(p.teamId).catch(() => []) : Promise.resolve([]));
-        const [taskResults, ...teamResults] = await Promise.all([
-          Promise.all(projectList.map(p => TasksService.getByProject(p.id).catch(() => [] as Task[]))),
-          ...teamRequests
+        const [taskList, teamMembers] = await Promise.all([
+          TasksService.getByProject(projectId).catch(() => []),
+          proj.teamId ? (await import("@/lib/services/teams")).TeamsService.getTeamMembers(proj.teamId).catch(() => []) : Promise.resolve([]),
         ]);
 
-        setTasks(taskResults.flat());
-        setMembers(teamResults.flat());
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load tasks");
+        setMembers(teamMembers as any[]);
+
+        const mapped: TaskItem[] = (taskList as any[]).map((t: any) => {
+          let uiStatus: TaskStatus = "TODO";
+          if (t.status === "ACCEPTED") uiStatus = "ACCEPTED";
+          else if (t.status === "DONE") uiStatus = "DONE";
+          else if (t.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
+
+          const matchedMember = (teamMembers as any[]).find((m: any) => (m.userId || m.id) === t.assigneeId);
+          const assigneeName = matchedMember
+            ? (matchedMember.displayName || matchedMember.userDisplayName || matchedMember.email)
+            : t.assigneeId ? t.assigneeId : "Unassigned";
+
+          return {
+            id: t.id,
+            title: t.title,
+            description: t.description || "",
+            status: uiStatus,
+            assigneeId: t.assigneeId,
+            assignee: assigneeName,
+            priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
+            dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : (t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "Active"),
+          };
+        });
+        setTasks(mapped);
       } finally {
         setLoading(false);
       }
     }
-    load();
-  }, []);
+    loadData();
+  }, [projectId]);
 
-  // ── Realtime polling: merge remote changes every 8s ─────────────────────
-  const handleRemoteUpdate = useCallback((remoteTasks: Task[]) => {
+  // ── Realtime polling: merge remote status changes every 8s ───────────────
+  // Store members in a ref so the callback doesn't re-create on every render
+  const membersRef = useRef<any[]>([]);
+  useEffect(() => { membersRef.current = members; }, [members]);
+
+  const handleRemoteUpdate = useCallback((remoteTasks: any[]) => {
     setTasks(prev => {
-      // For each remote task, update status/assignee only if different
-      // (preserves local optimistic state for tasks being dragged)
       const map = new Map(remoteTasks.map(t => [t.id, t]));
-      const updated = prev.map(t => {
-        const remote = map.get(t.id);
-        if (!remote) return t;
-        // Only update fields that could have changed remotely
-        if (remote.status !== t.status || remote.assigneeId !== t.assigneeId) {
-          return { ...t, status: remote.status, assigneeId: remote.assigneeId };
-        }
-        return t;
+      const updated = prev.map(local => {
+        const remote = map.get(local.id);
+        if (!remote) return local;
+        // Only patch status/assignee if they changed remotely
+        if (remote.status === local.status && remote.assigneeId === local.assigneeId) return local;
+        let uiStatus: TaskStatus = "TODO";
+        if (remote.status === "ACCEPTED") uiStatus = "ACCEPTED";
+        else if (remote.status === "DONE") uiStatus = "DONE";
+        else if (remote.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
+        const match = membersRef.current.find((m: any) => (m.userId || m.id) === remote.assigneeId);
+        const assigneeName = match
+          ? (match.displayName || match.userDisplayName || match.email)
+          : remote.assigneeId ? remote.assigneeId : "Unassigned";
+        return { ...local, status: uiStatus, assigneeId: remote.assigneeId, assignee: assigneeName };
       });
-      // Add any brand-new tasks from other members
+      // Append brand-new tasks created by other members
       const existingIds = new Set(prev.map(t => t.id));
-      const newTasks = remoteTasks.filter(t => !existingIds.has(t.id));
-      return newTasks.length > 0 ? [...updated, ...newTasks] : updated;
+      const newItems: any[] = remoteTasks
+        .filter(t => !existingIds.has(t.id))
+        .map((t: any) => {
+          let uiStatus: TaskStatus = "TODO";
+          if (t.status === "ACCEPTED") uiStatus = "ACCEPTED";
+          else if (t.status === "DONE") uiStatus = "DONE";
+          else if (t.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
+          const match = membersRef.current.find((m: any) => (m.userId || m.id) === t.assigneeId);
+          return {
+            id: t.id, title: t.title, description: t.description || "",
+            status: uiStatus, assigneeId: t.assigneeId,
+            assignee: match ? (match.displayName || match.email) : t.assigneeId || "Unassigned",
+            priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
+            dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "Active",
+          };
+        });
+      return newItems.length > 0 ? [...updated, ...newItems] : updated;
     });
   }, []);
 
-  useTasksRealtime(projectIds, handleRemoteUpdate);
+  useTasksRealtime([projectId], handleRemoteUpdate);
 
+  const currentProject = project || { id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" };
+  const isCompleted = currentProject.status === "COMPLETED";
 
-  const filteredTasks = tasks.filter(t => {
-    const matchesProject = selectedProject === "ALL" || t.projectId === selectedProject;
-    const matchesAssignee = !assignedOnly || !t.assigneeId || t.assigneeId === currentUserId;
-    return matchesProject && matchesAssignee;
-  });
+  const totalCount = tasks.length;
+  const doneCount = tasks.filter(t => t.status === "ACCEPTED").length;
+  const progressPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
-  function getAssigneeName(assigneeId?: string) {
-    if (!assigneeId) return "Unassigned";
-    const match = members.find(m => (m.userId || m.id) === assigneeId);
-    return match ? (match.displayName || match.userDisplayName || match.email || assigneeId) : assigneeId;
-  }
+  const filteredTasks = tasks.filter(t =>
+    !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  // A researcher can only modify tasks assigned to them.
-  // They also cannot move a task to ACCEPTED (only leads can accept).
-  function isOwnTask(task: Task) {
+  // Ownership check — researcher can only edit tasks assigned to them
+  function isOwnTask(task: TaskItem) {
     return task.assigneeId === currentUserId;
   }
 
-  // Confirmation modal state + helpers
-  const [pendingMove, setPendingMove] = useState<{ task: Task; to: TaskStatus } | null>(null);
-
-  const STAGE_LABELS: Record<TaskStatus, string> = {
-    TODO: "To Do",
-    IN_PROGRESS: "In Progress",
-    IN_REVIEW: "In Review",
-    DONE: "Completed (Pending Review)",
-    ACCEPTED: "Accepted ✓",
-    BLOCKED: "Blocked",
+  const handleMoveTask = async (taskId: string, target: TaskStatus) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !isOwnTask(task)) return;  // view-only for others' tasks
+    if (target === "ACCEPTED") return;       // only leads can accept
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: target } : t));
+    try { await TasksService.update(projectId, taskId, { status: target as any }); }
+    catch { setTasks(prev => prev.map(t => t.id === taskId ? { ...t } : t)); }
   };
 
-  function requestMove(task: Task, newStatus: TaskStatus) {
-    if (!isOwnTask(task)) return;
-    if (newStatus === "ACCEPTED") return;
-    if (task.status === newStatus) return;
-    setPendingMove({ task, to: newStatus });
-  }
 
-  async function moveTask(task: Task, newStatus: TaskStatus) {
-    if (!isOwnTask(task)) return;           // view-only for unassigned tasks
-    if (newStatus === "ACCEPTED") return;    // researchers cannot accept
-    setPendingMove(null);
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-    try { await TasksService.update(task.projectId, task.id, { status: newStatus }); }
-    catch { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: task.status } : t)); }
-  }
-
-
-  if (loading) return <LoadingState title="Loading Tasks..." subtitle="Fetching your assigned tasks" />;
-  if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
+  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading workspace…</p>;
 
   return (
     <div>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>My Tasks</h1>
-          <p style={s.sub}>{filteredTasks.length} total task{filteredTasks.length !== 1 ? "s" : ""} across {projects.length} project{projects.length !== 1 ? "s" : ""}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <Link href="/dashboard/researcher/projects" style={{ fontSize: 12, color: "#888", textDecoration: "none" }}>
+              ← My Projects
+            </Link>
+            <span style={{ color: "#ccc" }}>/</span>
+            <span style={{ fontSize: 12, color: "#444", fontWeight: 600 }}>{currentProject.name}</span>
+          </div>
+          <h1 style={s.title}>{currentProject.name}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#374151", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
+              📋 {doneCount}/{totalCount} tasks done
+            </span>
+            <div style={{ width: 80, height: 4, background: "#e5e7eb", borderRadius: 2 }}>
+              <div style={{ width: `${progressPct}%`, height: "100%", background: "#161616", borderRadius: 2, transition: "width 0.3s" }} />
+            </div>
+            <span style={{ fontSize: 11, color: "#888" }}>{progressPct}%</span>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <select
-            id="select-project-filter"
-            style={s.select}
-            value={selectedProject}
-            onChange={e => setSelectedProject(e.target.value)}
-          >
-            <option value="ALL">All Projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#424242", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}>
-            <input
-              type="checkbox"
-              checked={assignedOnly}
-              onChange={e => setAssignedOnly(e.target.checked)}
-              style={{ width: 16, height: 16, cursor: "pointer" }}
-            />
-            Assigned to me
-          </label>
+          <input
+            placeholder="Filter cards…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={s.searchInput}
+          />
         </div>
       </div>
 
@@ -192,10 +221,12 @@ export default function ResearcherTasksPage() {
               onDragLeave={() => setDragOverCol(null)}
               onDrop={e => {
                 e.preventDefault();
-                if (col.id === "ACCEPTED") return; // researchers cannot drop to Accepted
+                if (col.id === "ACCEPTED") return; // researchers cannot accept
                 const id = e.dataTransfer.getData("text/plain") || draggedTaskId;
-                const task = tasks.find(t => t.id === id);
-                if (task && isOwnTask(task)) requestMove(task, col.id);
+                if (id) {
+                  const t = tasks.find(tk => tk.id === id);
+                  if (t && isOwnTask(t)) handleMoveTask(id, col.id);
+                }
                 setDragOverCol(null); setDraggedTaskId(null);
               }}
               style={{ ...s.column, ...(isOver ? s.columnOver : {}) }}
@@ -213,12 +244,12 @@ export default function ResearcherTasksPage() {
                   return (
                   <div
                     key={task.id}
-                    id={`task-card-${task.id}`}
-                    draggable={canEdit && col.id !== "ACCEPTED"}
+                    draggable={canEdit && !isCompleted && col.id !== "ACCEPTED"}
                     onClick={() => setSelectedTask(task)}
                     onDragStart={e => {
                       if (!canEdit) { e.preventDefault(); return; }
-                      setDraggedTaskId(task.id); e.dataTransfer.setData("text/plain", task.id);
+                      setDraggedTaskId(task.id);
+                      e.dataTransfer.setData("text/plain", task.id);
                     }}
                     onDragEnd={() => { setDraggedTaskId(null); setDragOverCol(null); }}
                     style={{
@@ -228,10 +259,12 @@ export default function ResearcherTasksPage() {
                       borderLeft: canEdit ? undefined : "3px solid #e0e0e0",
                     }}
                   >
-                    {/* Card Top: id + priority */}
+                    {/* Card Top */}
                     <div style={s.taskCardTop}>
-                      <span style={s.taskId} title={`Full ID: ${task.id}`}>#{task.id.substring(0, 8)}</span>
-                      <span style={{ ...s.priorityBadge, ...priorityColors(task.priority) }}>
+                      <span style={s.taskId} title={`Full ID: ${task.id}`}>
+                        #{task.id.length > 8 ? task.id.substring(0, 8) : task.id}
+                      </span>
+                      <span style={{ ...s.priorityBadge, ...(task.priority === "HIGH" ? s.priHigh : task.priority === "MEDIUM" ? s.priMed : s.priLow) }}>
                         {task.priority}
                       </span>
                     </div>
@@ -239,18 +272,15 @@ export default function ResearcherTasksPage() {
                     <h4 style={s.taskTitle}>{task.title}</h4>
                     {task.description && <p style={s.taskDesc}>{task.description}</p>}
 
-                    {/* Card Bottom: due + status + avatar */}
+                    {/* Card Bottom */}
                     <div style={s.taskCardBottom}>
-                      <span style={s.taskDue}>
-                        {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : ""}
-                      </span>
+                      <span style={s.taskDue}>{task.dueDate}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {/* Only show status select for tasks assigned to the current user, and not on ACCEPTED column */}
-                        {canEdit && col.id !== "ACCEPTED" && (
+                        {canEdit && !isCompleted && col.id !== "ACCEPTED" && (
                           <select
                             value={task.status}
                             onClick={e => e.stopPropagation()}
-                            onChange={e => { e.stopPropagation(); requestMove(task, e.target.value as TaskStatus); }}
+                            onChange={e => { e.stopPropagation(); handleMoveTask(task.id, e.target.value as TaskStatus); }}
                             style={s.statusSelect}
                           >
                             <option value="TODO">To Do</option>
@@ -258,7 +288,6 @@ export default function ResearcherTasksPage() {
                             <option value="DONE">Completed (Pending Review)</option>
                           </select>
                         )}
-                        {/* View-only indicator for tasks not assigned to this researcher */}
                         {!canEdit && col.id !== "ACCEPTED" && (
                           <span style={{ fontSize: 10, color: "#9e9e9e", fontStyle: "italic" }}>view only</span>
                         )}
@@ -266,14 +295,14 @@ export default function ResearcherTasksPage() {
                         <span
                           style={{
                             ...s.assigneeAvatar,
-                            background: !task.assigneeId ? "#f0f0f0" : "#161616",
-                            color: !task.assigneeId ? "#757575" : "#ffffff",
-                            border: !task.assigneeId ? "1px solid #d0d0d0" : "none",
+                            background: task.assignee === "Unassigned" ? "#f0f0f0" : "#161616",
+                            color: task.assignee === "Unassigned" ? "#757575" : "#ffffff",
+                            border: task.assignee === "Unassigned" ? "1px solid #d0d0d0" : "none",
                           }}
-                          title={`Assignee: ${getAssigneeName(task.assigneeId)}`}
+                          title={`Assignee: ${task.assignee}`}
                           onClick={e => { e.stopPropagation(); setSelectedTask(task); }}
                         >
-                          {getInitials(getAssigneeName(task.assigneeId))}
+                          {getInitials(task.assignee)}
                         </span>
                       </div>
                     </div>
@@ -289,38 +318,6 @@ export default function ResearcherTasksPage() {
           );
         })}
       </div>
-
-      {/* ── Move Confirmation Modal ──────────────────────────────────────────── */}
-      {pendingMove && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setPendingMove(null)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#f0f4ff", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#3b5bdb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 10h10M12 7l3 3-3 3"/>
-              </svg>
-            </div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#161616", margin: "0 0 6px" }}>Move Task?</h3>
-            <p style={{ fontSize: 13, color: "#424242", margin: "0 0 18px", lineHeight: 1.5 }}>
-              Move <strong>&ldquo;{pendingMove.task.title}&rdquo;</strong> from{" "}
-              <span style={{ fontWeight: 600, color: "#555" }}>{STAGE_LABELS[pendingMove.task.status]}</span>{" "}
-              →{" "}
-              <span style={{ fontWeight: 700, color: "#161616" }}>{STAGE_LABELS[pendingMove.to]}</span>?
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setPendingMove(null)}
-                style={{ padding: "8px 18px", borderRadius: 7, border: "1px solid #d0d0d0", background: "#fff", fontSize: 13, fontWeight: 600, color: "#424242", cursor: "pointer" }}
-              >Cancel</button>
-              <button
-                onClick={() => moveTask(pendingMove.task, pendingMove.to)}
-                style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: "#161616", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}
-              >Confirm Move</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Task Detail Modal ───────────────────────────────────────────────── */}
       {selectedTask && (
@@ -341,22 +338,23 @@ export default function ResearcherTasksPage() {
               <button onClick={() => setSelectedTask(null)} style={m.closeBtn}>✕</button>
             </div>
 
-            <div style={{ ...m.body, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...m.body, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <span style={m.metaLabel}>TASK TITLE</span>
+                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>TASK TITLE</span>
                 <p style={{ fontSize: 15, fontWeight: 700, color: "#161616", marginTop: 4, lineHeight: 1.4 }}>{selectedTask.title}</p>
               </div>
 
               <div style={{ background: "#f9fafb", border: "1px solid #f0f0f0", borderRadius: 6, padding: "12px 14px" }}>
-                <span style={m.metaLabel}>DESCRIPTION</span>
+                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>DESCRIPTION</span>
                 <p style={{ fontSize: 13, color: "#424242", lineHeight: 1.5, marginTop: 4 }}>
                   {selectedTask.description || "No description provided for this task card."}
                 </p>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "12px 14px" }}>
+                {/* Status */}
                 <div>
-                  <span style={m.metaLabel}>STATUS</span>
+                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>STATUS</span>
                   <div style={{ marginTop: 4 }}>
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12, display: "inline-block",
@@ -367,19 +365,25 @@ export default function ResearcherTasksPage() {
                     </span>
                   </div>
                 </div>
+                {/* Assignee */}
                 <div>
-                  <span style={m.metaLabel}>ASSIGNEE</span>
+                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>ASSIGNEE</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                    <span style={{ width: 22, height: 22, borderRadius: 11, background: selectedTask.assigneeId ? "#161616" : "#e0e0e0", color: selectedTask.assigneeId ? "#ffffff" : "#616161", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {getInitials(getAssigneeName(selectedTask.assigneeId))}
+                    <span style={{ width: 22, height: 22, borderRadius: 11, background: selectedTask.assignee === "Unassigned" ? "#e0e0e0" : "#161616", color: selectedTask.assignee === "Unassigned" ? "#616161" : "#ffffff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {getInitials(selectedTask.assignee)}
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#161616" }}>{getAssigneeName(selectedTask.assigneeId)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#161616" }}>{selectedTask.assignee}</span>
                   </div>
                 </div>
+                {/* Priority */}
                 <div>
-                  <span style={m.metaLabel}>PRIORITY</span>
+                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>PRIORITY</span>
                   <div style={{ marginTop: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 3, display: "inline-block", ...priorityColors(selectedTask.priority) }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 3, display: "inline-block",
+                      background: selectedTask.priority === "HIGH" ? "#fde8e8" : selectedTask.priority === "MEDIUM" ? "#fff8e1" : "#f5f5f5",
+                      color: selectedTask.priority === "HIGH" ? "#c62828" : selectedTask.priority === "MEDIUM" ? "#f57f17" : "#616161",
+                    }}>
                       {selectedTask.priority}
                     </span>
                   </div>
@@ -387,9 +391,9 @@ export default function ResearcherTasksPage() {
               </div>
 
               <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: 6, padding: "12px 14px" }}>
-                <span style={m.metaLabel}>🕒 ACTIVITY LOG</span>
+                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>🕒 ACTIVITY LOG</span>
                 <p style={{ fontSize: 12, color: "#616161", lineHeight: 1.5, marginTop: 4 }}>
-                  Task active since {selectedTask.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString() : selectedTask.createdAt ? new Date(selectedTask.createdAt).toLocaleDateString() : "recent sprint"}. All updates are synchronized in real-time across team workspaces.
+                  Task active since {selectedTask.dueDate || "recent sprint"}. All updates are synchronized in real-time across team workspaces.
                 </p>
               </div>
             </div>
@@ -400,7 +404,6 @@ export default function ResearcherTasksPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
@@ -408,8 +411,7 @@ export default function ResearcherTasksPage() {
 const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
   title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
-  sub: { fontSize: 13, color: "#888888" },
-  select: { padding: "8px 12px", fontSize: 13, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", background: "#fff" },
+  searchInput: { padding: "8px 28px 8px 14px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 6, width: 200, outline: "none", background: "#ffffff" },
   btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   kanbanGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, alignItems: "flex-start" },
   column: { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "16px", minHeight: 450, display: "flex", flexDirection: "column" },
@@ -422,6 +424,9 @@ const s: Record<string, React.CSSProperties> = {
   taskCardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   taskId: { fontSize: 11, fontWeight: 600, color: "#9e9e9e", fontFamily: "monospace" },
   priorityBadge: { fontSize: 10, fontWeight: 600, padding: "2px 5px", borderRadius: 3 },
+  priHigh: { background: "#fde8e8", color: "#c62828" },
+  priMed: { background: "#fff8e1", color: "#f57f17" },
+  priLow: { background: "#f5f5f5", color: "#616161" },
   taskTitle: { fontSize: 13, fontWeight: 600, color: "#161616", lineHeight: 1.3, marginBottom: 6 },
   taskDesc: { fontSize: 12, color: "#616161", lineHeight: 1.4, marginBottom: 12 },
   taskCardBottom: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid #f5f5f5" },
@@ -439,11 +444,10 @@ const m: Record<string, React.CSSProperties> = {
   title: { fontSize: 16, fontWeight: 700, color: "#161616" },
   closeBtn: { background: "none", border: "none", fontSize: 15, color: "#9e9e9e", cursor: "pointer" },
   body: { padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 },
-  metaLabel: { fontSize: 10, fontWeight: 700, color: "#9e9e9e", letterSpacing: "0.8px", display: "block" } as React.CSSProperties,
   label: { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", display: "block" },
   field: { display: "flex", flexDirection: "column", gap: 6 },
   input: { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none" },
-  textarea: { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", resize: "none" } as React.CSSProperties,
+  textarea: { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", resize: "none" },
   select: { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, background: "#ffffff", outline: "none" },
   footer: { display: "flex", gap: 8, paddingTop: 10 },
   btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },

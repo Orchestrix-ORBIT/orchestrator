@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 import { ProjectsService, type Project } from "@/lib/services/projects";
 import { DocumentsService, type Document, type CreateDocumentBody } from "@/lib/services/documents";
 
@@ -79,7 +80,7 @@ export default function ResearcherDocumentsPage() {
     }
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading documents…</p>;
+  if (loading) return <LoadingState title="Loading Documents..." subtitle="Fetching your documents" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (

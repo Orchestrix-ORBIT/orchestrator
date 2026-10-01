@@ -335,6 +335,7 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     minHeight: "100vh",
     background: "#f5f5f5",
+    position: "relative",
   },
   topbar: {
     height: 48,

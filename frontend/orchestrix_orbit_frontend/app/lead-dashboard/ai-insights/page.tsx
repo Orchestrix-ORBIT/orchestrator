@@ -4,13 +4,14 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import LoadingState from "@/components/ui/LoadingState";
 import { ProjectsService, type Project } from "@/lib/services/projects";
-import { TasksService, type Task } from "@/lib/services/tasks";
+import { TasksService } from "@/lib/services/tasks";
+import { TeamsService, type TeamMember } from "@/lib/services/teams";
 import {
   getAiSummaries,
   updateAiSummaryStatus,
+  deleteAiSummary,
   type SavedAiSummary,
 } from "@/lib/services/aiSummaries";
-import SavedChatSummaries from "@/components/SavedChatSummaries";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface InsightItem {
@@ -34,17 +35,31 @@ export default function AiInsightsPage() {
   const [insights, setInsights]         = useState<InsightItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<InsightItem | null>(null);
   const [projects, setProjects]         = useState<Project[]>([]);
-  const [isApproving, setIsApproving]   = useState(false);
-  const [editTitle, setEditTitle]       = useState("");
-  const [editDesc, setEditDesc]         = useState("");
   const [filterType, setFilterType]     = useState<"ALL" | "PENDING" | "EXECUTED" | "ARCHIVED">("ALL");
   const [toastMsg, setToastMsg]         = useState<string | null>(null);
+  const [isDeleting, setIsDeleting]     = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  // Per-task editing state (one entry per action item)
+  const [taskTitles, setTaskTitles]         = useState<string[]>([]);
+  const [taskAssignees, setTaskAssignees]   = useState<string[]>([]);
+  const [approvingIdx, setApprovingIdx]     = useState<number | null>(null);
+  const [approvedIdxs, setApprovedIdxs]     = useState<number[]>([]);
+  const [teamMembers, setTeamMembers]       = useState<TeamMember[]>([]);
+  const [isMarkingRead, setIsMarkingRead]   = useState(false);
+  const [isArchiving, setIsArchiving]       = useState(false);
 
-  // When a modal opens, seed the editable fields
+  // When a modal opens, seed per-task editable fields and load team members
   useEffect(() => {
     if (selectedItem) {
-      setEditTitle(selectedItem.topic);
-      setEditDesc(selectedItem.summary);
+      const items = selectedItem.actionItems || [];
+      setTaskTitles(items.map((a) => a));
+      setTaskAssignees(items.map(() => ""));
+      setApprovedIdxs([]);
+      setApprovingIdx(null);
+      // Load team members for this project
+      TeamsService.getAllMembers()
+        .then((members) => setTeamMembers(members))
+        .catch(() => setTeamMembers([]));
     }
   }, [selectedItem]);
 
@@ -103,34 +118,40 @@ export default function AiInsightsPage() {
     };
   }, []);
 
-  async function handleApprove(item: InsightItem) {
-    setIsApproving(true);
+  async function handleApproveTask(item: InsightItem, taskIdx: number) {
+    const title = taskTitles[taskIdx]?.trim();
+    if (!title) return;
+    setApprovingIdx(taskIdx);
     try {
-      // Create task on the Kanban board in PostgreSQL database
+      const assigneeId = taskAssignees[taskIdx] || undefined;
       await TasksService.create(item.projectId, {
-        title: editTitle || item.topic,
-        description: editDesc || item.summary,
+        title,
+        description: item.summary,
         priority: "HIGH",
+        assigneeId,
       });
-
-      // Update AI summary status in DB to "Executed"
-      await updateAiSummaryStatus(item.id, "Executed");
-
-      // Optimistically update the UI
-      setInsights((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, status: "Executed" } : i))
-      );
-      setSelectedItem(null);
-      setToastMsg(`Approved! Task "${editTitle || item.topic}" created on ${item.projectName} Kanban board.`);
-      setTimeout(() => setToastMsg(null), 4000);
+      setApprovedIdxs((prev) => [...prev, taskIdx]);
+      // If all tasks approved, mark summary as Executed and close
+      const allApproved = [...approvedIdxs, taskIdx].length === (item.actionItems?.length || 0);
+      if (allApproved) {
+        await updateAiSummaryStatus(item.id, "Executed");
+        setInsights((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: "Executed" } : i)));
+        setSelectedItem(null);
+        setToastMsg(`✓ All tasks approved and created on ${item.projectName} Kanban board.`);
+        setTimeout(() => setToastMsg(null), 4000);
+      } else {
+        setToastMsg(`✓ Task "${title}" created.`);
+        setTimeout(() => setToastMsg(null), 2500);
+      }
     } catch (e) {
-      alert("Failed to approve task: " + e);
+      alert("Failed to create task: " + e);
     } finally {
-      setIsApproving(false);
+      setApprovingIdx(null);
     }
   }
 
   async function handleReject(item: InsightItem) {
+    setIsArchiving(true);
     try {
       await updateAiSummaryStatus(item.id, "Archived");
       setInsights((prev) =>
@@ -141,6 +162,24 @@ export default function AiInsightsPage() {
       setTimeout(() => setToastMsg(null), 3000);
     } catch (e) {
       alert("Failed to archive summary: " + e);
+    } finally {
+      setIsArchiving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setIsDeleting(true);
+    try {
+      await deleteAiSummary(id);
+      setInsights((prev) => prev.filter((i) => i.id !== id));
+      setSelectedItem(null);
+      setDeleteConfirmId(null);
+      setToastMsg("Summary deleted successfully.");
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch (e) {
+      alert("Failed to delete summary: " + e);
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -194,8 +233,6 @@ export default function AiInsightsPage() {
           ⚠ Failed to load summaries: {error}
         </div>
       )}
-
-      <SavedChatSummaries />
 
       {/* ── Stat Cards ───────────────────────────────────────────────────────── */}
       <div style={s.statGrid}>
@@ -310,6 +347,7 @@ export default function AiInsightsPage() {
                 <th style={s.th}>Confidence</th>
                 <th style={s.th}>Date</th>
                 <th style={{ ...s.th, textAlign: "right" }}>Status</th>
+                <th style={{ ...s.th, textAlign: "center", width: 60 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -350,6 +388,29 @@ export default function AiInsightsPage() {
                       {item.status}
                     </span>
                   </td>
+                  <td style={{ ...s.td, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    {deleteConfirmId === item.id ? (
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={isDeleting}
+                          style={{ fontSize: 10, padding: "3px 8px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 700 }}
+                        >{isDeleting ? "…" : "Yes"}</button>
+                        <button
+                          onClick={() => setDeleteConfirmId(null)}
+                          style={{ fontSize: 10, padding: "3px 8px", background: "#f5f5f5", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 4, cursor: "pointer" }}
+                        >No</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirmId(item.id)}
+                        title="Delete summary"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#9e9e9e", fontSize: 14, padding: 4, borderRadius: 4, transition: "color 0.15s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "#9e9e9e")}
+                      >🗑</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -381,93 +442,151 @@ export default function AiInsightsPage() {
                 </p>
               </div>
 
-              {selectedItem.status === "Pending Approval" ? (
-                <>
-                  <div style={m.section}>
-                    <span style={m.label}>EXECUTIVE SUMMARY</span>
-                    <p style={m.text}>{selectedItem.summary}</p>
-                  </div>
-                  <div style={m.section}>
-                    <span style={m.label}>PROPOSED TASK TITLE (EDITABLE)</span>
-                    <input
-                      style={{ ...m.input, marginTop: 8 }}
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                    />
-                  </div>
-                  <div style={m.section}>
-                    <span style={m.label}>PROPOSED TASK DESCRIPTION (EDITABLE)</span>
-                    <textarea
-                      style={{ ...m.textarea, marginTop: 8 }}
-                      value={editDesc}
-                      onChange={(e) => setEditDesc(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                </>
-              ) : (
+              {/* Executive Summary — always shown */}
+              <div style={m.section}>
+                <span style={m.label}>EXECUTIVE SUMMARY</span>
+                <p style={m.text}>{selectedItem.summary}</p>
+              </div>
+
+              {/* Key Findings */}
+              {selectedItem.keyFindings.length > 0 && (
                 <div style={m.section}>
-                  <span style={m.label}>EXECUTIVE SUMMARY</span>
-                  <p style={m.text}>{selectedItem.summary}</p>
+                  <span style={m.label}>KEY FINDINGS</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                    {selectedItem.keyFindings.map((f, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: "#424242" }}>
+                        <span style={{ color: "#9e9e9e", fontWeight: 700 }}>•</span>
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              <div style={{ ...m.section, borderBottom: "none", paddingBottom: 0 }}>
-                <span style={m.label}>KEY FINDINGS & EXTRACTED ACTION ITEMS</span>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                  {selectedItem.keyFindings.map((finding, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: "#161616" }}>
-                      <span style={{ color: "#9e9e9e", fontWeight: 700 }}>•</span>
-                      <span>{finding}</span>
-                    </div>
-                  ))}
+              {/* ── No actionable tasks notice + Mark as Read ── */}
+              {selectedItem.status === "Pending Approval" && (!selectedItem.actionItems || selectedItem.actionItems.length === 0) && (
+                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "14px 16px", borderLeft: "3px solid #22c55e", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+                  <p style={{ fontSize: 13, color: "#15803d", margin: 0, fontWeight: 500, flex: 1 }}>
+                    ℹ️ No actionable tasks were identified in this conversation. Mark it as read to acknowledge and close it.
+                  </p>
+                  <button
+                    disabled={isMarkingRead}
+                    onClick={async () => {
+                      setIsMarkingRead(true);
+                      try {
+                        await updateAiSummaryStatus(selectedItem.id, "Executed");
+                        setInsights((prev) => prev.map((i) => i.id === selectedItem.id ? { ...i, status: "Executed" } : i));
+                        setSelectedItem(null);
+                        setToastMsg("✓ Summary marked as read.");
+                        setTimeout(() => setToastMsg(null), 3000);
+                      } catch (e) {
+                        alert("Failed to mark as read: " + e);
+                      } finally {
+                        setIsMarkingRead(false);
+                      }
+                    }}
+                    style={{ flexShrink: 0, padding: "6px 14px", background: isMarkingRead ? "#4ade80" : "#16a34a", color: "#fff", border: "none", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: isMarkingRead ? "not-allowed" : "pointer", whiteSpace: "nowrap", opacity: isMarkingRead ? 0.75 : 1, transition: "all 0.15s" }}
+                  >
+                    {isMarkingRead ? "Processing…" : "✓ Mark as Read"}
+                  </button>
                 </div>
-              </div>
+              )}
+
+              {/* ── Per-task approval cards (only if action items exist) ── */}
+              {selectedItem.status === "Pending Approval" && selectedItem.actionItems && selectedItem.actionItems.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <span style={m.label}>TASKS TO CREATE ({selectedItem.actionItems.length})</span>
+                  {selectedItem.actionItems.map((actionItem, idx) => {
+                    const isApproved = approvedIdxs.includes(idx);
+                    const isApproving = approvingIdx === idx;
+                    return (
+                      <div key={idx} style={{
+                        border: isApproved ? "1px solid #bbf7d0" : "1px solid #e0e0e0",
+                        borderRadius: 6, padding: "12px 14px",
+                        background: isApproved ? "#f0fdf4" : "#fafafa",
+                        opacity: isApproved ? 0.75 : 1,
+                        display: "flex", flexDirection: "column", gap: 8,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#9e9e9e" }}>TASK {idx + 1}</span>
+                          {isApproved && <span style={{ fontSize: 11, fontWeight: 700, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: 10 }}>✓ Created</span>}
+                        </div>
+                        <input
+                          disabled={isApproved}
+                          value={taskTitles[idx] ?? actionItem}
+                          onChange={(e) => setTaskTitles((prev) => { const n = [...prev]; n[idx] = e.target.value; return n; })}
+                          style={{ ...m.input, fontSize: 13, fontWeight: 600 }}
+                          placeholder="Task title..."
+                        />
+                        {/* Assignee selector */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 11, color: "#9e9e9e", whiteSpace: "nowrap" }}>Assign to:</span>
+                          <select
+                            disabled={isApproved}
+                            value={taskAssignees[idx] ?? ""}
+                            onChange={(e) => setTaskAssignees((prev) => { const n = [...prev]; n[idx] = e.target.value; return n; })}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 12, border: "1px solid #d0d0d0", borderRadius: 4, background: "#fff", color: "#161616", cursor: "pointer" }}
+                          >
+                            <option value="">— Unassigned —</option>
+                            {teamMembers.map((m) => {
+                              const uid = m.userId || m.id || "";
+                              const name = m.userDisplayName || m.displayName || m.userEmail || m.email || uid;
+                              return <option key={uid} value={uid}>{name}</option>;
+                            })}
+                          </select>
+                        </div>
+                        {!isApproved && (
+                          <button
+                            disabled={isApproving || !taskTitles[idx]?.trim()}
+                            onClick={() => handleApproveTask(selectedItem, idx)}
+                            style={{ alignSelf: "flex-end", padding: "5px 14px", background: "#161616", color: "#fff", border: "none", borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (!taskTitles[idx]?.trim() || isApproving) ? 0.5 : 1 }}
+                          >
+                            {isApproving ? "Creating…" : "✓ Approve & Create"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div style={m.footer}>
               <span style={{ fontSize: 12, color: "#757575" }}>
                 Status: <strong>{selectedItem.status}</strong>
               </span>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  onClick={() => { if (window.confirm("Delete this summary permanently?")) handleDelete(selectedItem.id); }}
+                  disabled={isDeleting}
+                  style={{ padding: "8px 14px", background: "#fff", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                >
+                  {isDeleting ? "Deleting..." : "🗑 Delete"}
+                </button>
                 {selectedItem.status === "Pending Approval" ? (
                   <>
                     <button
                       onClick={() => handleReject(selectedItem)}
-                      style={m.btnDanger}
-                      disabled={isApproving}
+                      disabled={isArchiving}
+                      style={{ ...m.btnDanger, opacity: isArchiving ? 0.65 : 1, cursor: isArchiving ? "not-allowed" : "pointer" }}
                     >
-                      Reject
+                      {isArchiving ? "Archiving…" : "Archive"}
                     </button>
-                    <button
-                      onClick={() => handleApprove(selectedItem)}
-                      style={m.btnPrimary}
-                      disabled={isApproving}
-                    >
-                      {isApproving ? "Approving..." : "Approve & Convert to Task"}
-                    </button>
+                    {/* Only show Close if no tasks — approve buttons are inline per task */}
+                    {(!selectedItem.actionItems || selectedItem.actionItems.length === 0) && (
+                      <button onClick={() => setSelectedItem(null)} style={m.btnPrimary}>Close</button>
+                    )}
                   </>
                 ) : (
                   <>
                     <Link
                       href={`/lead-dashboard/projects/${selectedItem.projectId}`}
-                      style={{
-                        padding: "8px 14px",
-                        background: "#f5f5f5",
-                        color: "#161616",
-                        border: "1px solid #d0d0d0",
-                        borderRadius: 4,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        textDecoration: "none",
-                      }}
+                      style={{ padding: "8px 14px", background: "#f5f5f5", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
                       onClick={() => setSelectedItem(null)}
                     >
                       Open Project Kanban →
                     </Link>
-                    <button onClick={() => setSelectedItem(null)} style={m.btnPrimary}>
-                      Close
-                    </button>
+                    <button onClick={() => setSelectedItem(null)} style={m.btnPrimary}>Close</button>
                   </>
                 )}
               </div>

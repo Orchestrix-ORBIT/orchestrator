@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, use, useCallback, useRef } from "react";
 import Link from "next/link";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "ACCEPTED";
@@ -27,6 +27,7 @@ import { useEffect } from "react";
 import { ProjectsService } from "@/lib/services/projects";
 import { TasksService } from "@/lib/services/tasks";
 import { TeamsService } from "@/lib/services/teams";
+import { useTasksRealtime } from "@/lib/useTasksRealtime";
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "TODO", title: "To Do" },
@@ -69,32 +70,35 @@ export default function ProjectWorkspacePage({
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
 
+  // Confirmation modal state
+  const [pendingMove, setPendingMove] = useState<{ taskId: string; taskTitle: string; from: TaskStatus; to: TaskStatus } | null>(null);
+
+  const STAGE_LABELS: Record<TaskStatus, string> = {
+    TODO: "To Do",
+    IN_PROGRESS: "In Progress",
+    DONE: "Completed (Pending Review)",
+    ACCEPTED: "Accepted ✓",
+  };
+
+  function requestMove(taskId: string, targetStatus: TaskStatus) {
+    if (isCompletedProject) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || task.status === targetStatus) return;
+    setPendingMove({ taskId, taskTitle: task.title, from: task.status, to: targetStatus });
+  }
+
   useEffect(() => {
     async function loadData() {
       try {
-        const [proj, taskList, members] = await Promise.all([
-          ProjectsService.getById(projectId).catch(() => ({ id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" })),
+        const proj = await ProjectsService.getById(projectId).catch(() => ({ id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" as const, teamId: undefined as string | undefined }));
+        
+        const [taskList, members] = await Promise.all([
           TasksService.getByProject(projectId).catch(() => []),
-          TeamsService.getAllMembers().catch(() => []),
+          proj.teamId ? TeamsService.getTeamMembers(proj.teamId).catch(() => []) : Promise.resolve([]),
         ]);
+
         setProject(proj);
-
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        const assignedIds = storedMap[projectId] || [];
-
-        let projectMembers = members.filter((m: any) => assignedIds.includes(m.id || m.userId));
-        
-        // Fallback for default projects without assigned members in localStorage
-        if (projectMembers.length === 0) {
-          projectMembers = members.filter((m: any) => {
-            const role = String(m.role || "").toUpperCase();
-            const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
-            const email = String(m.email || m.userEmail || "").toLowerCase();
-            return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
-          });
-        }
-        
-        setAvailableMembers(projectMembers);
+        setAvailableMembers(members);
 
         const mappedTasks: TaskItem[] = (taskList as any[]).map((t: any) => {
           let uiStatus: TaskStatus = "TODO";
@@ -108,7 +112,11 @@ export default function ProjectWorkspacePage({
             title: t.title,
             description: t.description || "",
             status: uiStatus,
-            assignee: t.assigneeId ? "Researcher" : "Unassigned",
+            assignee: t.assigneeId
+              ? ((members as any[]).find((m: any) => (m.userId || m.id) === t.assigneeId)
+                  ? (members as any[]).find((m: any) => (m.userId || m.id) === t.assigneeId).displayName || t.assigneeId
+                  : t.assigneeId)
+              : "Unassigned",
             priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
             dueDate: t.dueDate || (t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "Active"),
           };
@@ -122,6 +130,48 @@ export default function ProjectWorkspacePage({
     }
     loadData();
   }, [projectId]);
+
+  // ── Realtime polling every 8s ─────────────────────────────────────────────
+  const availableMembersRef = useRef<any[]>([]);
+  useEffect(() => { availableMembersRef.current = availableMembers; }, [availableMembers]);
+
+  const handleRemoteUpdate = useCallback((remoteTasks: any[]) => {
+    setTasks(prev => {
+      const map = new Map(remoteTasks.map(t => [t.id, t]));
+      const updated = prev.map(local => {
+        const remote = map.get(local.id);
+        if (!remote) return local;
+        if (remote.status === local.status) return local;
+        let uiStatus: TaskStatus = "TODO";
+        if (remote.status === "ACCEPTED") uiStatus = "ACCEPTED";
+        else if (remote.status === "DONE" || remote.status === "COMPLETED") uiStatus = "DONE";
+        else if (remote.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
+        const match = availableMembersRef.current.find((m: any) => (m.userId || m.id) === remote.assigneeId);
+        const assigneeName = match ? (match.displayName || match.email || remote.assigneeId) : (remote.assigneeId || "Unassigned");
+        return { ...local, status: uiStatus, assignee: assigneeName };
+      });
+      const existingIds = new Set(prev.map(t => t.id));
+      const newItems: TaskItem[] = remoteTasks
+        .filter(t => !existingIds.has(t.id))
+        .map((t: any) => {
+          let uiStatus: TaskStatus = "TODO";
+          if (t.status === "ACCEPTED") uiStatus = "ACCEPTED";
+          else if (t.status === "DONE" || t.status === "COMPLETED") uiStatus = "DONE";
+          else if (t.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
+          const match = availableMembersRef.current.find((m: any) => (m.userId || m.id) === t.assigneeId);
+          return {
+            id: t.id, title: t.title, description: t.description || "",
+            status: uiStatus,
+            assignee: match ? (match.displayName || match.email) : t.assigneeId || "Unassigned",
+            priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
+            dueDate: t.dueDate || "Active",
+          };
+        });
+      return newItems.length > 0 ? [...updated, ...newItems] : updated;
+    });
+  }, []);
+
+  useTasksRealtime([projectId], handleRemoteUpdate);
 
   const currentProject = project || { id: projectId, name: `Project ${projectId.substring(0, 8)}`, status: "ACTIVE" };
   const isCompletedProject = currentProject.status === "COMPLETED";
@@ -141,6 +191,7 @@ export default function ProjectWorkspacePage({
         title: titleInput.trim(),
         description: descInput.trim() || undefined,
         priority: (priorityInput === "HIGH" ? "HIGH" : priorityInput === "MEDIUM" ? "MEDIUM" : "LOW") as any,
+        assigneeId: assigneeInput || undefined,
       });
 
       const newTask: TaskItem = {
@@ -148,7 +199,11 @@ export default function ProjectWorkspacePage({
         title: created.title,
         description: created.description || "",
         status: columnInput,
-        assignee: assigneeInput || "Researcher",
+        assignee: assigneeInput
+          ? (availableMembers.find((m: any) => (m.userId || m.id) === assigneeInput)
+              ? availableMembers.find((m: any) => (m.userId || m.id) === assigneeInput).displayName
+              : "Researcher")
+          : "Unassigned",
         priority: priorityInput,
         dueDate: "Just now",
       };
@@ -166,6 +221,7 @@ export default function ProjectWorkspacePage({
 
   const handleMoveTask = async (taskId: string, targetStatus: TaskStatus) => {
     if (isCompletedProject) return;
+    setPendingMove(null);
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: targetStatus } : t))
     );
@@ -346,7 +402,7 @@ export default function ProjectWorkspacePage({
                 if (isCompletedProject) return;
                 e.preventDefault();
                 const id = e.dataTransfer.getData("text/plain") || draggedTaskId;
-                if (id) handleMoveTask(id, col.id);
+                if (id) requestMove(id, col.id);
                 setDragOverCol(null);
                 setDraggedTaskId(null);
               }}
@@ -434,7 +490,7 @@ export default function ProjectWorkspacePage({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleMoveTask(task.id, "ACCEPTED");
+                                  requestMove(task.id, "ACCEPTED");
                                 }}
                                 style={{
                                   padding: "4px 10px",
@@ -456,7 +512,7 @@ export default function ProjectWorkspacePage({
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleMoveTask(task.id, e.target.value as TaskStatus);
+                                requestMove(task.id, e.target.value as TaskStatus);
                               }}
                               style={s.statusSelect}
                             >
@@ -497,6 +553,39 @@ export default function ProjectWorkspacePage({
           );
         })}
       </div>
+
+      {/* ── Move Confirmation Modal ──────────────────────────────────────────── */}
+      {pendingMove && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setPendingMove(null)}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            {/* Icon */}
+            <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#f0f4ff", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#3b5bdb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 10h10M12 7l3 3-3 3"/>
+              </svg>
+            </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#161616", margin: "0 0 6px" }}>Move Task?</h3>
+            <p style={{ fontSize: 13, color: "#424242", margin: "0 0 18px", lineHeight: 1.5 }}>
+              Move <strong>&ldquo;{pendingMove.taskTitle}&rdquo;</strong> from{" "}
+              <span style={{ fontWeight: 600, color: "#555" }}>{STAGE_LABELS[pendingMove.from]}</span>{" "}
+              →{" "}
+              <span style={{ fontWeight: 700, color: pendingMove.to === "ACCEPTED" ? "#2e7d32" : "#161616" }}>{STAGE_LABELS[pendingMove.to]}</span>?
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setPendingMove(null)}
+                style={{ padding: "8px 18px", borderRadius: 7, border: "1px solid #d0d0d0", background: "#fff", fontSize: 13, fontWeight: 600, color: "#424242", cursor: "pointer" }}
+              >Cancel</button>
+              <button
+                onClick={() => handleMoveTask(pendingMove.taskId, pendingMove.to)}
+                style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: pendingMove.to === "ACCEPTED" ? "#2e7d32" : "#161616", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}
+              >{pendingMove.to === "ACCEPTED" ? "Accept Task ✓" : "Confirm Move"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Task Details Modal ─────────────────────────────────────────────────── */}
       {selectedTask && (
@@ -710,10 +799,10 @@ export default function ProjectWorkspacePage({
                   >
                     <option value="">Select Assignee...</option>
                     {availableMembers.map((mem: any) => {
-                      const id = mem.id || mem.userId;
+                      const id = mem.userId || mem.id;
                       const name = mem.displayName || mem.userDisplayName || mem.email;
                       return (
-                        <option key={id} value={name}>
+                        <option key={id} value={id}>
                           {name}
                         </option>
                       );

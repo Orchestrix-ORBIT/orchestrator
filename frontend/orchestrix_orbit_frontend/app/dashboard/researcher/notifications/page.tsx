@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 import { ProjectsService } from "@/lib/services/projects";
 import { TasksService, type Task } from "@/lib/services/tasks";
 import { ResourcesService, type Booking } from "@/lib/services/resources";
@@ -120,6 +121,8 @@ export default function NotificationsPage() {
 
   const filtered = notifications.filter((n) => n.categories.includes(activeTab));
 
+  if (loading) return <LoadingState title="Loading Notifications..." subtitle="Fetching your recent notifications" />;
+
   return (
     <div>
       {/* ── Page header ──────────────────────────────────────────────────── */}
@@ -155,9 +158,7 @@ export default function NotificationsPage() {
 
       {/* ── Notification list ─────────────────────────────────────────────── */}
       <div style={s.notifList}>
-        {loading ? (
-          <p style={{ color: "#888", padding: 24 }}>Loading notifications…</p>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "#888", background: "#ffffff", borderRadius: 8, border: "1px solid #e8e8e8" }}>
             No notifications available in the database.
           </div>

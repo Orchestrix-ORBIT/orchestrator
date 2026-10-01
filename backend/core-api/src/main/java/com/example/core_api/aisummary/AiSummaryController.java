@@ -31,7 +31,7 @@ public class AiSummaryController {
         String schemaName = resolveSchema(tenantId);
         TenantContext.setCurrentTenant(schemaName);
         try {
-            return service.createSummary(request);
+            return service.createSummary(request, currentUser.getId());
         } finally {
             TenantContext.clear();
         }
@@ -46,10 +46,11 @@ public class AiSummaryController {
         String schemaName = resolveSchema(tenantId);
         TenantContext.setCurrentTenant(schemaName);
         try {
+            // Always filter by the authenticated user's ID — no cross-user leakage
             if (projectId != null) {
-                return service.getSummariesByProject(projectId);
+                return service.getSummariesByUserAndProject(currentUser.getId(), projectId);
             }
-            return service.getAllSummaries();
+            return service.getSummariesByUser(currentUser.getId());
         } finally {
             TenantContext.clear();
         }

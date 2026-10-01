@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { getTenantSlug, getToken } from "@/lib/auth";
+import { usePathname, useRouter } from "next/navigation";
+import { getTenantSlug, getToken, getRole, logout } from "@/lib/auth";
 
 const NAV = [
   {
@@ -93,7 +93,17 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [orgName, setOrgName] = useState<string>("");
+  const [role, setRole] = useState<string>("");
+
+  // read role once on mount
+  useEffect(() => { setRole(getRole() ?? ""); }, []);
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   useEffect(() => {
     const slug = getTenantSlug() || "myorg";
@@ -138,10 +148,50 @@ export function Sidebar() {
             </Link>
           );
         })}
-
-
       </nav>
 
+      {/* Footer: Back to Admin (admin/owner only) + Sign Out */}
+      <div style={{ padding: "12px 8px 0", marginTop: "auto", borderTop: "1px solid #2a2a2a", display: "flex", flexDirection: "column", gap: 6 }}>
+        {(role === "ROLE_ADMIN" || role === "ROLE_OWNER") && (
+          <Link
+            href="/admin"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "7px 12px",
+              background: "transparent",
+              border: "1px solid #333333",
+              borderRadius: 6,
+              color: "#a0a0a0",
+              fontSize: 12,
+              textDecoration: "none",
+            }}
+          >
+            Back to Admin
+          </Link>
+        )}
+        <button
+          onClick={handleLogout}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "1px solid #333333",
+            borderRadius: 6,
+            color: "#888888",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          Sign Out
+        </button>
+      </div>
     </aside>
   );
 }

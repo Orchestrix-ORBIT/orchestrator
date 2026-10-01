@@ -81,13 +81,13 @@ export default function Home() {
        * Step 2: Parse the response.
        * Backend returns: { token: "eyJ...", email: "...", role: "ROLE_MEMBER" }
        */
-      const data = await res.json() as { token: string; email: string; role: string };
+      const data = await res.json() as { token: string; email: string; role: string; userId?: string };
 
       /*
        * Step 3: Save to localStorage.
        * From now on, lib/api.ts will read these and attach them to every request.
        */
-      saveAuthData(data.token, data.role, data.email, siTenant.trim());
+      saveAuthData(data.token, data.role, data.email, siTenant.trim(), data.userId);
 
       /*
        * Step 4: Redirect based on role.
