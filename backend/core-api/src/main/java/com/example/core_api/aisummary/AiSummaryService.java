@@ -9,6 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+
+import com.example.core_api.project.Project;
+import com.example.core_api.project.ProjectRepository;
+import com.example.core_api.notification.NotificationService;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -22,9 +26,13 @@ public class AiSummaryService {
     private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"((?:\\\\\"|[^\"])*)\"");
 
     private final AiSummaryRepository repository;
+    private final ProjectRepository projectRepository;
+    private final NotificationService notificationService;
 
-    public AiSummaryService(AiSummaryRepository repository) {
+    public AiSummaryService(AiSummaryRepository repository, ProjectRepository projectRepository, NotificationService notificationService) {
         this.repository = repository;
+        this.projectRepository = projectRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -49,6 +57,17 @@ public class AiSummaryService {
                 .build();
 
         AiSummary saved = repository.save(entity);
+
+        // Notify project owner
+        projectRepository.findById(req.getProjectId()).ifPresent(project -> {
+            notificationService.notify(
+                project.getOwnerId(),
+                "AI_SUMMARY_CREATED",
+                "New AI Action Items",
+                "The Context Engine has suggested new tasks for project: " + project.getName()
+            );
+        });
+
         return mapToResponse(saved);
     }
 

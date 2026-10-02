@@ -45,7 +45,7 @@ export default function ResearcherProjectsPage() {
     ARCHIVED: projects.filter(p => p.status === "ARCHIVED").length,
   };
 
-  if (loading) return <LoadingState title="Loading projects…" subtitle="Fetching your assigned projects" />;
+  if (loading) return <LoadingState variant="table" title="Loading projects…" subtitle="Fetching your assigned projects" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
@@ -142,8 +142,8 @@ export default function ResearcherProjectsPage() {
 
 const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
-  sub: { fontSize: 13, color: "#888888" },
+  title: { fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#6b7280" },
   searchInput: {
     padding: "8px 14px",
     fontSize: 13,
@@ -153,20 +153,20 @@ const s: Record<string, React.CSSProperties> = {
     outline: "none",
     background: "#ffffff",
   },
-  filterRow: { display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #eeeeee", paddingBottom: 12 },
+  filterRow: { display: "inline-flex", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 12, marginBottom: 20, borderBottom: "1px solid #eeeeee", paddingBottom: 12 },
   filterTab: { padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#616161", background: "none", border: "none", borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 },
   filterTabActive: { background: "#161616", color: "#ffffff" },
   filterCount: { fontSize: 11, background: "rgba(0,0,0,0.06)", padding: "1px 6px", borderRadius: 10 },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 18 },
   card: {
     background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 8,
+    border: "1px solid #f3f4f6",
+    borderRadius: 12,
     padding: "20px",
     display: "flex",
     flexDirection: "column",
     gap: 12,
-    boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)",
     transition: "transform 0.2s ease, box-shadow 0.2s ease",
   },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
@@ -204,5 +204,5 @@ const s: Record<string, React.CSSProperties> = {
     marginTop: "auto",
   },
   cardDate: { fontSize: 11, color: "#9ca3af", fontWeight: 500 },
-  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#888", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
+  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#6b7280", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
 };

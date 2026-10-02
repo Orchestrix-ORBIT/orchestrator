@@ -2,9 +2,13 @@ package com.example.core_api.resource;
 
 import com.example.core_api.exception.ResourceNotFoundException;
 import com.example.core_api.exception.ResourceBookingConflictException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.example.core_api.notification.NotificationService;
 
 import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
@@ -21,22 +25,27 @@ import com.example.core_api.project.Project;
 @Transactional
 public class ResourceService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResourceService.class);
+
     private final ResourceRepository resourceRepository;
     private final ResourceBookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final ResourceMaintenanceRepository maintenanceRepository;
     private final ProjectRepository projectRepository;
+    private final NotificationService notificationService;
 
     public ResourceService(ResourceRepository resourceRepository, 
                            ResourceBookingRepository bookingRepository, 
                            UserRepository userRepository,
                            ResourceMaintenanceRepository maintenanceRepository,
-                           ProjectRepository projectRepository) {
+                           ProjectRepository projectRepository,
+                           NotificationService notificationService) {
         this.resourceRepository = resourceRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.maintenanceRepository = maintenanceRepository;
         this.projectRepository = projectRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +64,9 @@ public class ResourceService {
                 resourceRepository.save(res);
             });
         }
+        
+        cancelConflictingBookingsForMaintenance(saved);
+        
         return saved;
     }
 
@@ -101,6 +113,8 @@ public class ResourceService {
                 }
             }
         }
+        
+        cancelConflictingBookingsForMaintenance(saved);
 
         return saved;
     }
@@ -218,7 +232,7 @@ public class ResourceService {
                 .projectId(request.getProjectId())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
-                .status(BookingStatus.PENDING_APPROVAL)
+                .status(BookingStatus.APPROVED)
                 .purpose(request.getPurpose())
                 .build();
 
@@ -232,6 +246,24 @@ public class ResourceService {
                     "\"" + resource.getName() + "\" was just booked by another user for that time slot. " +
                     "Please refresh and choose a different time.");
         }
+        
+        // Notify managers about the new booking approval
+        String managerTitle = "New Booking Request Approved";
+        String managerMessage = "A new booking for " + resource.getName() + " has been requested and automatically approved.";
+        
+        List<User> managers = userRepository.findByRoleIn(java.util.List.of(
+            com.example.core_api.auth.UserRole.ADMIN,
+            com.example.core_api.auth.UserRole.OWNER,
+            com.example.core_api.auth.UserRole.ROLE_ADMIN,
+            com.example.core_api.auth.UserRole.RESOURCE_MANAGER
+        ));
+        
+        log.info("[NOTIFY] Found {} manager-level users to notify", managers.size());
+        for (User manager : managers) {
+            log.info("[NOTIFY] Notifying manager id={} email={}", manager.getId(), manager.getEmail());
+            notificationService.notify(manager.getId(), "BOOKING_UPDATE", managerTitle, managerMessage);
+        }
+        
         return mapToBookingResponse(booking);
     }
 
@@ -239,8 +271,20 @@ public class ResourceService {
         ResourceBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
                 
+        BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(newStatus);
         booking = bookingRepository.save(booking);
+
+        if (oldStatus != newStatus) {
+            Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+            String resName = resource != null ? resource.getName() : "Resource";
+            
+            String title = "Booking " + newStatus;
+            String message = "Your booking for " + resName + " has been " + newStatus.toString().toLowerCase() + ".";
+            
+            notificationService.notify(booking.getUserId(), "BOOKING_UPDATE", title, message);
+        }
+
         return mapToBookingResponse(booking);
     }
 
@@ -370,5 +414,34 @@ public class ResourceService {
             return java.time.OffsetDateTime.parse(clean).toInstant();
         } catch (Exception ignored) {}
         return null;
+    }
+    
+    private void cancelConflictingBookingsForMaintenance(ResourceMaintenance maintenance) {
+        if (!"Scheduled".equalsIgnoreCase(maintenance.getStatus()) && 
+            !"In Progress".equalsIgnoreCase(maintenance.getStatus())) {
+            return; // don't cancel if it's completed or cancelled
+        }
+
+        try {
+            java.time.Instant startInstant = parseToInstant(maintenance.getStartDate());
+            java.time.Instant endInstant = parseToInstant(maintenance.getEndDate());
+            if (startInstant == null || endInstant == null) return;
+            
+            java.time.OffsetDateTime startTime = java.time.OffsetDateTime.ofInstant(startInstant, java.time.ZoneOffset.UTC);
+            java.time.OffsetDateTime endTime = java.time.OffsetDateTime.ofInstant(endInstant, java.time.ZoneOffset.UTC);
+            
+            List<ResourceBooking> conflicting = bookingRepository.findOverlappingBookings(maintenance.getResourceId(), startTime, endTime);
+            for (ResourceBooking booking : conflicting) {
+                booking.setStatus(BookingStatus.CANCELLED);
+                bookingRepository.save(booking);
+                
+                String title = "Booking Cancelled - Priority Maintenance";
+                String message = "Your booking for asset '" + maintenance.getAssetName() + "' from " + booking.getStartTime() + " to " + booking.getEndTime() + " has been cancelled by a manager due to priority lab maintenance.";
+                notificationService.notify(booking.getUserId(), "BOOKING_UPDATE", title, message);
+                log.info("[NOTIFY] Cancelled overlapping booking id={} and notified user id={}", booking.getId(), booking.getUserId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to process maintenance overlaps for maintenance id={}", maintenance.getId(), e);
+        }
     }
 }

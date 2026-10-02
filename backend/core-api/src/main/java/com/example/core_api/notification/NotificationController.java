@@ -17,6 +17,9 @@ public class NotificationController {
         this.notificationRepository = notificationRepository;
     }
 
+    // TenantFilter (Order=1) already sets TenantContext from X-Tenant-ID before any
+    // controller method runs — no manual schema switching needed here.
+
     @GetMapping
     public List<Notification> getNotifications(@AuthenticationPrincipal User currentUser) {
         return notificationRepository.findAllByUserIdOrderByCreatedAtDesc(currentUser.getId());

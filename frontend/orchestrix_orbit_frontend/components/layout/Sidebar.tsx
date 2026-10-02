@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getTenantSlug, getToken, getRole, logout } from "@/lib/auth";
+import { NotificationsService } from "@/lib/services/notifications";
 
 const NAV = [
   {
@@ -96,9 +97,19 @@ export function Sidebar() {
   const router = useRouter();
   const [orgName, setOrgName] = useState<string>("");
   const [role, setRole] = useState<string>("");
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   // read role once on mount
   useEffect(() => { setRole(getRole() ?? ""); }, []);
+
+  useEffect(() => {
+    NotificationsService.getAll()
+      .then((list) => {
+        const unread = list.filter((n) => !n.read).length;
+        setUnreadCount(unread);
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   const handleLogout = () => {
     logout();
@@ -140,40 +151,27 @@ export function Sidebar() {
               id={`nav-lead-${item.label.toLowerCase().replace(/\s/g, "-")}`}
               href={item.href}
               style={active ? s.navItemActive : s.navItem}
+              className={!active ? "nav-item-hover" : ""}
             >
               <span style={active ? s.navIconActive : s.navIcon}>
                 {item.icon}
               </span>
-              <span>{item.label}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.label === "Notifications" && unreadCount > 0 && (
+                <span style={{ background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 10 }}>
+                  {unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer: Back to Admin (admin/owner only) + Sign Out */}
-      <div style={{ padding: "12px 8px 0", marginTop: "auto", borderTop: "1px solid #2a2a2a", display: "flex", flexDirection: "column", gap: 6 }}>
-        {(role === "ROLE_ADMIN" || role === "ROLE_OWNER") && (
-          <Link
-            href="/admin"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              padding: "7px 12px",
-              background: "transparent",
-              border: "1px solid #333333",
-              borderRadius: 6,
-              color: "#a0a0a0",
-              fontSize: 12,
-              textDecoration: "none",
-            }}
-          >
-            Back to Admin
-          </Link>
-        )}
+      {/* Footer: Sign Out */}
+      <div style={{ padding: "12px 8px 0", marginTop: "auto", borderTop: "1px solid #f3f4f6", display: "flex", flexDirection: "column", gap: 6 }}>
         <button
           onClick={handleLogout}
+          className="nav-item-hover"
           style={{
             width: "100%",
             display: "flex",
@@ -182,11 +180,12 @@ export function Sidebar() {
             gap: 8,
             padding: "8px 12px",
             background: "transparent",
-            border: "1px solid #333333",
+            border: "1px solid #d1d5db",
             borderRadius: 6,
-            color: "#888888",
+            color: "#6b7280",
             fontSize: 12,
             cursor: "pointer",
+            transition: "background 0.15s ease, color 0.15s ease",
           }}
         >
           Sign Out
@@ -198,38 +197,42 @@ export function Sidebar() {
 
 const s: Record<string, React.CSSProperties> = {
   sidebar: {
-    width: 200,
-    minWidth: 200,
-    background: "#161616",
+    width: 220,
+    minWidth: 220,
+    background: "#ffffff",
     display: "flex",
     flexDirection: "column",
     padding: "20px 0",
     position: "fixed" as const,
-    top: 0,
-    left: 0,
-    bottom: 0,
+    top: 12,
+    left: 12,
+    bottom: 12,
+    height: "calc(100vh - 24px)",
     zIndex: 20,
     fontFamily: "var(--font)",
     userSelect: "none",
+    borderRadius: 12,
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)",
   },
   brand: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
     padding: "0 18px 20px",
-    borderBottom: "1px solid #2a2a2a",
+    borderBottom: "1px solid #f3f4f6",
     marginBottom: 10,
   },
   brandName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 600,
-    color: "#ffffff",
+    color: "#111827",
     letterSpacing: "-0.2px",
   },
   brandSub: {
     fontSize: 11,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#6b7280",
+    fontWeight: 500,
   },
   nav: {
     display: "flex",
@@ -243,10 +246,10 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     padding: "9px 12px",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 13,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#4b5563",
+    fontWeight: 500,
     transition: "background 0.1s, color 0.1s",
     cursor: "pointer",
     textDecoration: "none",
@@ -256,22 +259,22 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     padding: "9px 12px",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 13,
-    color: "#ffffff",
-    fontWeight: 500,
-    background: "#2d2d2d",
+    color: "#4f46e5",
+    fontWeight: 600,
+    background: "#eef2ff",
     cursor: "pointer",
     textDecoration: "none",
   },
   navIcon: {
-    color: "#888888",
+    color: "#6b7280",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
   },
   navIconActive: {
-    color: "#ffffff",
+    color: "#4f46e5",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,

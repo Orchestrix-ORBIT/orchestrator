@@ -69,8 +69,7 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <LoadingState
-        title="Loading Notifications & Activity…"
+      <LoadingState variant="table" title="Loading Notifications & Activity…"
         subtitle="Fetching real-time workspace alerts, task updates, and system mentions"
       />
     );
@@ -185,7 +184,7 @@ export default function NotificationsPage() {
         <div style={s.notifList}>
           {filteredNotifs.length === 0 ? (
             <div style={s.emptyState}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#161616" }}>Inbox is clear</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Inbox is clear</p>
               <p style={{ fontSize: 12, color: "#9e9e9e", marginTop: 4 }}>
                 {filter === "ALL"
                   ? "No notifications yet."
@@ -248,36 +247,36 @@ export default function NotificationsPage() {
 
 const s: Record<string, React.CSSProperties> = {
   headerRow:       { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 },
-  pageTitle:       { fontSize: 28, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", marginBottom: 4 },
+  pageTitle:       { fontSize: 28, fontWeight: 700, color: "#111827", letterSpacing: "-0.5px", marginBottom: 4 },
   pageSub:         { fontSize: 13, color: "#9e9e9e" },
-  btnSecondary:    { background: "#ffffff", color: "#424242", border: "1px solid #d0d0d0", borderRadius: 4, padding: "8px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" },
+  btnSecondary:    { background: "#ffffff", color: "#374151", border: "1px solid #d0d0d0", borderRadius: 4, padding: "8px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" },
   statGrid:        { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 },
-  statCard:        { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 6 },
+  statCard:        { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 10, padding: "20px 22px 22px", display: "flex", flexDirection: "column", gap: 6, boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)" },
   statLabel:       { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", textTransform: "uppercase" as const },
-  statValue:       { fontSize: 32, fontWeight: 700, color: "#161616", letterSpacing: "-1px", lineHeight: 1.1 },
+  statValue:       { fontSize: 32, fontWeight: 700, color: "#111827", letterSpacing: "-1px", lineHeight: 1.1 },
   statSub:         { fontSize: 12, color: "#9e9e9e" },
-  filterBar:       { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
+  filterBar:       { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 10, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)" },
   filterGroup:     { display: "flex", alignItems: "center", gap: 8 },
   filterLabel:     { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", marginRight: 4 },
   filterBtn:       { background: "transparent", border: "1px solid #d0d0d0", borderRadius: 4, padding: "5px 12px", fontSize: 12, fontWeight: 500, color: "#616161", cursor: "pointer" },
   filterBtnActive: { background: "#161616", border: "1px solid #161616", borderRadius: 4, padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "#ffffff", cursor: "pointer" },
   countLabel:      { fontSize: 12, color: "#9e9e9e", fontWeight: 500 },
-  tableCard:       { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, overflow: "hidden" },
+  tableCard:       { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)" },
   notifList:       { display: "flex", flexDirection: "column" as const },
-  notifItem:       { padding: "16px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", flexDirection: "column" as const, gap: 6 },
+  notifItem:       { padding: "16px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", flexDirection: "column" as const, gap: 6 },
   notifTop:        { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  notifTitle:      { fontSize: 13, color: "#161616", fontWeight: 600 },
-  newDot:          { color: "#161616", fontSize: 8 },
+  notifTitle:      { fontSize: 13, color: "#111827", fontWeight: 600 },
+  newDot:          { color: "#111827", fontSize: 8 },
   notifTime:       { fontSize: 11, color: "#9e9e9e" },
   notifDesc:       { fontSize: 12, color: "#616161", lineHeight: 1.4 },
   notifBottom:     { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid #f9f9f9" },
   notifSender:     { fontSize: 11, color: "#9e9e9e" },
-  notifActionLink: { fontSize: 12, fontWeight: 600, color: "#161616", textDecoration: "none" },
+  notifActionLink: { fontSize: 12, fontWeight: 600, color: "#111827", textDecoration: "none" },
   btnToggleRead:   { background: "none", border: "none", color: "#9e9e9e", fontSize: 11, cursor: "pointer" },
   categoryBadge:   { fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase" as const },
   badgeAi:         { background: "#161616", color: "#ffffff" },
   badgeBooking:    { background: "#e8f5e9", color: "#2e7d32", border: "1px solid #c8e6c9" },
-  badgeTask:       { background: "#f5f5f5", color: "#424242", border: "1px solid #e0e0e0" },
+  badgeTask:       { background: "#f5f5f5", color: "#374151", border: "1px solid #f3f4f6" },
   badgeMention:    { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
   emptyState:      { padding: "48px 24px", textAlign: "center" as const },
 };

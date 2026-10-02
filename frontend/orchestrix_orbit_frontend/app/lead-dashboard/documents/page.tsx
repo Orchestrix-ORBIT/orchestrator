@@ -254,8 +254,7 @@ export default function DocumentsPage() {
   // ── Loading state ────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <LoadingState
-        title="Loading Knowledge & Documents…"
+      <LoadingState variant="grid" title="Loading Knowledge & Documents…"
         subtitle="Fetching research protocols, steering minutes, and pre-print papers"
       />
     );
@@ -281,12 +280,12 @@ export default function DocumentsPage() {
       </div>
 
       {/* ── Project Filter ───────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, padding: "10px 16px" }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#161616" }}>📁 Filter by Project:</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 12, padding: "10px 16px" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>📁 Filter by Project:</span>
         <select
           value={selectedProjectId}
           onChange={e => handleFilterChange(e.target.value)}
-          style={{ padding: "6px 12px", fontSize: 13, border: "1px solid #ccc", borderRadius: 6, background: "#fff", outline: "none", fontWeight: 500, color: "#161616", minWidth: 200 }}
+          style={{ padding: "6px 12px", fontSize: 13, border: "1px solid #ccc", borderRadius: 6, background: "#ffffff", outline: "none", fontWeight: 500, color: "#111827", minWidth: 200 }}
         >
           <option value="ALL">All Projects</option>
           {projects.map(p => (
@@ -294,7 +293,7 @@ export default function DocumentsPage() {
           ))}
         </select>
         {filterLoading && (
-          <span style={{ fontSize: 12, color: "#888", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid #e0e0e0", borderTop: "2px solid #161616", display: "inline-block", animation: "spin 0.7s linear infinite" }} />
             Updating…
           </span>
@@ -338,10 +337,10 @@ export default function DocumentsPage() {
         {docs.length === 0 ? (
           <div style={{ padding: "60px 20px", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>📄</div>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#161616", margin: "0 0 6px" }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: "0 0 6px" }}>
               No documents yet
             </p>
-            <p style={{ fontSize: 13, color: "#888", margin: "0 0 16px" }}>
+            <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 16px" }}>
               {selectedProjectId === "ALL"
                 ? "Create your first document to get started."
                 : "No documents for this project yet."}
@@ -370,7 +369,7 @@ export default function DocumentsPage() {
                   <td style={s.td}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <strong style={{ fontSize: 13 }}>{doc.title}</strong>
-                      <span style={{ fontSize: 11, color: "#9e9e9e", fontFamily: "monospace" }}>
+                      <span style={{ fontSize: 11, color: "#9e9e9e", fontFamily: "var(--font-mono)" }}>
                         {doc.id.substring(0, 8)}…
                       </span>
                     </div>
@@ -395,7 +394,7 @@ export default function DocumentsPage() {
                       {doc.category}
                     </span>
                   </td>
-                  <td style={{ ...s.td, fontSize: 12, color: "#424242" }}>{doc.author}</td>
+                  <td style={{ ...s.td, fontSize: 12, color: "#374151" }}>{doc.author}</td>
                   <td style={{ ...s.td, fontSize: 12, color: "#9e9e9e", textAlign: "center" as const }}>
                     v{doc.version}
                   </td>
@@ -446,10 +445,10 @@ export default function DocumentsPage() {
                   }}>
                     {selectedDoc.category}
                   </span>
-                  <span style={{ fontSize: 11, color: "#888", background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>
+                  <span style={{ fontSize: 11, color: "#6b7280", background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>
                     📁 {selectedDoc.projectName}
                   </span>
-                  <span style={{ fontSize: 11, color: "#888", background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>
+                  <span style={{ fontSize: 11, color: "#6b7280", background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>
                     v{selectedDoc.version}
                   </span>
                 </div>
@@ -604,24 +603,24 @@ export default function DocumentsPage() {
 
 const s: Record<string, React.CSSProperties> = {
   headerRow:    { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 },
-  pageTitle:    { fontSize: 28, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", marginBottom: 4 },
+  pageTitle:    { fontSize: 28, fontWeight: 700, color: "#111827", letterSpacing: "-0.5px", marginBottom: 4 },
   pageSub:      { fontSize: 13, color: "#9e9e9e" },
-  btnPrimary:   { background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSave:      { background: "#2e7d32", color: "#ffffff", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnOpen:      { padding: "5px 12px", background: "#f5f5f5", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 12, fontWeight: 600, color: "#161616", cursor: "pointer" },
+  btnOpen:      { padding: "5px 12px", background: "#f5f5f5", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 12, fontWeight: 600, color: "#111827", cursor: "pointer" },
   btnDelete:    { padding: "5px 8px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 4, fontSize: 12, cursor: "pointer" },
   statGrid:     { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 },
-  statCard:     { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 6 },
+  statCard:     { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 10, padding: "20px 22px 22px", display: "flex", flexDirection: "column", gap: 6, boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)" },
   statLabel:    { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", textTransform: "uppercase" as const },
-  statValue:    { fontSize: 32, fontWeight: 700, color: "#161616", letterSpacing: "-1px", lineHeight: 1.1 },
+  statValue:    { fontSize: 32, fontWeight: 700, color: "#111827", letterSpacing: "-1px", lineHeight: 1.1 },
   statSub:      { fontSize: 12, color: "#9e9e9e" },
-  tableCard:    { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, overflow: "hidden" },
+  tableCard:    { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)" },
   tableHeaderRow:{ display: "flex", alignItems: "center", justifyContent: "space-between" },
   sectionLabel: { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.6px", textTransform: "uppercase" as const, padding: "16px 20px 12px" },
   table:        { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
   th:           { textAlign: "left" as const, padding: "8px 16px", fontSize: 12, fontWeight: 500, color: "#9e9e9e", borderBottom: "1px solid #eeeeee", borderTop: "1px solid #eeeeee", background: "#fafafa" },
-  tr:           { borderBottom: "1px solid #f0f0f0" },
-  td:           { padding: "12px 16px", color: "#161616", fontSize: 13, verticalAlign: "middle" as const },
+  tr:           { borderBottom: "1px solid #f3f4f6" },
+  td:           { padding: "12px 16px", color: "#111827", fontSize: 13, verticalAlign: "middle" as const },
   badge:        { fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4 },
   badgeApproved:{ background: "#161616", color: "#ffffff" },
   badgeReview:  { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
@@ -630,23 +629,23 @@ const s: Record<string, React.CSSProperties> = {
 
 const m: Record<string, React.CSSProperties> = {
   overlay:       { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 },
-  modal:         { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, width: "100%", maxWidth: 520, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" },
-  modalLarge:    { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, width: "100%", maxWidth: 800, boxShadow: "0 10px 25px rgba(0,0,0,0.1)", maxHeight: "90vh", display: "flex", flexDirection: "column" as const },
+  modal:         { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 12, width: "100%", maxWidth: 520, boxShadow: "0 20px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)" },
+  modalLarge:    { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 12, width: "100%", maxWidth: 800, boxShadow: "0 20px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)", maxHeight: "90vh", display: "flex", flexDirection: "column" as const },
   header:        { padding: "18px 24px", borderBottom: "1px solid #eeeeee", display: "flex", alignItems: "flex-start" as const, justifyContent: "space-between", background: "#fafafa", flexShrink: 0 },
-  title:         { fontSize: 16, fontWeight: 700, color: "#161616", margin: 0 },
+  title:         { fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 },
   sub:           { fontSize: 12, color: "#9e9e9e", marginTop: 4, margin: 0 },
   closeBtn:      { background: "none", border: "none", fontSize: 15, color: "#9e9e9e", cursor: "pointer" },
   body:          { padding: "20px 24px", display: "flex", flexDirection: "column" as const, gap: 14 },
   bodyLarge:     { padding: "24px", flex: 1, overflowY: "auto" as const },
-  editorTextarea:{ width: "100%", padding: "14px 16px", fontSize: 14, fontFamily: "monospace", lineHeight: 1.6, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", color: "#161616", background: "#ffffff", resize: "vertical" as const, minHeight: 280, boxSizing: "border-box" as const },
+  editorTextarea:{ width: "100%", padding: "14px 16px", fontSize: 14, fontFamily: "var(--font-mono)", lineHeight: 1.6, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", color: "#111827", background: "#ffffff", resize: "vertical" as const, minHeight: 280, boxSizing: "border-box" as const },
   renderedDoc:   { background: "#fdfdfd", padding: "20px 24px", border: "1px solid #eeeeee", borderRadius: 4 },
-  docPre:        { fontSize: 13, fontFamily: "var(--font, sans-serif)", lineHeight: 1.6, color: "#333333", whiteSpace: "pre-wrap" as const, margin: 0 },
+  docPre:        { fontSize: 13, fontFamily: "var(--font)", lineHeight: 1.6, color: "#333333", whiteSpace: "pre-wrap" as const, margin: 0 },
   field:         { display: "flex", flexDirection: "column" as const, gap: 6 },
   label:         { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px" },
   input:         { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", background: "#ffffff" },
   textarea:      { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", resize: "none" as const },
   select:        { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, background: "#ffffff", outline: "none" },
   footer:        { padding: "14px 24px", borderTop: "1px solid #eeeeee", background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 },
-  btnPrimary:    { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnSecondary:  { padding: "8px 14px", background: "#ffffff", color: "#424242", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 500, cursor: "pointer" },
+  btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
+  btnSecondary:  { padding: "8px 14px", background: "#ffffff", color: "#374151", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 500, cursor: "pointer" },
 };

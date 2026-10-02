@@ -5,6 +5,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import { ProjectsService } from "@/lib/services/projects";
 import { TasksService, type Task } from "@/lib/services/tasks";
 import { ResourcesService, type Booking } from "@/lib/services/resources";
+import { NotificationsService, type Notification as ApiNotification } from "@/lib/services/notifications";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 type NotifCategory = "All" | "Tasks" | "Bookings" | "Chat" | "AI";
@@ -70,42 +71,36 @@ export default function NotificationsPage() {
   useEffect(() => {
     async function loadNotifications() {
       try {
-        const projects = await ProjectsService.getAll();
-        const taskPromises = projects.map((p) =>
-          TasksService.getByProject(p.id).catch(() => [] as Task[])
-        );
-        const [taskResults, bookings] = await Promise.all([
-          Promise.all(taskPromises),
-          ResourcesService.getMyBookings().catch(() => [] as Booking[]),
-        ]);
+        const apiNotifs = await NotificationsService.getAll();
+        
+        const items: Notification[] = apiNotifs.map((n) => {
+          let catType: NotifType = "task";
+          const cats: NotifCategory[] = ["All"];
+          
+          if (n.type.includes("TASK")) {
+            catType = "task";
+            cats.push("Tasks");
+          } else if (n.type.includes("BOOKING")) {
+            catType = "booking";
+            cats.push("Bookings");
+          } else if (n.type.includes("AI")) {
+            catType = "ai";
+            cats.push("AI");
+          } else if (n.type.includes("MENTION") || n.type.includes("CHAT")) {
+            catType = "message";
+            cats.push("Chat");
+          }
 
-        const flatTasks = taskResults.flat();
-        const items: Notification[] = [];
-
-        flatTasks.forEach((t) => {
-          items.push({
-            id: `task-${t.id}`,
-            type: "task",
-            title: `Task Status: ${t.title}`,
-            description: `Priority ${t.priority} • Status: ${t.status}`,
-            time: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "Active",
-            tag: "TASK",
-            isUnread: t.status !== "DONE",
-            categories: ["All", "Tasks"],
-          });
-        });
-
-        bookings.forEach((b) => {
-          items.push({
-            id: `booking-${b.id}`,
-            type: "booking",
-            title: `Resource Booking: ${b.resourceName || "Equipment"}`,
-            description: `Status: ${b.status} • Purpose: ${b.purpose || "Research Work"}`,
-            time: new Date(b.startTime).toLocaleDateString(),
-            tag: "RESOURCE",
-            isUnread: b.status === "APPROVED",
-            categories: ["All", "Bookings"],
-          });
+          return {
+            id: n.id,
+            type: catType,
+            title: n.title,
+            description: n.message,
+            time: new Date(n.createdAt).toLocaleDateString(),
+            tag: n.type,
+            isUnread: !n.read,
+            categories: cats,
+          };
         });
 
         setNotifications(items);
@@ -121,14 +116,21 @@ export default function NotificationsPage() {
 
   const filtered = notifications.filter((n) => n.categories.includes(activeTab));
 
-  if (loading) return <LoadingState title="Loading Notifications..." subtitle="Fetching your recent notifications" />;
+  if (loading) return <LoadingState variant="table" title="Loading Notifications..." subtitle="Fetching your recent notifications" />;
 
   return (
     <div>
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div style={s.pageHeader}>
         <h1 style={s.pageTitle}>Notifications</h1>
-        <button id="btn-mark-all-read" style={s.markAllBtn} onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })))}>
+        <button id="btn-mark-all-read" style={s.markAllBtn} onClick={async () => {
+          try {
+            await NotificationsService.markAllRead();
+            setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })));
+          } catch (e) {
+            console.error("Failed to mark all as read");
+          }
+        }}>
           Mark all as read
         </button>
       </div>
@@ -159,7 +161,7 @@ export default function NotificationsPage() {
       {/* ── Notification list ─────────────────────────────────────────────── */}
       <div style={s.notifList}>
         {filtered.length === 0 ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", color: "#888", background: "#ffffff", borderRadius: 8, border: "1px solid #e8e8e8" }}>
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", background: "#ffffff", borderRadius: 12, border: "1px solid #f3f4f6" }}>
             No notifications available in the database.
           </div>
         ) : (
@@ -181,11 +183,24 @@ export default function NotificationsPage() {
 
 /* ── Notification Row ────────────────────────────────────────────────────── */
 function NotifRow({ notif }: { notif: Notification }) {
+  const [unread, setUnread] = useState(notif.isUnread);
+
   return (
-    <div id={notif.id} style={s.notifRow}>
+    <div 
+      id={notif.id} 
+      style={{...s.notifRow, cursor: "pointer"}} 
+      onClick={async () => {
+        if (unread) {
+          try {
+            await NotificationsService.toggleRead(notif.id);
+            setUnread(false);
+          } catch (e) {}
+        }
+      }}
+    >
       {/* Unread indicator */}
       <div style={s.unreadDot}>
-        {notif.isUnread && <span style={s.dot} />}
+        {unread && <span style={s.dot} />}
       </div>
 
       {/* Icon */}
@@ -229,7 +244,7 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: {
     fontSize: 28,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
     letterSpacing: "-0.5px",
   },
   markAllBtn: {
@@ -263,7 +278,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "10px 18px",
     fontSize: 13,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
     background: "transparent",
     border: "none",
     borderBottom: "2px solid #161616",
@@ -276,8 +291,8 @@ const s: Record<string, React.CSSProperties> = {
   /* Notification list */
   notifList: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
+    border: "1px solid #f3f4f6",
+    borderRadius: 12,
     overflow: "hidden" as const,
     marginTop: 20,
   },
@@ -288,7 +303,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     gap: 0,
     padding: "18px 20px",
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
     transition: "background 0.1s",
   },
   unreadDot: {
@@ -309,13 +324,13 @@ const s: Record<string, React.CSSProperties> = {
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 12,
     background: "#f5f5f5",
-    border: "1px solid #e8e8e8",
+    border: "1px solid #f3f4f6",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#424242",
+    color: "#374151",
     flexShrink: 0,
     marginRight: 16,
   },
@@ -334,7 +349,7 @@ const s: Record<string, React.CSSProperties> = {
   notifTitle: {
     fontSize: 14,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   notifTime: {
     fontSize: 12,

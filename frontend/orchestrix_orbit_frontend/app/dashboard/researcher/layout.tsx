@@ -119,6 +119,7 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
                 id={`nav-${item.label.toLowerCase().replace(/\s/g, "-")}`}
                 href={item.href}
                 style={active ? s.navItemActive : s.navItem}
+                className={!active ? "nav-item-hover" : ""}
               >
                 <span style={active ? s.navIconActive : s.navIcon}>
                   {item.icon}
@@ -152,6 +153,7 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
             type="button"
             onClick={handleLogout}
             style={s.logoutBtn}
+            className="nav-item-hover"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
               <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
@@ -196,16 +198,7 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
             )}
           </div>
           <div style={s.topbarRight}>
-            {/* Upload Document button — only on documents page */}
-            {pathname === `${BASE}/documents` && (
-              <button id="btn-upload-document" style={s.uploadDocBtn}>
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ marginRight: 6 }}>
-                  <path d="M6.5 9V2M4 4.5L6.5 2 9 4.5" strokeLinejoin="round" />
-                  <path d="M1 10.5v1a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1" />
-                </svg>
-                Upload Document
-              </button>
-            )}
+
             {/* Lock icon */}
             <button id="btn-lock" style={s.iconBtn} title="Encryption">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -219,6 +212,7 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
               type="button"
               onClick={handleLogout}
               style={s.topbarLogoutBtn}
+              className="btn-secondary-hover"
               title="Sign Out"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -246,40 +240,45 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     minHeight: "100vh",
     fontFamily: "var(--font)",
+    background: "#f2f2f2",
   },
 
   /* Sidebar */
   sidebar: {
-    width: 192,
-    minWidth: 192,
-    background: "#161616",
+    width: 220,
+    minWidth: 220,
+    background: "#ffffff",
     display: "flex",
     flexDirection: "column",
     padding: "20px 0",
     position: "fixed" as const,
-    top: 0,
-    left: 0,
-    bottom: 0,
+    top: 12,
+    left: 12,
+    bottom: 12,
+    height: "calc(100vh - 24px)",
     zIndex: 10,
+    borderRadius: 12,
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)",
   },
   brand: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
     padding: "0 16px 20px",
-    borderBottom: "1px solid #2a2a2a",
+    borderBottom: "1px solid #f3f4f6",
     marginBottom: 8,
   },
   brandName: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: 600,
-    color: "#ffffff",
+    color: "#111827",
     letterSpacing: "-0.1px",
   },
   brandSub: {
     fontSize: 11,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#6b7280",
+    fontWeight: 500,
   },
   nav: {
     display: "flex",
@@ -293,10 +292,10 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     padding: "9px 10px",
-    borderRadius: 6,
+    borderRadius: 12,
     fontSize: 13,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#4b5563",
+    fontWeight: 500,
     transition: "background 0.1s, color 0.1s",
     cursor: "pointer",
     textDecoration: "none",
@@ -306,22 +305,22 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     padding: "9px 10px",
-    borderRadius: 6,
+    borderRadius: 12,
     fontSize: 13,
-    color: "#ffffff",
-    fontWeight: 500,
-    background: "#2d2d2d",
+    color: "#4f46e5",
+    fontWeight: 600,
+    background: "#eef2ff",
     cursor: "pointer",
     textDecoration: "none",
   },
   navIcon: {
-    color: "#888888",
+    color: "#6b7280",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
   },
   navIconActive: {
-    color: "#ffffff",
+    color: "#4f46e5",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
@@ -329,18 +328,19 @@ const s: Record<string, React.CSSProperties> = {
 
   /* Main */
   main: {
-    marginLeft: 192,
+    marginLeft: 244,
     flex: 1,
     display: "flex",
     flexDirection: "column",
     minHeight: "100vh",
-    background: "#f5f5f5",
+    background: "#f2f2f2",
     position: "relative",
   },
   topbar: {
     height: 48,
-    background: "#f5f5f5",
-    borderBottom: "1px solid #e0e0e0",
+    background: "rgba(242,242,242,0.85)",
+    backdropFilter: "blur(8px)",
+    borderBottom: "1px solid rgba(0,0,0,0.07)",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -368,7 +368,7 @@ const s: Record<string, React.CSSProperties> = {
     outline: "none",
     background: "transparent",
     fontSize: 13,
-    color: "#161616",
+    color: "#111827",
     width: "100%",
   },
   topbarRight: {
@@ -420,7 +420,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   sidebarDivider: {
     height: 1,
-    background: "#2a2a2a",
+    background: "#e5e7eb",
     marginBottom: 8,
   },
   encryptedSession: {
@@ -428,11 +428,11 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
     padding: "9px 10px",
-    borderRadius: 6,
+    borderRadius: 12,
     fontSize: 12,
     fontWeight: 500,
-    color: "#e8c84f",
-    background: "#242420",
+    color: "#d97706",
+    background: "#fffbeb",
     border: "none",
     cursor: "default",
     width: "100%",
@@ -443,28 +443,29 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     padding: "9px 10px",
-    borderRadius: 6,
+    borderRadius: 12,
     fontSize: 13,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#4b5563",
+    fontWeight: 500,
     cursor: "pointer",
     textDecoration: "none",
   },
   logoutBtn: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "9px 10px",
-    borderRadius: 6,
-    fontSize: 13,
-    color: "#f87171",
+    justifyContent: "center",
+    gap: 6,
+    padding: "8px 12px",
+    borderRadius: 12,
+    fontSize: 12,
+    color: "#374151",
     fontWeight: 500,
-    background: "none",
-    border: "none",
+    background: "transparent",
+    border: "1px solid #f3f4f6",
     cursor: "pointer",
     width: "100%",
-    textAlign: "left" as const,
-    marginTop: 4,
+    marginTop: 8,
+    transition: "background 0.15s",
   },
   topbarLogoutBtn: {
     display: "flex",

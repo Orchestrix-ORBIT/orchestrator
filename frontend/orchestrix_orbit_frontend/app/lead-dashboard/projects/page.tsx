@@ -245,7 +245,7 @@ export default function LeadProjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  if (loading) return <LoadingState title="Loading Projects & Workspaces…" subtitle="Fetching research projects, member assignments, and workspace details" />;
+  if (loading) return <LoadingState variant="table" title="Loading Projects & Workspaces…" subtitle="Fetching research projects, member assignments, and workspace details" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
@@ -289,7 +289,7 @@ export default function LeadProjectsPage() {
               </button>
             )}
           </div>
-          <button id="btn-new-project" style={s.btnPrimary} onClick={() => setShowModal(true)}>
+          <button id="btn-new-project" className="btn-hover-lift" style={s.btnPrimary} onClick={() => setShowModal(true)}>
             + New Project
           </button>
         </div>
@@ -305,6 +305,7 @@ export default function LeadProjectsPage() {
               ...s.filterTab,
               ...(filterStatus === st ? s.filterTabActive : {}),
             }}
+            className={filterStatus === st ? "" : "btn-secondary-hover"}
           >
             {st === "ALL" ? "All Projects" : st === "ACTIVE" ? "Active" : "Archived"}
             <span style={s.filterCount}>
@@ -322,76 +323,56 @@ export default function LeadProjectsPage() {
           const memberCount = projectMemberCounts[p.id] ?? 0;
 
           return (
-            <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
-              <div style={s.cardTop}>
-                <span style={{ ...s.badge, ...(p.status === "ACTIVE" ? s.activeStyle : s.archivedStyle), display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ fontSize: 8 }}>●</span> {p.status}
-                </span>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Link id={`btn-view-project-${p.id}`}
-                    href={`/lead-dashboard/projects/${p.id}`}
-                    style={s.viewBtn}>
-                    Open Workspace →
-                  </Link>
-                  <button id={`btn-edit-project-${p.id}`}
-                    style={s.editBtn}
-                    title="Edit project details"
-                    onClick={() => handleOpenEditModal(p)}>Edit</button>
-                  <button id={`btn-delete-project-${p.id}`}
-                    style={s.deleteBtn}
-                    title="Delete project"
-                    onClick={() => setProjectToDelete(p)}>Delete</button>
-                </div>
-              </div>
-
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                <h3 style={s.cardName}>
-                  <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link" style={{ fontSize: 16, fontWeight: 700 }}>
+          <div key={p.id} id={`project-card-${p.id}`} style={s.card} className="card-depth">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, marginBottom: 4 }}>
+                  <Link href={`/lead-dashboard/projects/${p.id}`} style={{ fontSize: "clamp(16px, 1.5vw, 20px)", fontWeight: 700, color: "#111827", textDecoration: "none" }}>
                     {p.name}
                   </Link>
                 </h3>
-                <p style={s.cardDesc}>{p.description || "No description provided."}</p>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#374151", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
-                    📋 {doneCount}/{pTasks.length} tasks done
-                  </span>
-                  <span
-                    style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4, cursor: p.teamId ? "pointer" : "default" }}
-                    onClick={() => p.teamId && openMembersModal(p)}
-                    title={p.teamId ? "Click to view members" : "No team assigned"}
-                  >
-                    {p.teamId ? `👥 ${memberCount} member${memberCount !== 1 ? "s" : ""}` : "⚠️ No team assigned"}
-                  </span>
-                </div>
+                <p style={{ fontSize: "clamp(12px, 1vw, 14px)", color: "#6b7280", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  {p.description || "No description provided."}
+                </p>
               </div>
+              <span style={{ ...s.badge, ...(p.status === "ACTIVE" ? s.activeStyle : s.archivedStyle), flexShrink: 0 }}>
+                {p.status}
+              </span>
+            </div>
 
-              {/* ── Card Footer: Team Avatars & Date ───────────────────────────── */}
-              <div style={s.cardFooter}>
-                <div
-                  style={{ ...s.avatarStack, cursor: p.teamId ? "pointer" : "default" }}
-                  onClick={() => p.teamId && openMembersModal(p)}
-                  title={p.teamId ? "Click to view all project members" : "No team assigned"}
-                >
-                  {p.teamId ? (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4 }}>👥 Members</span>
-                  ) : (
-                    <span style={s.unassignedText}>Unassigned</span>
-                  )}
-                </div>
-
-                <span style={s.cardDate}>
-                  {new Date(p.createdAt).toLocaleDateString()}
-                </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              <div style={s.metaBadge}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M4 4h8M4 8h8M4 12h4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {doneCount}/{pTasks.length} tasks
+              </div>
+              <div style={s.metaBadge} onClick={() => p.teamId && openMembersModal(p)}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="8" cy="6" r="3" />
+                  <path d="M3 14c0-2.5 2-4 5-4s5 1.5 5 4" strokeLinecap="round" />
+                </svg>
+                {p.teamId ? `${memberCount} members` : "Unassigned"}
               </div>
             </div>
+
+            <div style={{ marginTop: "auto", borderTop: "1px solid #f3f4f6", paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => handleOpenEditModal(p)} style={s.actionTextBtn} className="btn-secondary-hover">Edit</button>
+                <button onClick={() => setProjectToDelete(p)} style={{ ...s.actionTextBtn, color: "#dc2626" }} className="btn-secondary-hover">Delete</button>
+              </div>
+              <Link href={`/lead-dashboard/projects/${p.id}`} style={s.viewBtnMinimal} className="btn-secondary-hover">
+                Open Workspace →
+              </Link>
+            </div>
+          </div>
           );
         })}
 
         {filteredProjects.length === 0 && (
           <div style={s.empty}>
             <p>No projects match your search or filter criteria.</p>
-            <button style={s.btnPrimary} onClick={() => setShowModal(true)}>Create a project</button>
+            <button className="btn-hover-lift" style={s.btnPrimary} onClick={() => setShowModal(true)}>Create a project</button>
           </div>
         )}
       </div>
@@ -426,7 +407,7 @@ export default function LeadProjectsPage() {
                     if (!member) return null;
                     const name = member.displayName || member.userDisplayName || member.email;
                     return (
-                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
+                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
                         {name}
                         <button
                           type="button"
@@ -450,7 +431,7 @@ export default function LeadProjectsPage() {
                     onChange={e => setMemberSearchQuery(e.target.value)}
                   />
                   {memberSearchQuery.trim() !== "" && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
                       {availableMembers
                         .filter(m => {
                           const id = m.id || m.userId;
@@ -470,12 +451,12 @@ export default function LeadProjectsPage() {
                                 toggleMember(id);
                                 setMemberSearchQuery("");
                               }}
-                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f8f8f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f9fafb", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                               onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
                               onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
                             >
                               <span>{name}</span>
-                              <span style={{ fontSize: 11, color: "#888" }}>{m.email}</span>
+                              <span style={{ fontSize: 11, color: "#6b7280" }}>{m.email}</span>
                             </div>
                           );
                         })}
@@ -487,7 +468,7 @@ export default function LeadProjectsPage() {
                         const email = (m.email || m.userEmail || "").toLowerCase();
                         return name.includes(q) || email.includes(q);
                       }).length === 0 && (
-                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#888", textAlign: "center" }}>
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#6b7280", textAlign: "center" }}>
                           No matching researchers found
                         </div>
                       )}
@@ -536,7 +517,7 @@ export default function LeadProjectsPage() {
                     if (!member) return null;
                     const name = member.displayName || member.userDisplayName || member.email;
                     return (
-                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
+                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
                         {name}
                         <button
                           type="button"
@@ -560,7 +541,7 @@ export default function LeadProjectsPage() {
                     onChange={e => setEditMemberSearchQuery(e.target.value)}
                   />
                   {editMemberSearchQuery.trim() !== "" && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
                       {availableMembers
                         .filter(m => {
                           const id = m.id || m.userId;
@@ -580,12 +561,12 @@ export default function LeadProjectsPage() {
                                 toggleEditMember(id);
                                 setEditMemberSearchQuery("");
                               }}
-                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f8f8f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f9fafb", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                               onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
                               onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
                             >
                               <span>{name}</span>
-                              <span style={{ fontSize: 11, color: "#888" }}>{m.email}</span>
+                              <span style={{ fontSize: 11, color: "#6b7280" }}>{m.email}</span>
                             </div>
                           );
                         })}
@@ -597,7 +578,7 @@ export default function LeadProjectsPage() {
                         const email = (m.email || m.userEmail || "").toLowerCase();
                         return name.includes(q) || email.includes(q);
                       }).length === 0 && (
-                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#888", textAlign: "center" }}>
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#6b7280", textAlign: "center" }}>
                           No matching researchers found
                         </div>
                       )}
@@ -653,7 +634,7 @@ export default function LeadProjectsPage() {
 
             <div style={{ padding: "12px 24px 20px", maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
               {memberModalLoading ? (
-                <p style={{ textAlign: "center", fontSize: 13, color: "#888", padding: "20px 0" }}>Loading members…</p>
+                <p style={{ textAlign: "center", fontSize: 13, color: "#6b7280", padding: "20px 0" }}>Loading members…</p>
               ) : (
                 <>
                   {memberModalMembers
@@ -677,8 +658,8 @@ export default function LeadProjectsPage() {
                             justifyContent: "space-between",
                             padding: "10px 14px",
                             background: "#ffffff",
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 8,
+                            border: "1px solid #f3f4f6",
+                            borderRadius: 12,
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -704,7 +685,7 @@ export default function LeadProjectsPage() {
                             </div>
                           </div>
 
-                          <span style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#4f46e5", background: "#e0e7ff", border: "1px solid #c7d2fe", padding: "2px 8px", borderRadius: 4 }}>
                             {m.roleInTeam || "Researcher"}
                           </span>
                         </div>
@@ -717,7 +698,7 @@ export default function LeadProjectsPage() {
                     const email = (m.email || m.userEmail || "").toLowerCase();
                     return name.includes(q) || email.includes(q);
                   }).length === 0 && (
-                    <p style={{ textAlign: "center", fontSize: 13, color: "#888", padding: "20px 0" }}>
+                    <p style={{ textAlign: "center", fontSize: 13, color: "#6b7280", padding: "20px 0" }}>
                       {selectedProjectForMembersModal.teamId ? "No matching members found." : "No team assigned to this project yet."}
                     </p>
                   )}
@@ -733,7 +714,7 @@ export default function LeadProjectsPage() {
                   setSelectedProjectForMembersModal(null);
                   handleOpenEditModal(p);
                 }}
-                style={{ fontSize: 12, fontWeight: 600, color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", background: "none", border: "none", cursor: "pointer" }}
               >
                 + Manage / Edit Members
               </button>
@@ -777,9 +758,9 @@ export default function LeadProjectsPage() {
                 All associated Kanban task cards, attached documents, meeting notes, and member assignments for this workspace will be permanently removed.
               </p>
               
-              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.5px" }}>PROJECT ID</span>
-                <code style={{ fontSize: 11, color: "#374151", background: "#ffffff", padding: "2px 8px", border: "1px solid #e5e7eb", borderRadius: 4, fontFamily: "monospace", fontWeight: 600 }}>
+                <code style={{ fontSize: 11, color: "#374151", background: "#ffffff", padding: "2px 8px", border: "1px solid #f3f4f6", borderRadius: 4, fontFamily: "var(--font-mono)", fontWeight: 600 }}>
                   {projectToDelete.id}
                 </code>
               </div>
@@ -821,9 +802,9 @@ export default function LeadProjectsPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
-  sub: { fontSize: 13, color: "#888888" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(16px, 1.5vw, 24px)" },
+  title: { fontSize: "clamp(20px, 1.8vw, 28px)", fontWeight: 700, color: "#111827", marginBottom: 4 },
+  sub: { fontSize: "clamp(12px, 1vw, 15px)", color: "#6b7280" },
   searchInput: {
     padding: "8px 28px 8px 14px",
     fontSize: 13,
@@ -833,114 +814,38 @@ const s: Record<string, React.CSSProperties> = {
     outline: "none",
     background: "#ffffff",
   },
-  btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnSecondary: { padding: "9px 16px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
+  btnSecondary: { padding: "9px 16px", background: "#ffffff", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   
-  filterRow: { display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #eeeeee", paddingBottom: 12 },
+  filterRow: { display: "inline-flex", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 12, marginBottom: 20, borderBottom: "1px solid #eeeeee", paddingBottom: 12 },
   filterTab: { padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#616161", background: "none", border: "none", borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 },
   filterTabActive: { background: "#161616", color: "#ffffff" },
   filterCount: { fontSize: 11, background: "rgba(0,0,0,0.06)", padding: "1px 6px", borderRadius: 10 },
 
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 18 },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(clamp(280px, 25vw, 400px), 1fr))", gap: "clamp(16px, 1.5vw, 24px)" },
   card: {
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 8,
-    padding: "20px",
+    padding: "clamp(20px, 2vw, 32px)",
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-    boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+    gap: "clamp(12px, 1vw, 18px)",
   },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  badge: { fontSize: 10, fontWeight: 700, letterSpacing: "0.5px", padding: "3px 8px", borderRadius: 4 },
-  activeStyle: { background: "#e8f5e9", color: "#2e7d32" },
-  archivedStyle: { background: "#f5f5f5", color: "#757575" },
-  viewBtn: {
-    fontSize: 12,
-    color: "#ffffff",
-    background: "#161616",
-    fontWeight: 600,
-    textDecoration: "none",
-    padding: "5px 12px",
-    borderRadius: 4,
-    display: "inline-block",
-  },
-  editBtn: {
-    background: "#f3f4f6",
-    border: "1px solid #e5e7eb",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#374151",
-    cursor: "pointer",
-    padding: "5px 10px",
-    borderRadius: 4,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  deleteBtn: {
-    background: "#fff1f2",
-    border: "1px solid #fecdd3",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#e11d48",
-    cursor: "pointer",
-    padding: "5px 10px",
-    borderRadius: 6,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  cardName: { fontSize: 16, fontWeight: 700, color: "#111827", margin: 0, lineHeight: 1.3 },
-  cardDesc: {
-    fontSize: 13,
-    color: "#4b5563",
-    lineHeight: 1.5,
-    margin: 0,
-    marginTop: 4,
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical" as const,
-    overflow: "hidden",
-  },
-  cardFooter: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTop: "1px solid #f3f4f6",
-    marginTop: "auto",
-  },
-  avatarStack: { display: "flex", alignItems: "center" },
-  avatarCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    background: "#161616",
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "2px solid #ffffff",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-  },
-  unassignedText: { fontSize: 11, color: "#9ca3af", fontStyle: "italic" },
-  moreMembersTag: { fontSize: 11, fontWeight: 700, color: "#4b5563", marginLeft: 6 },
-  cardDate: { fontSize: 11, color: "#9ca3af", fontWeight: 500 },
-  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#888", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
+  badge: { fontSize: "clamp(10px, 0.8vw, 12px)", fontWeight: 700, letterSpacing: "0.5px", padding: "clamp(2px, 0.3vw, 4px) clamp(6px, 0.6vw, 10px)", borderRadius: 4 },
+  activeStyle: { background: "#dcfce7", color: "#166534" },
+  archivedStyle: { background: "#f3f4f6", color: "#4b5563" },
+  metaBadge: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: "clamp(11px, 0.9vw, 13px)", fontWeight: 500, color: "#4b5563", background: "#f9fafb", border: "1px solid #e5e7eb", padding: "4px 10px", borderRadius: 6, cursor: "pointer" },
+  actionTextBtn: { background: "none", border: "none", fontSize: "clamp(12px, 1vw, 14px)", fontWeight: 500, color: "#4b5563", cursor: "pointer", padding: "6px 10px", borderRadius: 6 },
+  viewBtnMinimal: { fontSize: "clamp(12px, 1vw, 14px)", fontWeight: 600, color: "#111827", textDecoration: "none", display: "inline-flex", alignItems: "center", padding: "6px 12px", borderRadius: 6 },
+  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#6b7280", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
   overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
-  modal: { background: "#ffffff", borderRadius: 10, padding: 28, width: "100%", maxWidth: 480 },
+  modal: { background: "#ffffff", borderRadius: 12, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 20px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.06)" },
   modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616" },
-  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" },
+  modalTitle: { fontSize: 16, fontWeight: 700, color: "#111827" },
+  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#6b7280", cursor: "pointer" },
   modalForm: { display: "flex", flexDirection: "column", gap: 16 },
   modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
+  label: { fontSize: 12, fontWeight: 600, color: "#111827" },
   input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
   errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
 };

@@ -43,6 +43,72 @@ function getInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function CustomStatusSelect({ value, onChange }: { value: TaskStatus, onChange: (val: TaskStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const options: {val: TaskStatus, label: string, shortLabel?: string}[] = [
+    {val: "TODO", label: "To Do"},
+    {val: "IN_PROGRESS", label: "In Progress"},
+    {val: "DONE", label: "Completed (Pending Review)", shortLabel: "Review"},
+    {val: "ACCEPTED", label: "Accepted ✓"},
+  ];
+  
+  return (
+    <div style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
+      <div 
+        onClick={() => setOpen(!open)}
+        style={{
+          background: "#f9fafb",
+          border: "1px solid #d1d5db",
+          fontSize: 10,
+          fontWeight: 600,
+          color: "#374151",
+          padding: "4px 8px",
+          borderRadius: 4,
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+          minWidth: 100
+        }}
+        onMouseOver={(e) => e.currentTarget.style.borderColor = "#9ca3af"}
+        onMouseOut={(e) => e.currentTarget.style.borderColor = "#d1d5db"}
+      >
+        <span>{options.find(o => o.val === value)?.shortLabel || options.find(o => o.val === value)?.label}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      {open && (
+        <>
+          <div style={{position: "fixed", inset: 0, zIndex: 99}} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+          <div style={{
+            position: "absolute", top: "100%", right: 0, marginTop: 4, 
+            background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 6, 
+            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)", zIndex: 100, minWidth: 160,
+            overflow: "hidden"
+          }}>
+            {options.map(o => (
+              <div 
+                key={o.val}
+                onClick={(e) => { e.stopPropagation(); onChange(o.val); setOpen(false); }}
+                style={{ 
+                  padding: "8px 12px", fontSize: 11, fontWeight: 500, color: "#374151",
+                  cursor: "pointer", background: value === o.val ? "#f3f4f6" : "#fff", 
+                  borderBottom: "1px solid #f3f4f6", transition: "background 0.1s ease" 
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "#f9fafb")}
+                onMouseOut={(e) => (e.currentTarget.style.background = value === o.val ? "#f3f4f6" : "#fff")}
+              >
+                {o.label}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectWorkspacePage({
   params,
 }: {
@@ -302,10 +368,10 @@ export default function ProjectWorkspacePage({
           marginBottom: 16,
         }} />
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-        <p style={{ fontSize: 14, color: "#161616", fontWeight: 600, margin: 0 }}>
+        <p style={{ fontSize: 14, color: "#111827", fontWeight: 600, margin: 0 }}>
           Loading Task Board…
         </p>
-        <p style={{ fontSize: 12, color: "#888888", margin: 0, marginTop: 4 }}>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: 0, marginTop: 4 }}>
           Fetching project tasks and assigned team members
         </p>
       </div>
@@ -436,9 +502,14 @@ export default function ProjectWorkspacePage({
                       setDraggedTaskId(null);
                       setDragOverCol(null);
                     }}
+                    className="card-depth"
                     style={{
-                      ...s.taskCard,
+                      padding: "14px 16px",
                       cursor: "pointer",
+                      marginBottom: 10,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
                     }}
                   >
                     <div style={s.taskCardTop}>
@@ -507,20 +578,10 @@ export default function ProjectWorkspacePage({
                                 Accept Task ✓
                               </button>
                             )}
-                            <select
+                            <CustomStatusSelect
                               value={task.status}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                requestMove(task.id, e.target.value as TaskStatus);
-                              }}
-                              style={s.statusSelect}
-                            >
-                              <option value="TODO">To Do</option>
-                              <option value="IN_PROGRESS">In Progress</option>
-                              <option value="DONE">Completed (Pending Review)</option>
-                              <option value="ACCEPTED">Accepted ✓</option>
-                            </select>
+                              onChange={(val) => requestMove(task.id, val)}
+                            />
                           </div>
                         )}
 
@@ -558,7 +619,7 @@ export default function ProjectWorkspacePage({
       {pendingMove && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => setPendingMove(null)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}
+          <div style={{ background: "#ffffff", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" }}
             onClick={e => e.stopPropagation()}>
             {/* Icon */}
             <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#f0f4ff", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
@@ -566,8 +627,8 @@ export default function ProjectWorkspacePage({
                 <path d="M5 10h10M12 7l3 3-3 3"/>
               </svg>
             </div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#161616", margin: "0 0 6px" }}>Move Task?</h3>
-            <p style={{ fontSize: 13, color: "#424242", margin: "0 0 18px", lineHeight: 1.5 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 6px" }}>Move Task?</h3>
+            <p style={{ fontSize: 13, color: "#374151", margin: "0 0 18px", lineHeight: 1.5 }}>
               Move <strong>&ldquo;{pendingMove.taskTitle}&rdquo;</strong> from{" "}
               <span style={{ fontWeight: 600, color: "#555" }}>{STAGE_LABELS[pendingMove.from]}</span>{" "}
               →{" "}
@@ -576,7 +637,7 @@ export default function ProjectWorkspacePage({
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
                 onClick={() => setPendingMove(null)}
-                style={{ padding: "8px 18px", borderRadius: 7, border: "1px solid #d0d0d0", background: "#fff", fontSize: 13, fontWeight: 600, color: "#424242", cursor: "pointer" }}
+                style={{ padding: "8px 18px", borderRadius: 7, border: "1px solid #d0d0d0", background: "#ffffff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}
               >Cancel</button>
               <button
                 onClick={() => handleMoveTask(pendingMove.taskId, pendingMove.to)}
@@ -597,7 +658,7 @@ export default function ProjectWorkspacePage({
                   <h3 style={{ ...m.title, fontSize: 17, fontWeight: 700 }}>
                     {selectedTask.isAiGenerated ? "⚡ AI Task Review" : "📋 Task Card Details"}
                   </h3>
-                  <span style={{ fontSize: 11, fontFamily: "monospace", color: "#666", background: "#f0f0f0", padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>
+                  <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "#666", background: "#f0f0f0", padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>
                     #{selectedTask.id.length > 8 ? selectedTask.id.substring(0, 8) : selectedTask.id}
                   </span>
                 </div>
@@ -612,19 +673,19 @@ export default function ProjectWorkspacePage({
               {/* Task Title */}
               <div>
                 <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>TASK TITLE</span>
-                <p style={{ fontSize: 15, fontWeight: 700, color: "#161616", marginTop: 4, lineHeight: 1.4 }}>{selectedTask.title}</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginTop: 4, lineHeight: 1.4 }}>{selectedTask.title}</p>
               </div>
 
               {/* Description */}
               <div style={{ background: "#f9fafb", border: "1px solid #f0f0f0", borderRadius: 6, padding: "12px 14px" }}>
                 <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>DESCRIPTION</span>
-                <p style={{ fontSize: 13, color: "#424242", lineHeight: 1.5, marginTop: 4 }}>
+                <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.5, marginTop: 4 }}>
                   {selectedTask.description || "No description provided for this task card."}
                 </p>
               </div>
 
               {/* Metadata Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 12, padding: "12px 14px" }}>
                 {/* Status */}
                 <div>
                   <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>STATUS</span>
@@ -659,7 +720,7 @@ export default function ProjectWorkspacePage({
                           border: "1px solid #d0d0d0",
                           outline: "none",
                           background: "#ffffff",
-                          color: "#161616",
+                          color: "#111827",
                           width: "100%",
                           cursor: "pointer",
                         }}
@@ -690,7 +751,7 @@ export default function ProjectWorkspacePage({
                         }}>
                           {getInitials(selectedTask.assignee)}
                         </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#161616" }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>
                           {selectedTask.assignee || "Unassigned"}
                         </span>
                       </div>
@@ -867,13 +928,13 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-end",
     marginBottom: 24,
-    borderBottom: "1px solid #e0e0e0",
+    borderBottom: "1px solid #e5e7eb",
     paddingBottom: 16,
   },
   pageTitle: {
     fontSize: 28,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
     letterSpacing: "-0.5px",
   },
   pageSub: {
@@ -895,7 +956,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 4,
     padding: "6px 12px",
   },
@@ -920,7 +981,7 @@ const s: Record<string, React.CSSProperties> = {
   progressVal: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   progressSub: {
     fontSize: 11,
@@ -943,8 +1004,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontSize: 13,
     fontWeight: 600,
-    cursor: "pointer",
-  },
+    cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   kanbanGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
@@ -956,17 +1016,18 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
   },
   column: {
-    background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
+    background: "linear-gradient(to bottom, #fcfcfc, #f4f5f7)",
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
     padding: "16px",
     minHeight: 450,
     display: "flex",
     flexDirection: "column",
+    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025), inset 0 1px 0 rgba(255,255,255,1)",
   },
   columnOver: {
-    background: "#f9f9f9",
-    borderColor: "#9e9e9e",
+    background: "#ebedf0",
+    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05), inset 0 2px 6px 0 rgba(0, 0, 0, 0.04)",
   },
   completedColumn: {
     background: "#ffffff",
@@ -976,28 +1037,34 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
-    paddingBottom: 10,
-    borderBottom: "1px solid #eeeeee",
+    padding: "10px 14px",
+    margin: "-16px -16px 16px -16px",
+    background: "linear-gradient(180deg, #f8f9fa 0%, #eef0f2 100%)",
+    borderBottom: "1px solid #d1d5db",
+    borderRadius: "10px 10px 0 0",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
   },
   colTitle: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#9e9e9e",
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#4b5563",
     letterSpacing: "0.5px",
     textTransform: "uppercase" as const,
+    textShadow: "0 1px 0 rgba(255,255,255,0.8)",
   },
   colCount: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#161616",
-    background: "#f0f0f0",
-    padding: "2px 6px",
-    borderRadius: 10,
+    color: "#111827",
+    background: "#ffffff",
+    border: "1px solid #d1d5db",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+    padding: "2px 8px",
+    borderRadius: 12,
   },
   taskList: {
     display: "flex",
     flexDirection: "column",
-    gap: 10,
     flex: 1,
   },
   completedTasksGrid: {
@@ -1007,7 +1074,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   taskCard: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 4,
     padding: "14px 16px",
     boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
@@ -1016,13 +1083,12 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
   },
   taskId: {
     fontSize: 11,
     fontWeight: 600,
     color: "#9e9e9e",
-    fontFamily: "monospace",
+    fontFamily: "var(--font-mono)",
   },
   aiBadge: {
     fontSize: 10,
@@ -1055,7 +1121,7 @@ const s: Record<string, React.CSSProperties> = {
   taskTitle: {
     fontSize: 13,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
     lineHeight: 1.3,
     marginBottom: 6,
   },
@@ -1069,6 +1135,8 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
     paddingTop: 10,
     borderTop: "1px solid #f5f5f5",
   },
@@ -1087,7 +1155,7 @@ const s: Record<string, React.CSSProperties> = {
     border: "1px solid #d0d0d0",
     borderRadius: 3,
     background: "#ffffff",
-    color: "#424242",
+    color: "#374151",
     cursor: "pointer",
   },
   assigneeAvatar: {
@@ -1106,12 +1174,11 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "default",
   },
   emptyCol: {
-    padding: "24px 12px",
+    padding: "32px 12px",
     textAlign: "center" as const,
     fontSize: 12,
-    color: "#9e9e9e",
-    border: "1px dashed #d0d0d0",
-    borderRadius: 4,
+    fontWeight: 500,
+    color: "#9ca3af",
   },
 };
 
@@ -1128,7 +1195,7 @@ const m: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 6,
     width: "100%",
     maxWidth: 520,
@@ -1144,7 +1211,7 @@ const m: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 16,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   sub: {
     fontSize: 12,
@@ -1165,7 +1232,7 @@ const m: Record<string, React.CSSProperties> = {
     gap: 14,
   },
   section: {
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
     paddingBottom: 10,
   },
   label: {
@@ -1178,12 +1245,12 @@ const m: Record<string, React.CSSProperties> = {
   mainTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
     marginTop: 4,
   },
   text: {
     fontSize: 13,
-    color: "#424242",
+    color: "#374151",
     lineHeight: 1.4,
     marginTop: 4,
   },
@@ -1229,12 +1296,11 @@ const m: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontSize: 13,
     fontWeight: 600,
-    cursor: "pointer",
-  },
+    cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSecondary: {
     padding: "8px 14px",
     background: "#ffffff",
-    color: "#424242",
+    color: "#374151",
     border: "1px solid #d0d0d0",
     borderRadius: 4,
     fontSize: 13,

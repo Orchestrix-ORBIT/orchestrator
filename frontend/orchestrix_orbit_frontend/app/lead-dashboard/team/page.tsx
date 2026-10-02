@@ -157,7 +157,7 @@ export default function LeadTeamPage() {
     return name.includes(q) || email.includes(q);
   });
 
-  if (loading) return <LoadingState title="Loading Team & Roster…" subtitle="Fetching researchers, project assignments, and team permissions" />;
+  if (loading) return <LoadingState variant="table" title="Loading Team & Roster…" subtitle="Fetching researchers, project assignments, and team permissions" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
@@ -194,7 +194,7 @@ export default function LeadTeamPage() {
           </thead>
           <tbody>
             {filteredMembers.length === 0 ? (
-              <tr><td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#888", padding: "36px 0" }}>
+              <tr><td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#6b7280", padding: "36px 0" }}>
                 No team members match your search filter.
               </td></tr>
             ) : filteredMembers.map((m: any, idx) => {
@@ -278,13 +278,13 @@ export default function LeadTeamPage() {
             </div>
 
             <div style={mStyles.body}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#888", letterSpacing: "0.5px" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: "0.5px" }}>
                 ASSIGNED PROJECTS ({ (selectedMemberForRemoval.assignedProjects || []).length })
               </span>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
                 {(selectedMemberForRemoval.assignedProjects || []).length === 0 ? (
-                  <p style={{ fontSize: 13, color: "#888", padding: "12px 0" }}>No active projects assigned.</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", padding: "12px 0" }}>No active projects assigned.</p>
                 ) : (
                   (selectedMemberForRemoval.assignedProjects || []).map((p: any) => (
                     <div
@@ -295,13 +295,13 @@ export default function LeadTeamPage() {
                         alignItems: "center",
                         padding: "10px 14px",
                         background: "#f9fafb",
-                        border: "1px solid #e8e8e8",
+                        border: "1px solid #f3f4f6",
                         borderRadius: 6,
                       }}
                     >
                       <div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#161616" }}>{p.name}</span>
-                        <span style={{ display: "block", fontSize: 11, color: "#888", marginTop: 2 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{p.name}</span>
+                        <span style={{ display: "block", fontSize: 11, color: "#6b7280", marginTop: 2 }}>
                           ID: {p.id.length > 8 ? p.id.substring(0, 8) : p.id}
                         </span>
                       </div>
@@ -348,7 +348,7 @@ export default function LeadTeamPage() {
                   padding: "8px 14px",
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#424242",
+                  color: "#374151",
                   background: "#ffffff",
                   border: "1px solid #d0d0d0",
                   borderRadius: 4,
@@ -367,8 +367,8 @@ export default function LeadTeamPage() {
 
 const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
-  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
-  sub: { fontSize: 13, color: "#888888" },
+  title: { fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#6b7280" },
   searchInput: {
     padding: "8px 14px",
     fontSize: 13,
@@ -378,22 +378,22 @@ const s: Record<string, React.CSSProperties> = {
     outline: "none",
     background: "#ffffff",
   },
-  card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.03)" },
+  card: { background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 12, padding: 24, boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)" },
   cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  cardTitle: { fontSize: 15, fontWeight: 700, color: "#161616" },
-  cardBadge: { fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "3px 10px", borderRadius: 12 },
+  cardTitle: { fontSize: 15, fontWeight: 700, color: "#111827" },
+  cardBadge: { fontSize: 11, fontWeight: 600, color: "#4f46e5", background: "#e0e7ff", padding: "3px 10px", borderRadius: 12 },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left" as const, fontSize: 11, fontWeight: 700, color: "#888888", letterSpacing: "0.5px", paddingBottom: 14, borderBottom: "1px solid #e0e0e0" },
-  tr: { borderBottom: "1px solid #f0f0f0" },
-  td: { fontSize: 13, color: "#424242", padding: "16px 0", verticalAlign: "middle" as const },
+  th: { textAlign: "left" as const, fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: "0.5px", paddingBottom: 14, borderBottom: "1px solid #e5e7eb" },
+  tr: { borderBottom: "1px solid #f3f4f6" },
+  td: { fontSize: 13, color: "#374151", padding: "16px 0", verticalAlign: "middle" as const },
   memberCell: { display: "flex", alignItems: "center", gap: 10 },
   avatar: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: "#161616", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 },
-  memberName: { fontSize: 13, fontWeight: 600, color: "#161616" },
+  memberName: { fontSize: 13, fontWeight: 600, color: "#111827" },
   memberEmail: { fontSize: 13, color: "#616161" },
-  roleBadge: { display: "inline-block", padding: "3px 8px", borderRadius: 4, background: "#f5f5f5", border: "1px solid #e0e0e0", fontSize: 11, fontWeight: 600, color: "#424242" },
+  roleBadge: { display: "inline-block", padding: "3px 8px", borderRadius: 4, background: "#f5f5f5", border: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#374151" },
   removeBtn: { padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "#c62828", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 5, cursor: "pointer" },
-  badge: { display: "inline-block", padding: "3px 8px", fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4 },
-  moreBadge: { background: "#f3f4f6", color: "#4b5563", border: "1px solid #e5e7eb", borderRadius: 4, padding: "3px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
+  badge: { display: "inline-block", padding: "3px 8px", fontSize: 11, fontWeight: 600, background: "#e0e7ff", color: "#1d4ed8", border: "1px solid #c7d2fe", borderRadius: 4 },
+  moreBadge: { background: "#f3f4f6", color: "#4b5563", border: "1px solid #f3f4f6", borderRadius: 4, padding: "3px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
 };
 
 const mStyles: Record<string, React.CSSProperties> = {
@@ -409,7 +409,7 @@ const mStyles: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: "#ffffff",
-    borderRadius: 8,
+    borderRadius: 12,
     width: "100%",
     maxWidth: 480,
     boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
@@ -426,18 +426,18 @@ const mStyles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 15,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   sub: {
     fontSize: 12,
-    color: "#888888",
+    color: "#6b7280",
     marginTop: 2,
   },
   closeBtn: {
     background: "none",
     border: "none",
     fontSize: 16,
-    color: "#888",
+    color: "#6b7280",
     cursor: "pointer",
   },
   body: {

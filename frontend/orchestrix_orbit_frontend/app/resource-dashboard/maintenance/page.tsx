@@ -261,14 +261,18 @@ export default function MaintenanceSchedulesPage() {
     if (isCreating) return;
     if (!startDateInput || !endDateInput) return;
 
-    const selectedResourceName = assetNameInput || (resources.length > 0 ? resources[0].name : "NVIDIA H100 SXM5 80GB GPU Compute Node");
-    const targetResource = resources.find(
-      r => r.name === selectedResourceName || r.name.toLowerCase().includes(selectedResourceName.toLowerCase())
-    );
+    // assetNameInput holds the resource UUID (from the select's value={r.id})
+    const selectedResourceId = assetNameInput || (resources.length > 0 ? resources[0].id : "");
+    const targetResource = resources.find(r => r.id === selectedResourceId);
+
+    if (!targetResource) {
+      setCreateError("Please select a valid lab asset.");
+      return;
+    }
 
     // Conflict check: Prevent double maintenance for same asset
     const conflict = checkMaintenanceConflict(
-      selectedResourceName,
+      targetResource.name,
       targetResource?.id,
       startDateInput,
       endDateInput,
@@ -285,11 +289,11 @@ export default function MaintenanceSchedulesPage() {
     const computedStatus = computeStatusFromDates(startDateInput, endDateInput);
 
     const payload = {
-      resourceId: targetResource?.id || null,
-      assetName: selectedResourceName,
-      category: targetResource?.type || "INSTRUMENT",
-      startDate: startDateInput,
-      endDate: endDateInput,
+      resourceId: targetResource.id,
+      assetName: targetResource.name,
+      category: targetResource.type || "INSTRUMENT",
+      startDate: new Date(startDateInput).toISOString(),
+      endDate: new Date(endDateInput).toISOString(),
       downtimeType: downtimeTypeInput,
       technician: technicianInput.trim() || "Lab Operations Manager",
       status: computedStatus,
@@ -463,7 +467,7 @@ export default function MaintenanceSchedulesPage() {
     const localEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
 
     if (resources.length > 0) {
-      setAssetNameInput(resources[0].name);
+      setAssetNameInput(resources[0].id);
     }
     setStartDateInput(localNow);
     setEndDateInput(localEnd);
@@ -655,10 +659,12 @@ export default function MaintenanceSchedulesPage() {
                 >
                   {resources.length > 0 ? (
                     resources.map(r => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
+                      <option key={r.id} value={r.id}>
+                        {r.name} {r.location ? `(${r.location})` : `(ID: ${r.id.substring(0, 8)})`}
+                      </option>
                     ))
                   ) : (
-                    <option value="NVIDIA H100 SXM5 80GB GPU Compute Node">NVIDIA H100 SXM5 80GB GPU Compute Node</option>
+                    <option value="" disabled>No resources available</option>
                   )}
                 </select>
               </div>
@@ -765,7 +771,7 @@ export default function MaintenanceSchedulesPage() {
                 Are you sure maintenance for <strong>{confirmEvent.assetName}</strong> is completed early and the resource is ready for use?
               </p>
 
-              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+              <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 6, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "#6b7280" }}>Maintenance Type:</span>
                   <span style={{ fontWeight: 600, color: "#111827" }}>{confirmEvent.downtimeType}</span>
@@ -946,7 +952,7 @@ export default function MaintenanceSchedulesPage() {
                 )}
               </p>
 
-              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+              <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 6, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "#6b7280" }}>Maintenance Type:</span>
                   <span style={{ fontWeight: 600, color: "#111827" }}>{deleteEvent.downtimeType}</span>
@@ -1004,7 +1010,7 @@ const s: Record<string, React.CSSProperties> = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 },
   pageTitle: { fontSize: 28, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", marginBottom: 4 },
   pageSub: { fontSize: 13, color: "#9e9e9e" },
-  btnPrimary: { background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   statGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 },
   statCard: { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 6 },
   statLabel: { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", textTransform: "uppercase" as const },
@@ -1074,7 +1080,7 @@ const m: Record<string, React.CSSProperties> = {
   select: { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, background: "#ffffff", outline: "none" },
   textarea: { padding: "8px 12px", fontSize: 13, border: "1px solid #d0d0d0", borderRadius: 4, outline: "none", resize: "none" },
   footer: { padding: "14px 24px", borderTop: "1px solid #eeeeee", background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSecondary: { padding: "8px 14px", background: "#ffffff", color: "#424242", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 500, cursor: "pointer" },
   errorAlert: {
     background: "#fef2f2",

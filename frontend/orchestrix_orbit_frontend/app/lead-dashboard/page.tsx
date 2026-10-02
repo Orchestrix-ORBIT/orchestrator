@@ -95,7 +95,7 @@ export default function LeadDashboardPage() {
       {/* ── Organization Header Banner ───────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", margin: 0, marginBottom: 4 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#111827", letterSpacing: "-0.025em", margin: 0, marginBottom: 4 }}>
             Research Lead Overview
           </h1>
         </div>
@@ -106,7 +106,7 @@ export default function LeadDashboardPage() {
       {/* Stats */}
       <div style={s.statsRow}>
         {STATS.map(stat => (
-          <div key={stat.id} id={stat.id} style={s.statCard}>
+          <div key={stat.id} id={stat.id} style={s.statCard} className="card-depth">
             <span style={s.statValue}>{stat.value}</span>
             <span style={s.statLabel}>{stat.label}</span>
             <span style={s.statSub}>{stat.sub}</span>
@@ -115,41 +115,43 @@ export default function LeadDashboardPage() {
       </div>
 
       {/* Projects table */}
-      <div style={s.card}>
+      <div style={s.card} className="card-depth">
         <div style={s.cardHead}>
           <span style={s.cardTitle}>Projects Overview</span>
-          <Link id="link-all-projects" href="/lead-dashboard/projects" style={s.cardLink}>Manage projects →</Link>
+          <Link id="link-all-projects" href="/lead-dashboard/projects" style={s.cardLink} className="btn-hover-lift">Manage projects →</Link>
         </div>
         {activeProjects.length === 0 ? (
-          <p style={{ color: "#888", fontSize: 13 }}>No active projects yet.</p>
+          <p style={{ color: "#6b7280", fontSize: 13 }}>No active projects yet.</p>
         ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                {["Project", "Tasks", "Status", "Created"].map(h => (
-                  <th key={h} style={s.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {activeProjects.map(p => {
-                const pTasks  = allTasks.filter(t => t.projectId === p.id);
-                const done    = pTasks.filter(t => t.status === "ACCEPTED").length;
-                return (
-                  <tr key={p.id}>
-                    <td style={s.td}>
-                      <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link">
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td style={s.td}>{done}/{pTasks.length} accepted</td>
-                    <td style={s.td}><span style={s.activeBadge}>{p.status}</span></td>
-                    <td style={s.td}>{new Date(p.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div style={s.tableWrapper}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  {["Project", "Tasks", "Status", "Created"].map(h => (
+                    <th key={h} style={s.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activeProjects.map(p => {
+                  const pTasks  = allTasks.filter(t => t.projectId === p.id);
+                  const done    = pTasks.filter(t => t.status === "ACCEPTED").length;
+                  return (
+                    <tr key={p.id} className="table-row-hover">
+                      <td style={s.td}>
+                        <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link" style={{ fontWeight: 500, color: "#111827", textDecoration: "none" }}>
+                          {p.name}
+                        </Link>
+                      </td>
+                      <td style={s.td}>{done}/{pTasks.length} accepted</td>
+                      <td style={s.td}><span style={s.activeBadge}>{p.status}</span></td>
+                      <td style={s.td}>{new Date(p.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -157,30 +159,32 @@ export default function LeadDashboardPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 },
-  statCard: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 4 },
-  statValue: { fontSize: 32, fontWeight: 700, color: "#161616", lineHeight: 1 },
-  statLabel: { fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.8px", marginTop: 6 },
-  statSub: { fontSize: 12, color: "#aaa" },
-  card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 24, marginBottom: 16 },
-  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  cardTitle: { fontSize: 14, fontWeight: 600, color: "#161616" },
+  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "clamp(16px, 2vw, 32px)", marginBottom: "clamp(24px, 3vw, 40px)" },
+  statCard: { padding: "clamp(20px, 2vw, 32px)", display: "flex", flexDirection: "column", gap: "clamp(6px, 0.5vw, 12px)" },
+  statValue: { fontSize: "clamp(28px, 2.5vw, 40px)", fontWeight: 700, color: "#111827", lineHeight: 1, letterSpacing: "-0.03em" },
+  statLabel: { fontSize: "clamp(10px, 0.8vw, 13px)", fontWeight: 600, color: "#6b7280", letterSpacing: "0.05em", marginTop: "clamp(8px, 1vw, 16px)", textTransform: "uppercase" },
+  statSub: { fontSize: "clamp(12px, 1vw, 15px)", color: "#9ca3af" },
+  card: { padding: "clamp(24px, 2.5vw, 40px)", marginBottom: "clamp(16px, 2vw, 32px)" },
+  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(16px, 2vw, 32px)" },
+  cardTitle: { fontSize: "clamp(14px, 1.2vw, 20px)", fontWeight: 600, color: "#111827" },
   cardLink: {
-    fontSize: 12,
-    color: "#161616",
-    background: "#f4f4f5",
-    border: "1px solid #e4e4e7",
-    padding: "5px 12px",
-    borderRadius: 6,
+    fontSize: "clamp(12px, 1vw, 15px)",
+    color: "#374151",
+    background: "#ffffff",
+    border: "1px solid #f3f4f6",
+    padding: "clamp(6px, 0.6vw, 10px) clamp(14px, 1.2vw, 20px)",
+    borderRadius: 12,
     textDecoration: "none",
-    fontWeight: 600,
+    fontWeight: 500,
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+    boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+    transition: "background 0.2s"
   },
+  tableWrapper: { border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left" as const, fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.6px", textTransform: "uppercase" as const, paddingBottom: 10, borderBottom: "1px solid #f0f0f0" },
-  td: { fontSize: 13, color: "#424242", padding: "10px 0", borderBottom: "1px solid #f8f8f8" },
-  activeBadge: { fontSize: 10, fontWeight: 700, background: "#e8f5e9", color: "#2e7d32", padding: "3px 8px", borderRadius: 4, letterSpacing: "0.4px" },
+  th: { textAlign: "left" as const, fontSize: "clamp(10px, 0.8vw, 13px)", fontWeight: 600, color: "#6b7280", letterSpacing: "0.5px", textTransform: "uppercase" as const, padding: "12px 16px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fa" },
+  td: { fontSize: "clamp(13px, 1vw, 15px)", color: "#374151", padding: "clamp(12px, 1vw, 16px) 16px", borderBottom: "1px solid #f3f4f6" },
+  activeBadge: { fontSize: "clamp(10px, 0.8vw, 13px)", fontWeight: 600, background: "#dcfce7", color: "#166534", padding: "clamp(4px, 0.4vw, 8px) clamp(10px, 1vw, 16px)", borderRadius: 6, letterSpacing: "0.3px" },
 };

@@ -313,27 +313,14 @@ export default function ResourcesPage() {
           setSelectedProject("Project Alpha Core");
         }
 
-        // Load cancelled booking IDs from permanent store
-        let cancelledIds: string[] = [];
-        try {
-          cancelledIds = JSON.parse(localStorage.getItem("cancelled_booking_ids") || "[]");
-        } catch (e) {}
-
-        let localBookings: any[] = [];
-        try {
-          localBookings = JSON.parse(localStorage.getItem("resource_bookings_ledger") || "[]");
-        } catch (e) {}
-
-        const normalizedLocal = localBookings.map(normalizeBooking);
         const normalizedDb = (fetchedMyBookings || []).map(normalizeBooking);
 
-        // Filter out DB bookings that are CANCELLED, REJECTED, or locally cancelled by user
+        // Filter out DB bookings that are CANCELLED or REJECTED
         const dbBookings = normalizedDb
           .filter(
             (b: any) =>
               b.status !== "CANCELLED" &&
-              b.status !== "REJECTED" &&
-              !cancelledIds.includes(String(b.id || ""))
+              b.status !== "REJECTED"
           )
           .map((b: any) => ({
             ...b,
@@ -341,49 +328,12 @@ export default function ResourcesPage() {
             project: b.project || b.projectName || "Genomic Sequence Alignment & Variant Calling",
           }));
 
-        // Also filter local ledger to exclude cancelled ones
-        const filteredLocalBookings = normalizedLocal
-          .filter((b: any) => !cancelledIds.includes(String(b.id || "")))
-          .map((lb: any) => {
-            const dbMatch = dbBookings.find(
-              (db: any) => String(db.resourceId) === String(lb.resourceId) && db.startTime === lb.startTime
-            );
-            return dbMatch && dbMatch.status ? { ...lb, status: dbMatch.status } : lb;
-          });
-
-        // Deduplicate: merge matching entries so bookedBy and project are preserved
-        const allBookings = [
-          ...dbBookings.map((db: any) => {
-            const localMatch = filteredLocalBookings.find(
-              (lb: any) => String(lb.resourceId) === String(db.resourceId) && lb.startTime === db.startTime
-            );
-            return {
-              ...db,
-              bookedBy: localMatch?.bookedBy || db.bookedBy || "Dinuka K. (Lead)",
-              project: localMatch?.project || db.project || db.projectName || "Active Project",
-            };
-          }),
-          ...filteredLocalBookings.filter(
-            (lb: any) =>
-              !dbBookings.some(
-                (db: any) =>
-                  String(db.resourceId) === String(lb.resourceId) &&
-                  db.startTime === lb.startTime
-              )
-          ),
-        ];
-
-        setAllBookingsState(allBookings);
-        setMyBookingsCount(allBookings.length);
-
-        // Sync cleaned & normalized ledger back
-        try {
-          localStorage.setItem("resource_bookings_ledger", JSON.stringify(filteredLocalBookings));
-        } catch (e) {}
+        setAllBookingsState(dbBookings);
+        setMyBookingsCount(dbBookings.length);
 
         const sourceList = (fetchedResources && fetchedResources.length > 0) ? fetchedResources : INITIAL_RESOURCES;
         const mapped: ResourceItem[] = sourceList.map((r: any) => {
-          const computed = computeDynamicStatus(r, allBookings, fetchedMaintenance);
+          const computed = computeDynamicStatus(r, dbBookings, fetchedMaintenance);
 
           return {
             id: String(r.id),
@@ -453,13 +403,6 @@ export default function ResourcesPage() {
         status: finalStatus,
       };
 
-      // Save to local ledger
-      try {
-        const localBookings = JSON.parse(localStorage.getItem("resource_bookings_ledger") || "[]");
-        localBookings.push(newBooking);
-        localStorage.setItem("resource_bookings_ledger", JSON.stringify(localBookings));
-      } catch (e) {}
-
       const updatedAllBookings = [...allBookingsState, newBooking];
       setAllBookingsState(updatedAllBookings);
       setMyBookingsCount(updatedAllBookings.length);
@@ -496,38 +439,14 @@ export default function ResourcesPage() {
     try {
       const bookingId = String(targetBooking.id || "");
 
-      // 1. Persist this cancellation to the permanent cancelled set
-      let cancelledIds: string[] = [];
-      try {
-        cancelledIds = JSON.parse(localStorage.getItem("cancelled_booking_ids") || "[]");
-      } catch (e) {}
-      if (bookingId && !cancelledIds.includes(bookingId)) {
-        cancelledIds.push(bookingId);
-        try {
-          localStorage.setItem("cancelled_booking_ids", JSON.stringify(cancelledIds));
-        } catch (e) {}
-      }
-
       // 2. Call backend to cancel (for real DB bookings)
       if (bookingId && !bookingId.startsWith("BK-")) {
         try {
           await ResourcesService.updateBookingStatus(bookingId, "CANCELLED");
         } catch (err) {
-          console.warn("Backend cancel failed, persisted locally:", err);
+          console.warn("Backend cancel failed", err);
         }
       }
-
-      // 3. Remove from local ledger
-      let localBookings: any[] = [];
-      try {
-        localBookings = JSON.parse(localStorage.getItem("resource_bookings_ledger") || "[]");
-      } catch (e) {}
-      const updatedLedger = localBookings.filter(
-        (b: any) => String(b.id || "") !== bookingId
-      );
-      try {
-        localStorage.setItem("resource_bookings_ledger", JSON.stringify(updatedLedger));
-      } catch (e) {}
 
       // 4. Update UI state
       const updatedBookings = allBookingsState.filter(
@@ -565,7 +484,7 @@ export default function ResourcesPage() {
         try {
           await ResourcesService.updateBookingStatus(bookingId, "APPROVED");
         } catch (err) {
-          console.warn("Backend approve failed, updating locally:", err);
+          console.warn("Backend approve failed", err);
         }
       }
 
@@ -574,18 +493,6 @@ export default function ResourcesPage() {
         String(b.id || "") === bookingId ? { ...b, status: "APPROVED" } : b
       );
       setAllBookingsState(updatedAll);
-
-      // Update in local ledger
-      let localBookings: any[] = [];
-      try {
-        localBookings = JSON.parse(localStorage.getItem("resource_bookings_ledger") || "[]");
-      } catch (e) {}
-      const updatedLedger = localBookings.map((b: any) =>
-        String(b.id || "") === bookingId ? { ...b, status: "APPROVED" } : b
-      );
-      try {
-        localStorage.setItem("resource_bookings_ledger", JSON.stringify(updatedLedger));
-      } catch (e) {}
 
       // Re-calculate dynamic resource statuses
       setResources((prev) =>
@@ -636,8 +543,7 @@ export default function ResourcesPage() {
 
   if (loading) {
     return (
-      <LoadingState 
-        title="Loading Resources & Compute…" 
+      <LoadingState variant="grid" title="Loading Resources & Compute…" 
         subtitle="Fetching lab hardware, compute clusters, and equipment schedules" 
       />
     );
@@ -687,7 +593,7 @@ export default function ResourcesPage() {
                 fontWeight: 600,
                 color: "#374151",
                 background: "#f3f4f6",
-                border: "1px solid #e5e7eb",
+                border: "1px solid #f3f4f6",
                 padding: "3px 10px",
                 borderRadius: 12,
               }}>
@@ -731,11 +637,11 @@ export default function ResourcesPage() {
                 <td style={s.td}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <strong>{r.name}</strong>
-                    <span style={{ fontSize: 11, color: "#9e9e9e" }}>ID: RES-0{r.id.length > 8 ? r.id.substring(0, 4) : r.id}</span>
+                    <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "var(--font-mono)" }}>ID: RES-0{r.id.length > 8 ? r.id.substring(0, 4) : r.id}</span>
                   </div>
                 </td>
                 <td style={{ ...s.td, color: "#616161" }}>{r.type}</td>
-                <td style={{ ...s.td, color: "#161616", fontSize: 12 }}>{r.availableSlot}</td>
+                <td style={{ ...s.td, color: "#111827", fontSize: 12 }}>{r.availableSlot}</td>
                 <td style={s.td}>
                   {r.project !== "-" ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -837,13 +743,13 @@ export default function ResourcesPage() {
                       style={{
                         padding: "18px 20px",
                         background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 8,
+                        border: "1px solid #f3f4f6",
+                        borderRadius: 12,
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
                         gap: 16,
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)",
                       }}
                     >
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -933,7 +839,7 @@ export default function ResourcesPage() {
             </div>
 
             <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "14px 16px", fontSize: 13, color: "#991b1b" }}>
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 16px", fontSize: 13, color: "#991b1b" }}>
                 <p style={{ margin: 0, fontWeight: 600 }}>Are you sure you want to cancel this reservation?</p>
                 <p style={{ margin: "8px 0 0", fontSize: 12, color: "#7f1d1d" }}>
                   <strong>Resource:</strong> {bookingToCancel.resourceName || "Lab Resource"}
@@ -977,7 +883,7 @@ export default function ResourcesPage() {
           background: "#111827",
           color: "#ffffff",
           padding: "12px 20px",
-          borderRadius: 8,
+          borderRadius: 12,
           boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
           fontSize: 13,
           fontWeight: 600,
@@ -1011,8 +917,8 @@ export default function ResourcesPage() {
                 justifyContent: "space-between",
                 padding: "12px 16px",
                 background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8
+                border: "1px solid #f3f4f6",
+                borderRadius: 12
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{
@@ -1098,7 +1004,7 @@ export default function ResourcesPage() {
                         </div>
                       </div>
 
-                      <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", padding: "12px 16px", borderRadius: 8, fontSize: 12, color: "#374151" }}>
+                      <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", padding: "12px 16px", borderRadius: 12, fontSize: 12, color: "#374151" }}>
                         🔒 <strong>Resource Manager Maintenance Lock</strong>: {notesText}
                       </div>
                     </div>
@@ -1125,7 +1031,7 @@ export default function ResourcesPage() {
                     </div>
                   </div>
 
-                  <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", padding: "12px 16px", borderRadius: 8, fontSize: 12, color: "#374151" }}>
+                  <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", padding: "12px 16px", borderRadius: 12, fontSize: 12, color: "#374151" }}>
                     🔒 <strong>Database Row-Level Lock Active</strong>: Zero double-booking concurrency lock ensures zero overlapping reservations.
                   </div>
                 </div>
@@ -1150,7 +1056,7 @@ export default function ResourcesPage() {
                     </div>
                   </div>
 
-                  <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", padding: "12px 16px", borderRadius: 8, fontSize: 12, color: "#374151" }}>
+                  <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", padding: "12px 16px", borderRadius: 12, fontSize: 12, color: "#374151" }}>
                     ✓ <strong>Ready for Research</strong>: Asset cleared for booking by any authorized project team member.
                   </div>
                 </div>
@@ -1222,7 +1128,7 @@ export default function ResourcesPage() {
             {bookingSuccess ? (
               <div style={{ padding: "36px 24px", textAlign: "center" }}>
                 <span style={{ fontSize: 28 }}>✓</span>
-                <h4 style={{ fontSize: 16, fontWeight: 700, color: "#161616", marginTop: 8 }}>
+                <h4 style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginTop: 8 }}>
                   Booking Request Confirmed!
                 </h4>
                 <p style={{ fontSize: 13, color: "#616161", marginTop: 4 }}>
@@ -1400,13 +1306,13 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: {
     fontSize: 28,
     fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-0.5px",
+    color: "#111827",
+    letterSpacing: "-0.025em",
     marginBottom: 4,
   },
   pageSub: {
     fontSize: 13,
-    color: "#9e9e9e",
+    color: "#6b7280",
   },
   btnPrimary: {
     background: "#161616",
@@ -1416,8 +1322,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "9px 16px",
     fontSize: 13,
     fontWeight: 600,
-    cursor: "pointer",
-  },
+    cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   statGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
@@ -1426,36 +1331,38 @@ const s: Record<string, React.CSSProperties> = {
   },
   statCard: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
-    padding: "18px 20px 20px",
+    border: "1px solid rgba(0,0,0,0.06)",
+    borderRadius: 10,
+    padding: "20px 22px 22px",
     display: "flex",
     flexDirection: "column",
     gap: 6,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)",
   },
   statLabel: {
     fontSize: 11,
     fontWeight: 600,
-    color: "#9e9e9e",
-    letterSpacing: "0.5px",
+    color: "#6b7280",
+    letterSpacing: "0.05em",
     textTransform: "uppercase" as const,
   },
   statValue: {
     fontSize: 32,
     fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-1px",
+    color: "#111827",
+    letterSpacing: "-0.03em",
     lineHeight: 1.1,
   },
   statSub: {
     fontSize: 12,
-    color: "#9e9e9e",
+    color: "#6b7280",
   },
   tableCard: {
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 6,
+    border: "1px solid rgba(0,0,0,0.06)",
+    borderRadius: 10,
     overflow: "hidden",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)",
   },
   tableHeaderRow: {
     display: "flex",
@@ -1465,8 +1372,8 @@ const s: Record<string, React.CSSProperties> = {
   sectionLabel: {
     fontSize: 11,
     fontWeight: 600,
-    color: "#9e9e9e",
-    letterSpacing: "0.6px",
+    color: "#6b7280",
+    letterSpacing: "0.05em",
     textTransform: "uppercase" as const,
     padding: "16px 20px 12px",
   },
@@ -1480,17 +1387,17 @@ const s: Record<string, React.CSSProperties> = {
     padding: "8px 16px",
     fontSize: 12,
     fontWeight: 500,
-    color: "#9e9e9e",
+    color: "#6b7280",
     borderBottom: "1px solid #eeeeee",
     borderTop: "1px solid #eeeeee",
     background: "#fafafa",
   },
   tr: {
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
   },
   td: {
     padding: "12px 16px",
-    color: "#161616",
+    color: "#111827",
     fontSize: 13,
     verticalAlign: "middle" as const,
   },
@@ -1507,7 +1414,7 @@ const s: Record<string, React.CSSProperties> = {
   badgeReserved: {
     background: "#f3f4f6",
     color: "#374151",
-    border: "1px solid #e5e7eb",
+    border: "1px solid #f3f4f6",
   },
   badgeMaintenance: {
     background: "#fef2f2",
@@ -1553,7 +1460,7 @@ const m: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: "#ffffff",
-    border: "1px solid #e5e7eb",
+    border: "1px solid #f3f4f6",
     borderRadius: 12,
     width: "100%",
     maxWidth: 600,
@@ -1637,8 +1544,7 @@ const m: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     fontSize: 13,
     fontWeight: 600,
-    cursor: "pointer",
-  },
+    cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSecondary: {
     padding: "9px 16px",
     background: "#ffffff",

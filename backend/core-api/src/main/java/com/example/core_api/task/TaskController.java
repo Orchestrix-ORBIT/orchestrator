@@ -21,47 +21,35 @@ public class TaskController {
         this.taskService = taskService;
     }
 
+    // TenantFilter (Order=1) sets TenantContext for the full request lifecycle.
+    // No manual TenantContext management needed in any controller method.
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse createTask(
             @AuthenticationPrincipal User currentUser,
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateTaskRequest request) {
         requireAuthenticated(currentUser);
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return taskService.createTask(projectId, request);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        return taskService.createTask(projectId, request);
     }
 
     @GetMapping
     public List<TaskResponse> getTasksByProject(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) UUID assigneeId) {
-        
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            if (status != null) {
-                return taskService.getTasksByProjectAndStatus(projectId, status);
-            } else if (assigneeId != null) {
-                return taskService.getTasksByProjectAndAssignee(projectId, assigneeId);
-            }
-            return taskService.getTasksByProject(projectId);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
+        if (status != null) {
+            return taskService.getTasksByProjectAndStatus(projectId, status);
+        } else if (assigneeId != null) {
+            return taskService.getTasksByProjectAndAssignee(projectId, assigneeId);
         }
+        return taskService.getTasksByProject(projectId);
     }
 
     @GetMapping("/{taskId}")
     public TaskResponse getTaskById(
-            @PathVariable UUID projectId, 
+            @PathVariable UUID projectId,
             @PathVariable UUID taskId) {
         return taskInProject(projectId, taskId);
     }
@@ -69,37 +57,23 @@ public class TaskController {
     @PatchMapping("/{taskId}")
     public TaskResponse updateTask(
             @AuthenticationPrincipal User currentUser,
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID projectId,
             @PathVariable UUID taskId,
             @RequestBody UpdateTaskRequest request) {
         requireAuthenticated(currentUser);
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            taskInProject(projectId, taskId);
-            return taskService.updateTask(taskId, request, currentUser);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        taskInProject(projectId, taskId);
+        return taskService.updateTask(taskId, request, currentUser);
     }
 
     @DeleteMapping("/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTask(
             @AuthenticationPrincipal User currentUser,
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
-            @PathVariable UUID projectId, 
+            @PathVariable UUID projectId,
             @PathVariable UUID taskId) {
         requireAuthenticated(currentUser);
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            taskInProject(projectId, taskId);
-            taskService.deleteTask(taskId);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        taskInProject(projectId, taskId);
+        taskService.deleteTask(taskId);
     }
 
     private void requireAuthenticated(User currentUser) {

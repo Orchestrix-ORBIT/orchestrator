@@ -11,6 +11,7 @@ import { SavedSummariesService } from "@/lib/services/savedSummaries";
 interface Channel {
   id: string;
   projectId: string;
+  teamId?: string;
   name: string;
   project: string;
 }
@@ -36,15 +37,29 @@ function getSenderColor(name: string): string {
 /** Convert email/raw string to readable display name.
  *  1. Roster lookup by email. 2. Humanise local part.
  */
-function formatSenderName(raw: string, members: any[]): string {
+function getSenderDisplayName(m: { senderId?: string; senderName?: string }, members: any[]): string {
+  const raw = m.senderName || "";
   if (!raw) return "Unknown";
-  if (!raw.includes("@")) return raw;
-  const member = members.find(
-    (m: any) => (m.email || m.userEmail || "").toLowerCase() === raw.toLowerCase()
+
+  if (raw.includes("@")) {
+    const memberByEmail = members.find(
+      (mem: any) => (mem.email || mem.userEmail || "").toLowerCase() === raw.toLowerCase()
+    );
+    if (memberByEmail && (memberByEmail.displayName || memberByEmail.userDisplayName || memberByEmail.name)) {
+      return memberByEmail.displayName || memberByEmail.userDisplayName || memberByEmail.name;
+    }
+    const local = raw.split("@")[0];
+    return local.split(/[._\-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  }
+
+  const memberByName = members.find(
+    (mem: any) => (mem.displayName || mem.name || "").toLowerCase() === raw.toLowerCase()
   );
-  if (member) return member.displayName || member.userDisplayName || member.name || raw;
-  const local = raw.split("@")[0];
-  return local.split(/[._\-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  if (memberByName && (memberByName.displayName || memberByName.name)) {
+    return memberByName.displayName || memberByName.name;
+  }
+
+  return raw;
 }
 
 import { ProjectsService } from "@/lib/services/projects";
@@ -56,6 +71,7 @@ export default function ChatPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  const [assignedProjectMembers, setAssignedProjectMembers] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
   // ── AI Summarization state ───────────────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false);
@@ -150,9 +166,14 @@ export default function ChatPage() {
   const currentUserId = getUserId() || "";
 
   const currentDisplayName = React.useMemo(() => {
-    if (!teamMembers.length) return formatSenderName(currentUserEmail, []);
-    return formatSenderName(currentUserEmail, teamMembers);
+    return getSenderDisplayName({ senderName: currentUserEmail }, teamMembers);
   }, [currentUserEmail, teamMembers]);
+
+  const myUserId = React.useMemo(() => {
+    if (currentUserId) return currentUserId;
+    const currentMember = teamMembers.find(m => (m.email || m.userEmail || "").toLowerCase() === currentUserEmail.toLowerCase());
+    return currentMember?.userId || currentMember?.id;
+  }, [currentUserId, currentUserEmail, teamMembers]);
 
   // Load real projects and team members from database API
   useEffect(() => {
@@ -164,6 +185,7 @@ export default function ChatPage() {
             setSelectedChannel({
               id: data[0].id,
               projectId: data[0].id,
+              teamId: data[0].teamId,
               name: `#${data[0].name.toLowerCase().replace(/\s+/g, "-")}`,
               project: data[0].name,
             });
@@ -176,6 +198,29 @@ export default function ChatPage() {
         .catch((err) => console.warn("Could not fetch team members:", err)),
     ]).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedChannel) {
+      setAssignedProjectMembers([]);
+      return;
+    }
+    const assignmentsMap = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("project_assigned_members") || "{}") : {};
+    const localAssignedIds: string[] = assignmentsMap[selectedChannel.projectId] || [];
+
+    if (selectedChannel.teamId) {
+      TeamsService.getTeamMembers(selectedChannel.teamId)
+        .then(members => {
+          const backendIds = members.map((m: any) => m.userId || m.id);
+          const allIds = Array.from(new Set([...backendIds, ...localAssignedIds]));
+          setAssignedProjectMembers(teamMembers.filter(m => allIds.includes(m.id || m.userId)));
+        })
+        .catch(() => {
+          setAssignedProjectMembers(teamMembers.filter(m => localAssignedIds.includes(m.id || m.userId)));
+        });
+    } else {
+      setAssignedProjectMembers(teamMembers.filter(m => localAssignedIds.includes(m.id || m.userId)));
+    }
+  }, [selectedChannel, teamMembers]);
 
   const activeProjectId = selectedChannel ? selectedChannel.projectId : "";
   const {
@@ -391,24 +436,11 @@ export default function ChatPage() {
   const channelList: Channel[] = projects.map((p) => ({
     id: p.id,
     projectId: p.id,
+    teamId: p.teamId,
     name: `#${p.name.toLowerCase().replace(/\s+/g, "-")}`,
     project: p.name,
   }));
 
-  const assignmentsMap = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("project_assigned_members") || "{}") : {};
-  let assignedMemberIds: string[] = selectedChannel ? (assignmentsMap[selectedChannel.projectId] || []) : [];
-
-  if (selectedChannel && assignedMemberIds.length === 0 && teamMembers.length > 0) {
-    const researchers = teamMembers.filter((m: any) => {
-      const role = String(m.role || "").toUpperCase();
-      const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
-      const email = String(m.email || m.userEmail || "").toLowerCase();
-      return role === "RESEARCHER" || name.includes("researcher") || email.includes("researcher");
-    });
-    assignedMemberIds = researchers.slice(0, 2).map((m: any) => m.id || m.userId);
-  }
-
-  const assignedProjectMembers = teamMembers.filter(m => assignedMemberIds.includes(m.id || m.userId));
 
   if (!mounted) {
     return <div suppressHydrationWarning />;
@@ -429,8 +461,8 @@ export default function ChatPage() {
             </div>
           </div>
           <div>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#161616", margin: 0, textAlign: "center" }}>Loading Channels &amp; Chat…</p>
-            <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0", textAlign: "center" }}>Connecting to WebSocket STOMP broker</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", margin: 0, textAlign: "center" }}>Loading Channels &amp; Chat…</p>
+            <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0", textAlign: "center" }}>Connecting to WebSocket STOMP broker</p>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {["lc-d1","lc-d2","lc-d3"].map(c => <div key={c} className={c} style={{ width: 6, height: 6, borderRadius: "50%", background: "#9ca3af" }} />)}
@@ -545,10 +577,10 @@ export default function ChatPage() {
                       animation: "spin 0.8s linear infinite",
                       marginBottom: 12,
                     }} />
-                    <p style={{ fontSize: 13, color: "#161616", fontWeight: 600, margin: 0 }}>
+                    <p style={{ fontSize: 13, color: "#111827", fontWeight: 600, margin: 0 }}>
                       Loading {selectedChannel.name} messages…
                     </p>
-                    <p style={{ fontSize: 11, color: "#888888", margin: 0, marginTop: 2 }}>
+                    <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>
                       Fetching conversation history from database
                     </p>
                   </div>
@@ -571,7 +603,7 @@ export default function ChatPage() {
                             }
                             loadMoreMessages();
                           }}
-                          style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#f0f4ff", border: "1px solid #bfdbfe", padding: "4px 12px", borderRadius: 12, cursor: "pointer" }}
+                          style={{ fontSize: 11, fontWeight: 600, color: "#4f46e5", background: "#f0f4ff", border: "1px solid #c7d2fe", padding: "4px 12px", borderRadius: 12, cursor: "pointer" }}
                         >
                           ↑ Load older messages
                         </button>
@@ -584,17 +616,14 @@ export default function ChatPage() {
                       </div>
                     ) : (
                       filteredMessages.map((m) => {
-                        const rawSender = m.senderName || "";
-                        const displaySender = formatSenderName(rawSender, teamMembers);
-                        const senderClean = displaySender.toLowerCase().trim();
-                        const currentClean = currentDisplayName.toLowerCase().trim();
+                        const displaySender = getSenderDisplayName(m, teamMembers);
+                        
                         const isMe =
                           m.id.startsWith("opt-") ||
                           m.senderId === "me" ||
-                          (currentUserId.length > 0 && m.senderId === currentUserId) ||
-                          senderClean === "you" ||
-                          (currentClean.length > 0 && senderClean === currentClean) ||
-                          (currentClean.length > 0 && currentClean.includes(senderClean));
+                          (myUserId && m.senderId === myUserId) ||
+                          (m.senderName && m.senderName.toLowerCase() === currentUserEmail.toLowerCase()) ||
+                          (m.senderName && m.senderName.toLowerCase() === currentDisplayName.toLowerCase());
 
                         const isSelected = selectedIds.has(m.id);
                         const senderColor = getSenderColor(displaySender);
@@ -728,7 +757,7 @@ export default function ChatPage() {
                                         fontSize: 12,
                                         borderRadius: 4,
                                         border: "1px solid #ccc",
-                                        color: "#161616",
+                                        color: "#111827",
                                       }}
                                     />
                                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
@@ -783,7 +812,7 @@ export default function ChatPage() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "8px 16px",
-                  background: "#eff6ff",
+                  background: "#e0e7ff",
                   borderTop: "1px solid #bfdbfe",
                   borderLeft: "4px solid #2563eb",
                   fontSize: 12,
@@ -813,7 +842,7 @@ export default function ChatPage() {
           ) : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 40, textAlign: "center", color: "#9e9e9e" }}>
               <span style={{ fontSize: 36, marginBottom: 12 }}>📁</span>
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#161616", marginBottom: 6 }}>No Project Selected</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", marginBottom: 6 }}>No Project Selected</h3>
               <p style={{ fontSize: 13, maxWidth: 320, marginBottom: 16 }}>Create a project in your workspace to enable real-time WebSocket chat rooms.</p>
               <Link href="/lead-dashboard/projects" style={{ background: "#161616", color: "#ffffff", padding: "8px 16px", borderRadius: 4, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Create Your First Project</Link>
             </div>
@@ -865,7 +894,7 @@ export default function ChatPage() {
               {/* ── Suggested Tasks — one per unique sender ─────────────── */}
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: "14px 16px", border: "1px solid #e2e8f0", marginTop: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#161616" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
                     🎯 Suggested Tasks for Approval
                   </div>
                   {suggestedTasks.length > 0 && (
@@ -887,7 +916,7 @@ export default function ChatPage() {
                       <div key={task.senderName} style={{
                         background: task.rejected ? "#f9f9f9" : createdTaskTitles.has(task.senderName) ? "#f0fdf4" : "#fff",
                         border: task.rejected ? "1px solid #e5e7eb" : createdTaskTitles.has(task.senderName) ? "1px solid #86efac" : "1px solid #e2e8f0",
-                        borderRadius: 8, padding: "12px 14px",
+                        borderRadius: 12, padding: "12px 14px",
                         opacity: task.rejected ? 0.55 : 1,
                         transition: "all 0.2s",
                       }}>
@@ -897,7 +926,7 @@ export default function ChatPage() {
                             {getInitials(task.senderName)}
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "#161616" }}>{task.senderName}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>{task.senderName}</div>
                             <div style={{ fontSize: 10, color: "#9e9e9e" }}>Suggested assignee</div>
                           </div>
                           {createdTaskTitles.has(task.senderName) && (
@@ -931,7 +960,7 @@ export default function ChatPage() {
                               <div style={{ flex: 2 }} />
                               <button
                                 onClick={() => handleRejectTask(task.senderName)}
-                                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280" }}
+                                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #f3f4f6", background: "#ffffff", cursor: "pointer", color: "#6b7280" }}
                               >✕ Reject</button>
                               <button
                                 onClick={() => handleApproveTask(task)}
@@ -981,7 +1010,7 @@ export default function ChatPage() {
           background: "#161616",
           color: "#ffffff",
           padding: "10px 18px",
-          borderRadius: 8,
+          borderRadius: 12,
           fontSize: 12,
           fontWeight: 600,
           boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
@@ -1008,13 +1037,13 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: {
     fontSize: 24,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
     letterSpacing: "-0.5px",
     margin: 0,
   },
   pageSub: {
     fontSize: 12,
-    color: "#888888",
+    color: "#6b7280",
     margin: 0,
     marginTop: 2,
   },
@@ -1023,7 +1052,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 6,
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 6,
     padding: "6px 12px",
     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -1031,13 +1060,13 @@ const s: Record<string, React.CSSProperties> = {
   statBadgeLabel: {
     fontSize: 10,
     fontWeight: 700,
-    color: "#888888",
+    color: "#6b7280",
     letterSpacing: "0.5px",
   },
   statBadgeValue: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   chatLayout: {
     display: "flex",
@@ -1051,7 +1080,7 @@ const s: Record<string, React.CSSProperties> = {
     width: 320,
     minWidth: 300,
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 6,
     display: "flex",
     flexDirection: "column",
@@ -1065,7 +1094,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   channelItem: {
     padding: "14px 18px",
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
     cursor: "pointer",
     display: "flex",
     flexDirection: "column",
@@ -1075,7 +1104,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   channelItemActive: {
     padding: "14px 18px",
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
     cursor: "pointer",
     display: "flex",
     flexDirection: "column",
@@ -1091,12 +1120,12 @@ const s: Record<string, React.CSSProperties> = {
   chName: {
     fontSize: 13,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
   },
   chNameActive: {
     fontSize: 13,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   chProject: {
     fontSize: 11,
@@ -1105,7 +1134,7 @@ const s: Record<string, React.CSSProperties> = {
   conversationCard: {
     flex: 1,
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 6,
     display: "flex",
     flexDirection: "column",
@@ -1122,7 +1151,7 @@ const s: Record<string, React.CSSProperties> = {
   convTitle: {
     fontSize: 15,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   convSub: {
     fontSize: 12,
@@ -1197,7 +1226,7 @@ const s: Record<string, React.CSSProperties> = {
   senderThem: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#2563eb",
+    color: "#4f46e5",
   },
   msgTime: {
     fontSize: 10,
@@ -1240,7 +1269,7 @@ const s: Record<string, React.CSSProperties> = {
   summarizeBtn: {
     padding: "6px 14px",
     background: "#ffffff",
-    border: "1px solid #e0e0e0",
+    border: "1px solid #f3f4f6",
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
@@ -1275,12 +1304,12 @@ const s: Record<string, React.CSSProperties> = {
     background: "transparent", border: "1px solid #444", borderRadius: 20, cursor: "pointer",
   },
   selectionSummarizeBtn: {
-    padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#161616",
-    background: "#fff", border: "none", borderRadius: 20, cursor: "pointer",
+    padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#111827",
+    background: "#ffffff", border: "none", borderRadius: 20, cursor: "pointer",
   },
   errorBanner: {
     position: "fixed" as const, bottom: 140, left: "50%", transform: "translateX(-50%)",
-    background: "#fff3e0", border: "1px solid #ffb74d", borderRadius: 8,
+    background: "#fff3e0", border: "1px solid #ffb74d", borderRadius: 12,
     padding: "10px 16px", fontSize: 13, color: "#e65100",
     display: "flex", alignItems: "center", gap: 10, zIndex: 200, maxWidth: 500,
   },
@@ -1290,12 +1319,12 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 24,
   },
   modalBox: {
-    background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "80vh",
+    background: "#ffffff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "80vh",
     display: "flex", flexDirection: "column" as const, overflow: "hidden",
     boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
   },
-  modalHeader: { display: "flex", alignItems: "center", gap: 10, padding: "18px 20px 14px", borderBottom: "1px solid #f0f0f0" },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616", flex: 1 },
+  modalHeader: { display: "flex", alignItems: "center", gap: 10, padding: "18px 20px 14px", borderBottom: "1px solid #f3f4f6" },
+  modalTitle: { fontSize: 16, fontWeight: 700, color: "#111827", flex: 1 },
   modalMeta: { fontSize: 11, color: "#9e9e9e", background: "#f5f5f5", borderRadius: 20, padding: "2px 10px" },
   modalClose: { background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#9e9e9e", padding: 4 },
   modalBody: {
@@ -1303,21 +1332,21 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex", flexDirection: "column" as const, gap: 20,
   },
   summaryText: {
-    fontSize: 14, lineHeight: 1.7, color: "#424242", margin: 0,
-    padding: "14px 16px", background: "#f9f9f9", borderRadius: 8, borderLeft: "3px solid #4f46e5",
+    fontSize: 14, lineHeight: 1.7, color: "#374151", margin: 0,
+    padding: "14px 16px", background: "#f9f9f9", borderRadius: 12, borderLeft: "3px solid #4f46e5",
   },
   modalSection: { display: "flex", flexDirection: "column" as const, gap: 8 },
-  modalSectionTitle: { fontSize: 13, fontWeight: 700, color: "#161616", letterSpacing: "0.2px" },
+  modalSectionTitle: { fontSize: 13, fontWeight: 700, color: "#111827", letterSpacing: "0.2px" },
   modalList: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column" as const, gap: 6 },
-  modalListItem: { fontSize: 13, lineHeight: 1.6, color: "#424242" },
+  modalListItem: { fontSize: 13, lineHeight: 1.6, color: "#374151" },
   modalFooter: { display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 20px", borderTop: "1px solid #f0f0f0" },
   modalCopyBtn: {
     padding: "7px 16px", fontSize: 13, fontWeight: 500, color: "#4f46e5",
-    background: "#f0f0ff", border: "1px solid #c7d2fe", borderRadius: 8, cursor: "pointer",
+    background: "#f0f0ff", border: "1px solid #c7d2fe", borderRadius: 12, cursor: "pointer",
   },
   modalCloseBtn: {
     padding: "7px 16px", fontSize: 13, fontWeight: 600, color: "#fff",
-    background: "#161616", border: "none", borderRadius: 8, cursor: "pointer",
+    background: "#161616", border: "none", borderRadius: 12, cursor: "pointer",
   },
   actionBtn: {
     background: "none",

@@ -59,7 +59,7 @@ class ChatMessageServiceTest {
 
         // Record: (projectId, taskId, content, senderName, tenantId)
         SendChatMessageRequest req = new SendChatMessageRequest(
-                projectId, null, "AES256_ENCRYPTED_CONTENT", null, null);
+                projectId, null, "AES256_ENCRYPTED_CONTENT", null, null, null);
 
         ChatMessageResponse response = chatMessageService.saveMessage(req, senderId);
         assertThat(response.id()).isEqualTo(messageId);
@@ -75,7 +75,7 @@ class ChatMessageServiceTest {
         when(userRepository.findById(senderId)).thenReturn(Optional.of(noDisplay));
         when(chatMessageRepository.save(any())).thenReturn(sampleMessage);
         SendChatMessageRequest req = new SendChatMessageRequest(
-                projectId, null, "AES256_ENCRYPTED_CONTENT", null, null);
+                projectId, null, "AES256_ENCRYPTED_CONTENT", null, null, null);
         assertThat(chatMessageService.saveMessage(req, senderId).senderName()).isEqualTo("researcher@lab.com");
     }
 
@@ -84,7 +84,7 @@ class ChatMessageServiceTest {
         // When senderName is provided, skip the DB lookup (performance optimisation)
         when(chatMessageRepository.save(any())).thenReturn(sampleMessage);
         SendChatMessageRequest req = new SendChatMessageRequest(
-                projectId, null, "AES256_ENCRYPTED_CONTENT", "Dr. Silva", null);
+                projectId, null, "AES256_ENCRYPTED_CONTENT", "Dr. Silva", null, null);
         assertThat(chatMessageService.saveMessage(req, senderId).senderName()).isEqualTo("Dr. Silva");
         verify(userRepository, never()).findById(any());
     }
@@ -97,7 +97,7 @@ class ChatMessageServiceTest {
                 .senderId(senderId).contentEncrypted(cipher).createdAt(OffsetDateTime.now()).build();
         when(userRepository.findById(senderId)).thenReturn(Optional.of(sampleUser));
         when(chatMessageRepository.save(any())).thenReturn(savedMsg);
-        SendChatMessageRequest req = new SendChatMessageRequest(projectId, null, cipher, null, null);
+        SendChatMessageRequest req = new SendChatMessageRequest(projectId, null, cipher, null, null, null);
         assertThat(chatMessageService.saveMessage(req, senderId).content()).isEqualTo(cipher);
     }
 

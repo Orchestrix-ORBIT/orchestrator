@@ -185,8 +185,7 @@ export default function AiInsightsPage() {
 
   if (loading) {
     return (
-      <LoadingState
-        title="Loading AI Summaries…"
+      <LoadingState variant="chat" title="Loading AI Summaries…"
         subtitle="Connecting to database and fetching chat-generated summaries"
       />
     );
@@ -236,24 +235,24 @@ export default function AiInsightsPage() {
 
       {/* ── Stat Cards ───────────────────────────────────────────────────────── */}
       <div style={s.statGrid}>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="card-depth">
           <span style={s.statLabel}>TOTAL AI SUMMARIES</span>
           <span style={s.statValue}>{insights.length}</span>
           <span style={s.statSub}>Generated across chats</span>
         </div>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="card-depth">
           <span style={s.statLabel}>AVG CONFIDENCE</span>
           <span style={s.statValue}>{insights.length > 0 ? `${avgConfidence}%` : "100%"}</span>
           <span style={s.statSub}>LangChain Context Engine</span>
         </div>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="card-depth">
           <span style={s.statLabel}>PENDING APPROVAL</span>
           <span style={{ ...s.statValue, color: pendingCount > 0 ? "#f57f17" : "#161616" }}>
             {pendingCount}
           </span>
           <span style={s.statSub}>Awaiting lead review</span>
         </div>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="card-depth">
           <span style={s.statLabel}>CONVERTED TO TASKS</span>
           <span style={s.statValue}>{executedCount}</span>
           <span style={s.statSub}>Approved into Kanban board</span>
@@ -261,7 +260,7 @@ export default function AiInsightsPage() {
       </div>
 
       {/* ── Main Summaries Table Card ─────────────────────────────────────────── */}
-      <div style={s.tableCard}>
+      <div style={s.tableCard} className="card-depth">
         <div style={s.tableHeaderRow}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <p style={s.sectionLabel}>AI SUMMARIES & ACTION ITEMS</p>
@@ -313,7 +312,7 @@ export default function AiInsightsPage() {
         {visibleInsights.length === 0 ? (
           <div style={{ padding: "56px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#161616", margin: 0 }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>
               {insights.length === 0
                 ? "No AI Summaries created yet"
                 : "No summaries in this category"}
@@ -364,10 +363,10 @@ export default function AiInsightsPage() {
                       <span style={s.topicSub}>Click to inspect & approve task</span>
                     </div>
                   </td>
-                  <td style={{ ...s.td, color: "#424242", fontWeight: 500 }}>
+                  <td style={{ ...s.td, color: "#374151", fontWeight: 500 }}>
                     {item.projectName}
                   </td>
-                  <td style={{ ...s.td, color: "#616161", fontFamily: "monospace", fontSize: 12 }}>
+                  <td style={{ ...s.td, color: "#616161", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                     {item.model}
                   </td>
                   <td style={s.td}>
@@ -398,7 +397,7 @@ export default function AiInsightsPage() {
                         >{isDeleting ? "…" : "Yes"}</button>
                         <button
                           onClick={() => setDeleteConfirmId(null)}
-                          style={{ fontSize: 10, padding: "3px 8px", background: "#f5f5f5", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 4, cursor: "pointer" }}
+                          style={{ fontSize: 10, padding: "3px 8px", background: "#f5f5f5", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 4, cursor: "pointer" }}
                         >No</button>
                       </div>
                     ) : (
@@ -437,7 +436,7 @@ export default function AiInsightsPage() {
             <div style={m.body}>
               <div style={m.section}>
                 <span style={m.label}>TARGET PROJECT</span>
-                <p style={{ fontSize: 14, fontWeight: 600, color: "#161616", marginTop: 4 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "#111827", marginTop: 4 }}>
                   {selectedItem.projectName} • Logged on {selectedItem.date}
                 </p>
               </div>
@@ -454,7 +453,7 @@ export default function AiInsightsPage() {
                   <span style={m.label}>KEY FINDINGS</span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
                     {selectedItem.keyFindings.map((f, i) => (
-                      <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: "#424242" }}>
+                      <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: "#374151" }}>
                         <span style={{ color: "#9e9e9e", fontWeight: 700 }}>•</span>
                         <span>{f}</span>
                       </div>
@@ -525,7 +524,7 @@ export default function AiInsightsPage() {
                             disabled={isApproved}
                             value={taskAssignees[idx] ?? ""}
                             onChange={(e) => setTaskAssignees((prev) => { const n = [...prev]; n[idx] = e.target.value; return n; })}
-                            style={{ flex: 1, padding: "6px 8px", fontSize: 12, border: "1px solid #d0d0d0", borderRadius: 4, background: "#fff", color: "#161616", cursor: "pointer" }}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 12, border: "1px solid #d0d0d0", borderRadius: 4, background: "#ffffff", color: "#111827", cursor: "pointer" }}
                           >
                             <option value="">— Unassigned —</option>
                             {teamMembers.map((m) => {
@@ -559,7 +558,7 @@ export default function AiInsightsPage() {
                 <button
                   onClick={() => { if (window.confirm("Delete this summary permanently?")) handleDelete(selectedItem.id); }}
                   disabled={isDeleting}
-                  style={{ padding: "8px 14px", background: "#fff", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  style={{ padding: "8px 14px", background: "#ffffff", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                 >
                   {isDeleting ? "Deleting..." : "🗑 Delete"}
                 </button>
@@ -581,7 +580,7 @@ export default function AiInsightsPage() {
                   <>
                     <Link
                       href={`/lead-dashboard/projects/${selectedItem.projectId}`}
-                      style={{ padding: "8px 14px", background: "#f5f5f5", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+                      style={{ padding: "8px 14px", background: "#f5f5f5", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
                       onClick={() => setSelectedItem(null)}
                     >
                       Open Project Kanban →
@@ -600,48 +599,48 @@ export default function AiInsightsPage() {
 
 const s: Record<string, React.CSSProperties> = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 },
-  pageTitle: { fontSize: 28, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", marginBottom: 4 },
-  pageSub:   { fontSize: 13, color: "#757575" },
-  btnPrimary:{ background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none" },
-  statGrid:  { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 },
-  statCard:  { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 6 },
-  statLabel: { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", textTransform: "uppercase" as const },
-  statValue: { fontSize: 32, fontWeight: 700, color: "#161616", letterSpacing: "-1px", lineHeight: 1.1 },
-  statSub:   { fontSize: 12, color: "#9e9e9e" },
-  tableCard: { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, overflow: "hidden" },
+  pageTitle: { fontSize: "clamp(24px, 2vw, 32px)", fontWeight: 700, color: "#111827", letterSpacing: "-0.5px", marginBottom: 4 },
+  pageSub:   { fontSize: "clamp(12px, 1vw, 15px)", color: "#757575" },
+  btnPrimary: { background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, padding: "clamp(8px, 0.8vw, 12px) clamp(16px, 1.5vw, 24px)", fontSize: "clamp(12px, 1vw, 14px)", fontWeight: 600, textDecoration: "none" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
+  statGrid:  { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "clamp(16px, 1.5vw, 24px)", marginBottom: 32 },
+  statCard:  { padding: "clamp(16px, 1.5vw, 24px)", display: "flex", flexDirection: "column", gap: 6 },
+  statLabel: { fontSize: "clamp(10px, 0.8vw, 12px)", fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", textTransform: "uppercase" as const },
+  statValue: { fontSize: "clamp(24px, 2.2vw, 36px)", fontWeight: 700, color: "#111827", letterSpacing: "-1px", lineHeight: 1.1 },
+  statSub:   { fontSize: "clamp(11px, 0.9vw, 14px)", color: "#9e9e9e" },
+  tableCard: { overflow: "hidden" },
   tableHeaderRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px 10px" },
   sectionLabel: { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.6px", textTransform: "uppercase" as const, margin: 0 },
   filterTabs: { display: "flex", gap: 6 },
-  filterTabBtn: { background: "none", border: "1px solid #e0e0e0", borderRadius: 4, padding: "4px 10px", fontSize: 12, color: "#616161", cursor: "pointer", fontWeight: 500 },
+  filterTabBtn: { background: "none", border: "1px solid #f3f4f6", borderRadius: 4, padding: "4px 10px", fontSize: 12, color: "#616161", cursor: "pointer", fontWeight: 500 },
   filterTabBtnActive: { background: "#161616", borderColor: "#161616", color: "#ffffff", fontWeight: 600 },
-  table:     { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
-  th:        { textAlign: "left" as const, padding: "10px 16px", fontSize: 12, fontWeight: 500, color: "#9e9e9e", borderBottom: "1px solid #eeeeee", borderTop: "1px solid #eeeeee", background: "#fafafa" },
-  tr:        { borderBottom: "1px solid #f0f0f0", cursor: "pointer" },
-  td:        { padding: "12px 16px", color: "#161616", fontSize: 13, verticalAlign: "middle" as const },
-  topicName: { fontWeight: 600, color: "#161616" },
-  topicSub:  { fontSize: 11, color: "#9e9e9e" },
+  table:     { width: "100%", borderCollapse: "collapse" as const, fontSize: "clamp(12px, 1vw, 15px)" },
+  th:        { textAlign: "left" as const, padding: "10px 16px", fontSize: "clamp(11px, 0.9vw, 14px)", fontWeight: 500, color: "#9e9e9e", borderBottom: "1px solid #eeeeee", borderTop: "1px solid #eeeeee", background: "#fafafa" },
+  tr:        { borderBottom: "1px solid #f3f4f6", cursor: "pointer" },
+  td:        { padding: "clamp(12px, 1vw, 18px) 16px", color: "#111827", fontSize: "clamp(12px, 1vw, 15px)", verticalAlign: "middle" as const },
+  topicName: { fontWeight: 600, color: "#111827" },
+  topicSub:  { fontSize: "clamp(10px, 0.8vw, 13px)", color: "#9e9e9e" },
   confidenceBadge: { fontSize: 11, fontWeight: 600, color: "#2e7d32", background: "#e8f5e9", padding: "2px 6px", borderRadius: 3 },
   badge:     { fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4 },
   badgeDone: { background: "#161616", color: "#ffffff" },
   badgePending: { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
-  badgeArchived: { background: "#f5f5f5", color: "#9e9e9e", border: "1px solid #e0e0e0" },
+  badgeArchived: { background: "#f5f5f5", color: "#9e9e9e", border: "1px solid #f3f4f6" },
   toastSuccess: { background: "#e8f5e9", border: "1px solid #c8e6c9", borderRadius: 6, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#2e7d32", fontWeight: 500 },
   toastError: { background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#c62828" },
 };
 
 const m: Record<string, React.CSSProperties> = {
   overlay:  { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 },
-  modal:    { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, width: "100%", maxWidth: 580, boxShadow: "0 10px 25px rgba(0,0,0,0.15)" },
+  modal:    { background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 12, width: "100%", maxWidth: 580, boxShadow: "0 20px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)" },
   header:   { padding: "18px 24px", borderBottom: "1px solid #eeeeee", display: "flex", alignItems: "flex-start", justifyContent: "space-between" },
-  title:    { fontSize: 16, fontWeight: 700, color: "#161616", margin: 0 },
+  title:    { fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 },
   sub:      { fontSize: 12, color: "#757575", marginTop: 2, margin: 0 },
   closeBtn: { background: "none", border: "none", fontSize: 16, color: "#9e9e9e", cursor: "pointer" },
   body:     { padding: "20px 24px", display: "flex", flexDirection: "column" as const, gap: 14, maxHeight: "70vh", overflowY: "auto" as const },
-  section:  { borderBottom: "1px solid #f0f0f0", paddingBottom: 12 },
+  section:  { borderBottom: "1px solid #f3f4f6", paddingBottom: 12 },
   label:    { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", display: "block" },
-  text:     { fontSize: 13, color: "#424242", lineHeight: 1.5, marginTop: 4 },
+  text:     { fontSize: 13, color: "#374151", lineHeight: 1.5, marginTop: 4 },
   footer:   { padding: "14px 24px", borderTop: "1px solid #eeeeee", background: "#fafafa", display: "flex", alignItems: "center", justifyContent: "space-between" },
-  btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { padding: "8px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnDanger:  { padding: "8px 16px", background: "#fff0f0", color: "#c62828", border: "1px solid #f5c6cb", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   input:      { width: "100%", boxSizing: "border-box" as const, padding: "8px 12px", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontFamily: "var(--font)" },
   textarea:   { width: "100%", boxSizing: "border-box" as const, padding: "8px 12px", border: "1px solid #d0d0d0", borderRadius: 4, fontSize: 13, fontFamily: "var(--font)", resize: "vertical" as const },
