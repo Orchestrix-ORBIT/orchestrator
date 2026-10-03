@@ -3,6 +3,7 @@
   --black:        #161616;
   --black-soft:   #1f1f1f;
   --white:        #ffffff;
+  --bg:           #f2f2f2;          /* Warm gray page background — matches Adept */
   --grey-50:      #f5f5f5;
   --grey-100:     #eeeeee;
   --grey-200:     #e0e0e0;
@@ -11,22 +12,35 @@
   --grey-800:     #424242;
   --text-main:    #161616;
   --text-muted:   #616161;
-  --border:       #e0e0e0;
-  --radius:       6px;
+  --border:       #e5e7eb;
+  --border-light: #f3f4f6;
+  --radius:       8px;
   --radius-sm:    4px;
-  --font:         'Inter', system-ui, -apple-system, sans-serif;
+  --radius-lg:    12px;
+  /* Shadows — layered for 3-D card depth */
+  --shadow-sm:    0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:    0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.05);
+  --shadow-lg:    0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+  --font:         var(--font-inter-next, 'Inter'), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:    var(--font-jb, 'JetBrains Mono'), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* ── Reset ────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  font-family: var(--font);
+}
 body {
-  background: var(--grey-50);
+  background: var(--bg);
   color: var(--text-main);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 a { text-decoration: none; color: inherit; }
 button { font-family: var(--font); cursor: pointer; }
@@ -53,7 +67,7 @@ input, textarea { font-family: var(--font); }
 
 /* ── Clickable Link Utilities ──────────────────────────────────────────────── */
 .clickable-project-link {
-  color: #2563eb;
+  color: #4f46e5;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
@@ -61,7 +75,7 @@ input, textarea { font-family: var(--font); }
 }
 
 .clickable-project-link:hover {
-  color: #1d4ed8;
+  color: #4338ca;
   text-decoration: underline;
 }
 
@@ -79,10 +93,231 @@ input, textarea { font-family: var(--font); }
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d1d5db;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ca3af;
+}
+
+/* ── Card Depth Utilities ───────────────────────────────────────────────── */
+/* Base card — white on warm-gray background creates natural depth */
+.card-depth {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255,255,255,1);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+.card-depth:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255,255,255,1);
+  transform: translateY(-2px);
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* Table header row — slightly elevated bg */
+.table-th-depth {
+  background: #f8f9fa !important;
+  border-top: 1px solid rgba(0,0,0,0.05) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.07) !important;
+}
+
+/* Sidebar Nav Item Hover */
+.nav-item-hover:hover {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+.nav-item-hover:hover > span {
+  color: #111827 !important;
+}
+
+/* Table Row Hover */
+.table-row-hover { transition: background 0.15s ease; }
+.table-row-hover:hover { background: #f8f9fa; cursor: pointer; }
+
+/* Button Hover */
+.btn-hover-lift { transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease; }
+.btn-hover-lift:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important; }
+
+.btn-secondary-hover { transition: background 0.1s ease; }
+.btn-secondary-hover:hover { background: #f3f4f6 !important; }
+
+/* ── Premium SaaS Animations 2026 ───────────────────────────────────────── */
+.stat-card-hover {
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease !important;
+}
+.stat-card-hover:hover {
+  transform: translateY(-4px) scale(1.01) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+
+.btn-shiny {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease !important;
+}
+.btn-shiny::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.04), transparent);
+  transition: all 0.6s ease;
+  z-index: 1;
+}
+.btn-shiny:hover::after {
+  left: 100%;
+}
+.btn-shiny:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.06) !important;
+  border-color: #d1d5db !important;
+}
+
+.btn-hover-flat {
+  transition: all 0.2s ease !important;
+}
+.btn-hover-flat:hover {
+  opacity: 0.85 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Universal Button Hover for inline-styled buttons */
+button:not(:disabled) {
+  transition: opacity 0.2s ease, box-shadow 0.2s ease !important;
+}
+button:not(:disabled):hover {
+  opacity: 0.85;
+}
+
+.search-input-premium:focus {
+  background: #ffffff !important;
+  border-color: #111827 !important;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1), inset 0 1px 2px rgba(0,0,0,0.02) !important;
+  outline: none;
+}
+
+/* ── Auth Page Responsive Utilities ─────────────────────────────────────── */
+.auth-page-container {
+  display: flex;
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+.auth-brand-panel {
+  flex: 0 0 45%;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background shapes for the premium feel */
+@keyframes floatShape1 {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(5%, 10%) scale(1.1); }
+  66% { transform: translate(-5%, 5%) scale(0.95); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes floatShape2 {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-5%, -10%) scale(0.95); }
+  66% { transform: translate(5%, -5%) scale(1.1); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+.auth-brand-panel::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: floatShape1 18s ease-in-out infinite;
+}
+.auth-brand-panel::after {
+  content: "";
+  position: absolute;
+  bottom: -15%;
+  right: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: floatShape2 22s ease-in-out infinite;
+}
+
+.auth-glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 32px;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.auth-input-focus:focus {
+  border-color: #111827 !important;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1) !important;
+}
+
+.auth-btn-primary {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.auth-btn-primary:hover {
+  background: #1e293b !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+}
+
+.auth-form-panel {
+  flex: 1;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+}
+
+@media (max-width: 900px) {
+  .auth-page-container {
+    flex-direction: column;
+  }
+  .auth-brand-panel {
+    flex: 0 0 auto;
+    padding: 24px;
+    justify-content: center;
+  }
+  .auth-brand-text {
+    display: none !important;
+  }
+  .auth-logo-row {
+    margin-bottom: 0 !important;
+    justify-content: center;
+  }
+  .auth-form-panel {
+    padding: 0;
+    align-items: flex-start;
+    background: #ffffff; /* Make the background white to blend the card */
+  }
+  .auth-card {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 32px 24px !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+  }
 }
 

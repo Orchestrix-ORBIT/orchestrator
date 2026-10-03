@@ -65,6 +65,10 @@ export const TeamsService = {
   addMember: (teamId: string, body: AddMemberBody) =>
     api.post<void>(`/api/research-teams/${teamId}/members`, body),
 
+  /** GET /api/research-teams/{teamId}/members — list members of a specific team */
+  getTeamMembers: (teamId: string) =>
+    api.get<TeamMember[]>(`/api/research-teams/${teamId}/members`),
+
   /** DELETE /api/research-teams/{teamId}/members/{userId} — remove a member */
   removeMember: (teamId: string, userId: string) =>
     api.del(`/api/research-teams/${teamId}/members/${userId}`),

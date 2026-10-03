@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ResourcesService, type Resource } from "@/lib/services/resources";
+import LoadingState from "@/components/ui/LoadingState";
 
 export default function ResourceDashboardPage() {
   const [resources, setResources] = useState<Resource[]>([]);
@@ -22,7 +23,7 @@ export default function ResourceDashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading…</p>;
+  if (loading) return <LoadingState variant="manager-overview" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   const effectiveResources = resources.map(r => ({

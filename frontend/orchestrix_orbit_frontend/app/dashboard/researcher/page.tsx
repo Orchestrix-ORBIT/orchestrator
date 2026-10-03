@@ -51,12 +51,13 @@ export default function ResearcherHomePage() {
           projectList.map((p) => TasksService.getByProject(p.id).catch(() => [] as Task[]))
         );
         const flatTasks = taskResults.flat();
+        // Read the userId persisted to localStorage during login (see app/page.tsx)
         let currentUserId = "";
         try {
-          const userStr = localStorage.getItem("user") || "{}";
-          currentUserId = JSON.parse(userStr).id || "";
+          currentUserId = localStorage.getItem("userId") || "";
         } catch (e) {}
 
+        // Only show tasks assigned to this researcher, or tasks with no assignee yet
         const myTasksOnly = flatTasks.filter(
           (t) => !t.assigneeId || t.assigneeId === currentUserId
         );
@@ -94,7 +95,7 @@ export default function ResearcherHomePage() {
     .filter(b => b.status === "APPROVED" || b.status === "PENDING")
     .slice(0, 3);
 
-  if (loading) return <LoadingState title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
+  if (loading) return <LoadingState variant="researcher-home" title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
   if (error)   return <ErrorState message={error} />;
 
   const STAT_ITEMS = [
@@ -138,11 +139,11 @@ export default function ResearcherHomePage() {
             </thead>
             <tbody>
               {pendingTasks.length === 0 ? (
-                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#888" }}>No open tasks 🎉</td></tr>
+                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#6b7280" }}>No open tasks 🎉</td></tr>
               ) : pendingTasks.map((task) => (
                 <tr key={task.id} style={{ cursor: "pointer" }}>
                   <td style={s.td}>
-                    <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none", color: "#161616", fontWeight: 600 }}>
+                    <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none", color: "#111827", fontWeight: 600 }}>
                       {task.title}
                     </Link>
                   </td>
@@ -170,7 +171,7 @@ export default function ResearcherHomePage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {upcomingBookings.length === 0 ? (
-              <p style={{ color: "#888", fontSize: 13 }}>No upcoming bookings</p>
+              <p style={{ color: "#6b7280", fontSize: 13 }}>No upcoming bookings</p>
             ) : upcomingBookings.map((b) => (
               <div key={b.id} style={s.bookingRow}>
                 <div>
@@ -192,7 +193,7 @@ export default function ResearcherHomePage() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div style={{ padding: 24, background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 8, color: "#c62828", fontSize: 14 }}>
+    <div style={{ padding: 24, background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 12, color: "#c62828", fontSize: 14 }}>
       <strong>Error:</strong> {message}
     </div>
   );
@@ -201,7 +202,7 @@ function ErrorState({ message }: { message: string }) {
 function statusStyle(status: string): React.CSSProperties {
   switch (status) {
     case "IN_PROGRESS": return { background: "#161616", color: "#ffffff", border: "none" };
-    default:            return { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" };
+    default:            return { background: "transparent", color: "#374151", border: "1px solid #d0d0d0" };
   }
 }
 
@@ -223,8 +224,8 @@ const s: Record<string, React.CSSProperties> = {
   },
   statCard: {
     background: "#ffffff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
+    border: "1px solid #f3f4f6",
+    borderRadius: 12,
     padding: "20px 24px",
     display: "flex",
     flexDirection: "column",
@@ -233,13 +234,13 @@ const s: Record<string, React.CSSProperties> = {
   statValue: {
     fontSize: 32,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
     lineHeight: 1,
   },
   statLabel: {
     fontSize: 10,
     fontWeight: 700,
-    color: "#888888",
+    color: "#6b7280",
     letterSpacing: "0.8px",
     marginTop: 6,
   },
@@ -254,10 +255,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   card: {
     background: "#ffffff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
-    padding: 24,
-  },
+    border: "1px solid #f3f4f6",
+    borderRadius: 12,
+    padding: 24, boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)"},
   cardHead: {
     display: "flex",
     justifyContent: "space-between",
@@ -267,11 +267,11 @@ const s: Record<string, React.CSSProperties> = {
   cardTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
   },
   cardLink: {
     fontSize: 12,
-    color: "#888888",
+    color: "#6b7280",
     textDecoration: "none",
     fontWeight: 500,
   },
@@ -283,17 +283,17 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "left" as const,
     fontSize: 10,
     fontWeight: 700,
-    color: "#888888",
+    color: "#6b7280",
     letterSpacing: "0.6px",
     textTransform: "uppercase" as const,
     paddingBottom: 10,
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
   },
   td: {
     fontSize: 13,
-    color: "#424242",
+    color: "#374151",
     padding: "10px 0",
-    borderBottom: "1px solid #f8f8f8",
+    borderBottom: "1px solid #f9fafb",
   },
   badge: {
     display: "inline-block",
@@ -307,16 +307,16 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "12px 0",
-    borderBottom: "1px solid #f8f8f8",
+    borderBottom: "1px solid #f9fafb",
   },
   bookingName: {
     fontSize: 13,
     fontWeight: 500,
-    color: "#161616",
+    color: "#111827",
     marginBottom: 2,
   },
   bookingTime: {
     fontSize: 12,
-    color: "#888888",
+    color: "#6b7280",
   },
 };

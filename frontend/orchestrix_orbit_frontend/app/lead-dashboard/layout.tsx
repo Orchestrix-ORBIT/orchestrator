@@ -12,6 +12,7 @@ export default function LeadDashboardLayout({
 }) {
   const [mounted, setMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -35,7 +36,7 @@ export default function LeadDashboardLayout({
   }, [menuOpen]);
 
   if (!mounted) {
-    return <div style={{ minHeight: "100vh", background: "#f5f5f5" }} suppressHydrationWarning />;
+    return <div style={{ minHeight: "100vh", background: "#f9fafb" }} suppressHydrationWarning />;
   }
 
   const isAdmin = !!(getRole() || "").toUpperCase().match(/ADMIN|OWNER/);
@@ -43,10 +44,10 @@ export default function LeadDashboardLayout({
   return (
     <div style={s.root} suppressHydrationWarning>
       {/* ── Fixed Sidebar ────────────────────────────────────────────────── */}
-      <Sidebar />
+      <Sidebar isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
 
       {/* ── Main Area ────────────────────────────────────────────────────── */}
-      <div style={s.main}>
+      <div style={{ ...s.main, marginLeft: isSidebarCollapsed ? 104 : 244 }}>
         {/* Topbar matching Researcher Dashboard */}
         <header style={s.topbar}>
           <div style={s.topbarRight}>
@@ -65,6 +66,7 @@ export default function LeadDashboardLayout({
                   </div>
                   <button 
                     style={s.dropdownLogout}
+                    className="btn-secondary-hover"
                     onClick={() => {
                       logout();
                       router.push("/");
@@ -98,23 +100,26 @@ const s: Record<string, React.CSSProperties> = {
     height: "100vh",
     maxHeight: "100vh",
     overflow: "hidden",
-    background: "#f5f5f5",
+    background: "#f2f2f2",
     fontFamily: "var(--font)",
   },
   main: {
-    marginLeft: 200,
+    marginLeft: 244,
+    transition: "margin-left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
     flex: 1,
     display: "flex",
     flexDirection: "column",
     height: "100vh",
     maxHeight: "100vh",
     overflow: "hidden",
-    background: "#f5f5f5",
+    background: "#f2f2f2",
+    position: "relative",
   },
   topbar: {
     height: 48,
-    background: "#f5f5f5",
-    borderBottom: "1px solid #e0e0e0",
+    background: "rgba(242,242,242,0.85)",
+    backdropFilter: "blur(8px)",
+    borderBottom: "1px solid rgba(0,0,0,0.07)",
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -133,27 +138,28 @@ const s: Record<string, React.CSSProperties> = {
     width: 36,
     height: 36,
     borderRadius: "50%",
-    background: "#1976d2",
+    background: "#111827",
     color: "#fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 14,
+    fontWeight: "700",
     cursor: "pointer",
     border: "2px solid transparent",
     outline: "none",
-    transition: "border 0.2s",
+    transition: "opacity 0.15s",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
   },
   dropdownMenu: {
     position: "absolute",
     top: "calc(100% + 8px)",
     right: 0,
     width: 220,
-    background: "#fff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+    background: "#ffffff",
+    border: "1px solid rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -161,12 +167,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   dropdownHeader: {
     padding: "12px 16px",
-    borderBottom: "1px solid #f0f0f0",
-    background: "#f9fafb",
+    borderBottom: "1px solid #f3f4f6",
+    background: "#fafafa",
   },
   dropdownEmail: {
     fontSize: 13,
-    color: "#424242",
+    color: "#374151",
     fontWeight: 500,
     wordBreak: "break-all",
   },
@@ -186,7 +192,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   content: {
     flex: 1,
-    padding: "16px 24px",
+    padding: "20px 28px",
     display: "flex",
     flexDirection: "column",
     overflowY: "auto",

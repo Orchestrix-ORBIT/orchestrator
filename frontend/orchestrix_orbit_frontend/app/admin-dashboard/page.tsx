@@ -281,7 +281,7 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: {
     fontSize: 28,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
     letterSpacing: "-0.5px",
     marginBottom: 4,
   },
@@ -296,7 +296,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     fontSize: 13,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
     textDecoration: "none",
   },
   statGrid: {
@@ -307,8 +307,8 @@ const s: Record<string, React.CSSProperties> = {
   },
   statCard: {
     background: "#ffffff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
+    border: "1px solid #f3f4f6",
+    borderRadius: 12,
     padding: "16px 20px",
     display: "flex",
     flexDirection: "column",
@@ -323,7 +323,7 @@ const s: Record<string, React.CSSProperties> = {
   statValue: {
     fontSize: 24,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
   },
   statSub: {
     fontSize: 11,
@@ -336,17 +336,16 @@ const s: Record<string, React.CSSProperties> = {
   },
   card: {
     background: "#ffffff",
-    border: "1px solid #e8e8e8",
+    border: "1px solid #f3f4f6",
     borderRadius: 12,
-    padding: 24,
-  },
+    padding: 24, boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)"},
   cardHeader: {
     marginBottom: 16,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: 700,
-    color: "#161616",
+    color: "#111827",
     marginBottom: 4,
   },
   cardSub: {
@@ -366,7 +365,7 @@ const s: Record<string, React.CSSProperties> = {
   label: {
     fontSize: 12,
     fontWeight: 600,
-    color: "#424242",
+    color: "#374151",
   },
   input: {
     padding: "9px 12px",
@@ -422,12 +421,12 @@ const s: Record<string, React.CSSProperties> = {
     padding: "12px 14px",
     background: "#f9f9f9",
     border: "1px solid #eee",
-    borderRadius: 8,
+    borderRadius: 12,
   },
   tenantName: {
     fontSize: 13,
     fontWeight: 600,
-    color: "#161616",
+    color: "#111827",
   },
   tenantMeta: {
     fontSize: 11,
@@ -462,9 +461,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   td: {
     fontSize: 13,
-    color: "#424242",
+    color: "#374151",
     padding: "12px 14px",
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid #f3f4f6",
   },
   emptyStateCell: {
     textAlign: "center",

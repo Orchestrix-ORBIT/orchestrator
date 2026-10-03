@@ -45,6 +45,14 @@ public class ResearchTeamController {
         teamService.addMemberToTeam(teamId, request);
     }
 
+    @GetMapping("/{teamId}/members")
+    public List<TeamMemberDetailResponse> getTeamMembers(
+            @PathVariable UUID teamId,
+            @AuthenticationPrincipal User currentUser) {
+        // Any authenticated user can view team members (needed by researcher project page)
+        return teamService.getTeamMembers(teamId);
+    }
+
     @DeleteMapping("/{teamId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeMemberFromTeam(

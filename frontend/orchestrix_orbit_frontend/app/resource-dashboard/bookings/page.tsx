@@ -7,6 +7,7 @@ import {
   type Booking,
   type BookingStatus,
 } from "@/lib/services/resources";
+import LoadingState from "@/components/ui/LoadingState";
 
 /*
  * This page shows ALL bookings across ALL resources.
@@ -65,7 +66,7 @@ export default function ResourceBookingsPage() {
 
   /* ── Approve / Reject ───────────────────────────────────────────────── */
   async function updateStatus(bookingId: string, status: BookingStatus) {
-    const action = status === "APPROVED" ? "approve" : "reject";
+    const action = status === "APPROVED" ? "approve" : status === "CANCELLED" ? "cancel" : "reject";
     if (!window.confirm(`Are you sure you want to ${action} this booking?`)) return;
 
     setUpdating(bookingId);
@@ -79,7 +80,7 @@ export default function ResourceBookingsPage() {
     }
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading bookings…</p>;
+  if (loading) return <LoadingState variant="manager-bookings" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   const pending   = bookings.filter(b => b.status === "PENDING" || b.status === "PENDING_APPROVAL").length;
@@ -96,16 +97,16 @@ export default function ResourceBookingsPage() {
 
       {/* Filter */}
       <div style={s.filterRow}>
-        {(["ALL", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED"] as const).map(f => {
+        {(["ALL", "APPROVED", "CANCELLED", "REJECTED"] as const).map(f => {
           const count = f === "ALL" 
             ? bookings.length 
-            : bookings.filter(b => b.status === f || (f === "PENDING_APPROVAL" && b.status === "PENDING")).length;
+            : bookings.filter(b => b.status === f).length;
           
           return (
             <button key={f}
               style={filter === f ? s.filterOn : s.filterOff}
               onClick={() => setFilter(f)}>
-              {f === "ALL" ? `All (${count})` : `${f.replace("_", " ")} (${count})`}
+              {f === "ALL" ? `All (${count})` : `${f} (${count})`}
             </button>
           );
         })}
@@ -140,30 +141,19 @@ export default function ResourceBookingsPage() {
               {resource && (
                 <div style={s.resourceTag}>📍 {resource.location ?? resource.type}</div>
               )}
-              {/* Actions — only for PENDING or PENDING_APPROVAL */}
-              {(b.status === "PENDING" || b.status === "PENDING_APPROVAL") && (
+              {/* Actions — only for APPROVED (override) */}
+              {b.status === "APPROVED" && (
                 <div style={s.actions}>
                   <button
-                    id={`btn-approve-${b.id}`}
-                    style={{ ...s.approveBtn, opacity: updating === b.id ? 0.6 : 1 }}
-                    disabled={updating === b.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateStatus(b.id, "APPROVED");
-                    }}
-                  >
-                    {updating === b.id ? "…" : "✓ Approve"}
-                  </button>
-                  <button
                     id={`btn-reject-${b.id}`}
-                    style={{ ...s.rejectBtn, opacity: updating === b.id ? 0.6 : 1 }}
+                    style={{ ...s.rejectBtn, opacity: updating === b.id ? 0.6 : 1, background: "transparent", color: "#c62828", border: "1px solid #c62828" }}
                     disabled={updating === b.id}
                     onClick={(e) => {
                       e.stopPropagation();
-                      updateStatus(b.id, "REJECTED");
+                      updateStatus(b.id, "CANCELLED");
                     }}
                   >
-                    {updating === b.id ? "…" : "✕ Reject"}
+                    {updating === b.id ? "…" : "✕ Override / Cancel"}
                   </button>
                 </div>
               )}

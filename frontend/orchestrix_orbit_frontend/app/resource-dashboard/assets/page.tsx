@@ -7,6 +7,7 @@ import {
   type CreateResourceBody,
   type ResourceType,
 } from "@/lib/services/resources";
+import LoadingState from "@/components/ui/LoadingState";
 
 export default function ResourceAssetsPage() {
   const [resources, setResources]       = useState<Resource[]>([]);
@@ -59,7 +60,7 @@ export default function ResourceAssetsPage() {
     }
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading assets…</p>;
+  if (loading) return <LoadingState variant="manager-assets" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
@@ -227,7 +228,7 @@ const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
   title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
   sub: { fontSize: 13, color: "#888888" },
-  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSecondary: { padding: "10px 18px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   table: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" },
   thead: { display: "grid", gridTemplateColumns: "2fr 100px 1fr 120px 80px 100px", gap: 0, padding: "12px 20px", borderBottom: "1px solid #f0f0f0", background: "#fafafa" },

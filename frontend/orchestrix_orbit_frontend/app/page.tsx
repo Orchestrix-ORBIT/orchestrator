@@ -73,6 +73,9 @@ export default function Home() {
       });
 
       if (!res.ok) {
+        if (res.status >= 500) {
+          throw new Error("The service is temporarily unavailable. Please try again later.");
+        }
         const msg = await res.text();
         throw new Error(msg || "Invalid credentials");
       }
@@ -81,13 +84,13 @@ export default function Home() {
        * Step 2: Parse the response.
        * Backend returns: { token: "eyJ...", email: "...", role: "ROLE_MEMBER" }
        */
-      const data = await res.json() as { token: string; email: string; role: string };
+      const data = await res.json() as { token: string; email: string; role: string; userId?: string };
 
       /*
        * Step 3: Save to localStorage.
        * From now on, lib/api.ts will read these and attach them to every request.
        */
-      saveAuthData(data.token, data.role, data.email, siTenant.trim());
+      saveAuthData(data.token, data.role, data.email, siTenant.trim(), data.userId);
 
       /*
        * Step 4: Redirect based on role.
@@ -99,7 +102,11 @@ export default function Home() {
       router.push(destPath);
 
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sign in failed");
+      let errorMessage = err instanceof Error ? err.message : "Sign in failed";
+      if (errorMessage === "Failed to fetch") {
+        errorMessage = "Cannot connect to the server. Please check your internet connection or try again later.";
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -132,6 +139,9 @@ export default function Home() {
       });
 
       if (!res.ok) {
+        if (res.status >= 500) {
+          throw new Error("The service is temporarily unavailable. Please try again later.");
+        }
         const msg = await res.text();
         throw new Error(msg || "Registration failed");
       }
@@ -139,35 +149,40 @@ export default function Home() {
       // Registration succeeded — redirect to sign-in so user can log in
       changeTab("signin");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      let errorMessage = err instanceof Error ? err.message : "Registration failed";
+      if (errorMessage === "Failed to fetch") {
+        errorMessage = "Cannot connect to the server. Please check your internet connection or try again later.";
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={s.page}>
-
-      {/* ── Left — brand panel ───────────────────────────────────────────── */}
-      <div style={s.brandPanel}>
-        <div style={s.brandInner}>
-          <div style={s.logoRow}>
+    <div className="auth-page-container">
+      
+      {/* ── Enhanced Left Brand Panel ── */}
+      <div className="auth-brand-panel">
+        <div className="auth-glass-card" style={s.brandInner}>
+          <div className="auth-logo-row" style={s.logoRow}>
             <div style={s.logoBox}>O</div>
             <span style={s.logoName}>Orchestrix ORBIT</span>
           </div>
-          <p style={s.brandTagline}>
+          <p className="auth-brand-text" style={s.brandTagline}>
             Privacy-preserving research collaboration platform.
           </p>
-          <div style={s.divider} />
-          <p style={s.brandQuote}>
+          <div className="auth-brand-text" style={s.divider} />
+          <p className="auth-brand-text" style={s.brandQuote}>
             &ldquo;Designed for research teams that need security without compromise.&rdquo;
           </p>
         </div>
       </div>
 
-      {/* ── Right — auth form ────────────────────────────────────────────── */}
-      <div style={s.formPanel}>
-        <div style={s.formBox}>
+      {/* ── Right Form Panel ── */}
+      <div className="auth-form-panel">
+        {/* ── Main Auth Card ────────────────────────────────────────────────── */}
+        <div className="auth-card" style={s.authCard}>
 
           {/* Tabs */}
           <div style={s.tabRow} role="tablist" aria-label="Account access">
@@ -205,23 +220,17 @@ export default function Home() {
           {/* ── Sign in ── */}
           {tab === "signin" && (
             <form id="form-signin" role="tabpanel" aria-labelledby="tab-signin" className="auth-form-enter" onSubmit={handleSignIn} style={s.form}>
-              <div>
+              <div style={{ textAlign: "center", marginBottom: 8 }}>
                 <h1 style={s.heading}>Welcome back</h1>
                 <p style={s.sub}>Sign in to continue to your workspace</p>
               </div>
 
-              {/* Error banner — shown if the API returns an error */}
               {error && (
                 <div id="signin-error" style={s.errorBanner}>
                   {error}
                 </div>
               )}
 
-              {/*
-               * Organization Slug — this becomes the X-Tenant-ID header.
-               * It maps to a PostgreSQL schema (e.g. "research-lab" → schema "org_research-lab").
-               * Users must know their org's slug to log in.
-               */}
               <Field id="si-tenant" label="Organization" type="text"
                 placeholder="your-org-slug"
                 value={siTenant} onChange={setSiTenant} />
@@ -234,17 +243,16 @@ export default function Home() {
                 placeholder="Enter your password"
                 value={siPass} onChange={setSiPass} />
 
-              <button id="btn-signin" type="submit" style={{ ...s.btnPrimary, opacity: loading ? 0.6 : 1 }} disabled={loading}>
+              <button id="btn-signin" type="submit" className="auth-btn-primary" style={{ ...s.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
                 {loading ? "Signing in…" : "Sign in"}
               </button>
-
             </form>
           )}
 
           {/* ── Sign up ── */}
           {tab === "signup" && (
             <form id="form-signup" role="tabpanel" aria-labelledby="tab-signup" className="auth-form-enter" onSubmit={handleSignUp} style={s.form}>
-              <div>
+              <div style={{ textAlign: "center", marginBottom: 8 }}>
                 <h1 style={s.heading}>Create account</h1>
                 <p style={s.sub}>Join your research workspace</p>
               </div>
@@ -275,15 +283,11 @@ export default function Home() {
                 placeholder="Repeat your password"
                 value={suConf} onChange={setSuConf} />
 
-              <button id="btn-signup" type="submit" style={{ ...s.btnPrimary, opacity: loading ? 0.6 : 1 }} disabled={loading}>
+              <button id="btn-signup" type="submit" className="auth-btn-primary" style={{ ...s.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
                 {loading ? "Creating account…" : "Create account"}
               </button>
-
             </form>
           )}
-
-
-
         </div>
       </div>
     </div>
@@ -298,119 +302,139 @@ function Field({
   placeholder: string; value: string;
   onChange: (v: string) => void;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (showPassword ? "text" : "password") : type;
+
   return (
     <div style={f.wrap}>
       <label htmlFor={id} style={f.label}>{label}</label>
-      <input
-        id={id}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={f.input}
-        required
-      />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+        <input
+          id={id}
+          className="auth-input-focus"
+          type={inputType}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ ...f.input, paddingRight: isPassword ? "40px" : "14px" }}
+          required
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            style={{
+              position: "absolute",
+              right: "10px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#6b7280",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "4px"
+            }}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ── Styles ───────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
-  page: {
-    display: "flex",
-    minHeight: "100vh",
-    fontFamily: "var(--font)",
-  },
+  // Container styles moved to globals.css for responsiveness
 
-  /* Error banner — shown when sign-in or sign-up fails */
-  errorBanner: {
-    padding: "10px 14px",
-    background: "#fff0f0",
-    border: "1px solid #f5c6cb",
-    borderRadius: 6,
-    fontSize: 13,
-    color: "#c62828",
-    lineHeight: 1.5,
-  },
-
-  /* Left brand panel */
-  brandPanel: {
-    width: "42%",
-    background: "#161616",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "48px 56px",
-  },
   brandInner: {
-    maxWidth: 360,
+    maxWidth: 380,
     width: "100%",
+    position: "relative",
+    zIndex: 2,
   },
   logoRow: {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 40,
   },
   logoBox: {
     width: 36,
     height: 36,
     background: "#ffffff",
-    color: "#161616",
-    borderRadius: 6,
+    color: "#111827",
+    borderRadius: 8,
     display: "flex" as unknown as string,
     alignItems: "center",
     justifyContent: "center",
     fontWeight: 800,
-    fontSize: 16,
-    flexShrink: 0,
+    fontSize: 18,
+    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
   },
   logoName: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 700,
-    letterSpacing: "-0.3px",
+    letterSpacing: "-0.4px",
   },
   brandTagline: {
-    color: "#aaaaaa",
-    fontSize: 15,
-    lineHeight: 1.65,
+    color: "#9ca3af",
+    fontSize: 16,
+    lineHeight: 1.6,
     marginBottom: 40,
+    fontWeight: 400,
   },
   divider: {
     height: 1,
-    background: "#2e2e2e",
+    background: "rgba(255, 255, 255, 0.1)",
     marginBottom: 32,
   },
   brandQuote: {
-    color: "#666666",
-    fontSize: 13,
+    color: "#9ca3af",
+    fontSize: 14,
     lineHeight: 1.7,
     fontStyle: "italic",
   },
 
-  /* Right form panel */
-  formPanel: {
-    flex: 1,
-    background: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "48px 40px",
-  },
-  formBox: {
+  /* Right Form Panel */
+  authCard: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 440,
+    background: "#ffffff",
+    borderRadius: 16,
+    padding: "48px 40px",
+    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)",
+    border: "1px solid #f3f4f6",
   },
-
-  /* Tabs */
+  errorBanner: {
+    padding: "10px 14px",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    fontSize: 13,
+    color: "#dc2626",
+    lineHeight: 1.5,
+  },
   tabRow: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     position: "relative",
     padding: 4,
-    background: "#f4f4f4",
-    border: "1px solid #dedede",
+    background: "#f3f4f6",
     borderRadius: 10,
     marginBottom: 32,
   },
@@ -420,71 +444,69 @@ const s: Record<string, React.CSSProperties> = {
     bottom: 4,
     left: 4,
     width: "calc((100% - 8px) / 2)",
-    background: "#161616",
-    borderRadius: 7,
-    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.16)",
+    background: "#ffffff",
+    borderRadius: 8,
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
     transition: "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
   },
   tabOn: {
     position: "relative",
     zIndex: 1,
-    padding: "11px 0",
+    padding: "10px 0",
     fontSize: 14,
-    fontWeight: 700,
-    color: "#ffffff",
+    fontWeight: 600,
+    color: "#111827",
     background: "none",
     border: "none",
-    borderRadius: 7,
+    borderRadius: 8,
     cursor: "pointer",
     transition: "color 180ms ease",
   },
   tabOff: {
     position: "relative",
     zIndex: 1,
-    padding: "11px 0",
+    padding: "10px 0",
     fontSize: 14,
-    fontWeight: 600,
-    color: "#555555",
+    fontWeight: 500,
+    color: "#6b7280",
     background: "none",
     border: "none",
-    borderRadius: 7,
+    borderRadius: 8,
     cursor: "pointer",
     transition: "color 180ms ease",
   },
-
-  /* Form */
   form: {
     display: "flex",
     flexDirection: "column",
     gap: 20,
   },
   heading: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "-0.4px",
-    marginBottom: 6,
+    color: "#111827",
+    letterSpacing: "-0.5px",
+    marginBottom: 4,
   },
   sub: {
-    fontSize: 13,
-    color: "#888888",
+    fontSize: 14,
+    color: "#6b7280",
   },
   btnPrimary: {
     width: "100%",
     padding: "12px 0",
-    background: "#161616",
+    background: "#111827",
     color: "#ffffff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
-    marginTop: 4,
-    letterSpacing: "0.1px",
+    marginTop: 8,
+    transition: "background 0.2s",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
   },
 };
 
-/* Field-level styles */
 const f: Record<string, React.CSSProperties> = {
   wrap: {
     display: "flex",
@@ -492,20 +514,20 @@ const f: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   label: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#161616",
-    letterSpacing: "0.1px",
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#374151",
   },
   input: {
-    padding: "10px 12px",
+    padding: "12px 14px",
     fontSize: 14,
-    border: "1.5px solid #161616",
-    borderRadius: 6,
+    border: "1px solid #d1d5db",
+    borderRadius: 8,
     background: "#ffffff",
-    color: "#161616",
+    color: "#111827",
     outline: "none",
     width: "100%",
     fontFamily: "var(--font)",
+    transition: "border-color 0.15s, box-shadow 0.15s",
   },
 };

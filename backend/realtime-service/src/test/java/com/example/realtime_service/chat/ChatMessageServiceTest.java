@@ -61,7 +61,7 @@ class ChatMessageServiceTest {
     @Test
     void saveMessage_withValidTenantAndSenderId_savesMessageAndReturnsResponse() {
         SendChatMessageRequest request = new SendChatMessageRequest(
-                projectId, taskId, "Hello team!", "Dr. Alice", "test-lab", null, null, null
+                projectId, taskId, "Hello team!", "Dr. Alice", null, "test-lab", null, null, null
         );
 
         ChatMessage savedMessage = ChatMessage.builder()
@@ -88,7 +88,7 @@ class ChatMessageServiceTest {
     @Test
     void saveMessage_withNullSenderName_fetchesDisplayNameFromRepository() {
         SendChatMessageRequest request = new SendChatMessageRequest(
-                projectId, taskId, "Message content", null, "myorg", null, null, null
+                projectId, taskId, "Message content", null, null, "myorg", null, null, null
         );
 
         when(userRepository.findById(senderId)).thenReturn(Optional.of(sampleUser));
@@ -113,7 +113,7 @@ class ChatMessageServiceTest {
     @Test
     void saveMessage_withNullSenderIdAndName_defaultsToResearcher() {
         SendChatMessageRequest request = new SendChatMessageRequest(
-                projectId, taskId, "Anon msg", "", null, null, null, null
+                projectId, taskId, "Anon msg", "", null, null, null, null, null
         );
 
         when(userRepository.findByEmail("Researcher")).thenReturn(Optional.empty());

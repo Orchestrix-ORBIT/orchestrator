@@ -9,6 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+
+import com.example.core_api.project.Project;
+import com.example.core_api.project.ProjectRepository;
+import com.example.core_api.notification.NotificationService;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -22,19 +26,24 @@ public class AiSummaryService {
     private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"((?:\\\\\"|[^\"])*)\"");
 
     private final AiSummaryRepository repository;
+    private final ProjectRepository projectRepository;
+    private final NotificationService notificationService;
 
-    public AiSummaryService(AiSummaryRepository repository) {
+    public AiSummaryService(AiSummaryRepository repository, ProjectRepository projectRepository, NotificationService notificationService) {
         this.repository = repository;
+        this.projectRepository = projectRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
-    public AiSummaryResponse createSummary(CreateAiSummaryRequest req) {
+    public AiSummaryResponse createSummary(CreateAiSummaryRequest req, UUID createdBy) {
         String actionItemsJson = toJson(req.getActionItems());
         String keyFindingsJson = toJson(req.getKeyFindings());
         String deadlineSuggestionsJson = toJson(req.getDeadlineSuggestions());
 
         AiSummary entity = AiSummary.builder()
                 .projectId(req.getProjectId())
+                .createdBy(createdBy)
                 .topic(req.getTopic() != null && !req.getTopic().isBlank() ? req.getTopic() : "Chat Discussion Summary")
                 .summaryText(req.getSummaryText())
                 .actionItems(actionItemsJson)
@@ -48,12 +57,39 @@ public class AiSummaryService {
                 .build();
 
         AiSummary saved = repository.save(entity);
+
+        // Notify project owner
+        projectRepository.findById(req.getProjectId()).ifPresent(project -> {
+            notificationService.notify(
+                project.getOwnerId(),
+                "AI_SUMMARY_CREATED",
+                "New AI Action Items",
+                "The Context Engine has suggested new tasks for project: " + project.getName()
+            );
+        });
+
         return mapToResponse(saved);
     }
 
     @Transactional(readOnly = true)
     public List<AiSummaryResponse> getAllSummaries() {
         return repository.findAllByOrderByProcessedAtDesc()
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AiSummaryResponse> getSummariesByUser(UUID createdBy) {
+        return repository.findByCreatedByOrderByProcessedAtDesc(createdBy)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AiSummaryResponse> getSummariesByUserAndProject(UUID createdBy, UUID projectId) {
+        return repository.findByCreatedByAndProjectIdOrderByProcessedAtDesc(createdBy, projectId)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -84,6 +120,15 @@ public class AiSummaryService {
     }
 
     @Transactional
+    public AiSummaryResponse updateActionItems(UUID id, List<String> actionItems) {
+        AiSummary entity = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("AI Summary not found with id: " + id));
+        entity.setActionItems(toJson(actionItems));
+        AiSummary saved = repository.save(entity);
+        return mapToResponse(saved);
+    }
+
+    @Transactional
     public void deleteSummary(UUID id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("AI Summary not found with id: " + id);
@@ -95,6 +140,7 @@ public class AiSummaryService {
         return AiSummaryResponse.builder()
                 .id(s.getId())
                 .projectId(s.getProjectId())
+                .createdBy(s.getCreatedBy())
                 .topic(s.getTopic() != null ? s.getTopic() : "Chat Discussion Summary")
                 .summaryText(s.getSummaryText())
                 .actionItems(fromJson(s.getActionItems()))

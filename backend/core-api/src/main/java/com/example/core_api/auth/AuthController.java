@@ -13,33 +13,20 @@ public class AuthController {
 
     private final AuthService authService;
 
+    // TenantFilter (Order=1) sets TenantContext for the full request lifecycle.
+    // No manual TenantContext management needed in any controller method.
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @Valid @RequestBody RegisterRequest request
     ) {
-        String tenant = (tenantId != null && !tenantId.isBlank()) ? tenantId : "myorg";
-        String schemaName = "org_" + tenant.toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @Valid @RequestBody LoginRequest request
     ) {
-        String tenant = (tenantId != null && !tenantId.isBlank()) ? tenantId : "myorg";
-        String schemaName = "org_" + tenant.toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return ResponseEntity.ok(authService.login(request));
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        return ResponseEntity.ok(authService.login(request));
     }
 }

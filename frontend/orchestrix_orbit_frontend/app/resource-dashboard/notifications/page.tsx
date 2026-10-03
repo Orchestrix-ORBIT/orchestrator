@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface ResourceNotification {
   id: string;
@@ -14,48 +15,7 @@ interface ResourceNotification {
   linkHref?: string;
 }
 
-const INITIAL_NOTIFS: ResourceNotification[] = [
-  {
-    id: "RN-1",
-    title: "Urgent Booking Request: Researcher requested Illumina NovaSeq 6000 Sequencer",
-    category: "Booking Request",
-    time: "5m ago",
-    read: false,
-    details: "Genomic Sequence Alignment project submitted booking request for Tomorrow (09:00 - 15:00). Requires manager approval.",
-    linkText: "Review Bookings →",
-    linkHref: "/resource-dashboard/bookings",
-  },
-  {
-    id: "RN-2",
-    title: "Concurrency Lock Enforced: Overlapping H100 GPU attempt rejected",
-    category: "Collision Lock",
-    time: "45m ago",
-    read: false,
-    details: "PostgreSQL row lock rejected overlapping request for NVIDIA H100 GPU in 280ms. Zero conflict.",
-    linkText: "View Schedule →",
-    linkHref: "/resource-dashboard/bookings",
-  },
-  {
-    id: "RN-3",
-    title: "Scheduled Maintenance Active: Thermo Scientific Orbitrap Mass Spectrometer",
-    category: "Maintenance",
-    time: "2h ago",
-    read: false,
-    details: "Downtime window active. Automated lockout applied to all booking APIs.",
-    linkText: "View Maintenance Logs →",
-    linkHref: "/resource-dashboard/maintenance",
-  },
-  {
-    id: "RN-4",
-    title: "Quota Threshold Reached: Active Project reached 80% weekly GPU cap",
-    category: "Quota Alert",
-    time: "1d ago",
-    read: true,
-    details: "Research Project has utilized 38/48 allocated hours for NVIDIA H100 SXM5 GPU compute nodes this week.",
-    linkText: "Inspect Policies →",
-    linkHref: "/resource-dashboard/policies",
-  },
-];
+const INITIAL_NOTIFS: ResourceNotification[] = [];
 
 import { api } from "@/lib/api";
 
@@ -68,7 +28,7 @@ export default function ResourceNotificationsPage() {
     setLoading(true);
     try {
       const data = await api.get<any[]>("/api/notifications");
-      if (data && data.length > 0) {
+      if (Array.isArray(data)) {
         const mapped: ResourceNotification[] = data.map((n) => ({
           id: n.id,
           title: n.title || "Operations Alert",
@@ -120,7 +80,7 @@ export default function ResourceNotificationsPage() {
     return n.category === filter;
   });
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading operational notifications…</p>;
+  if (loading) return <LoadingState variant="manager-notifications" />;
 
   return (
     <div>
@@ -294,6 +254,6 @@ const s: Record<string, React.CSSProperties> = {
   badgeReq: { background: "#161616", color: "#ffffff" },
   badgeCollision: { background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5" },
   badgeMaint: { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
-  badgeQuota: { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" },
+  badgeQuota: { background: "#e0e7ff", color: "#1d4ed8", border: "1px solid #c7d2fe" },
   emptyState: { padding: "48px 24px", textAlign: "center" as const },
 };

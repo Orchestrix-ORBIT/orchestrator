@@ -11,7 +11,7 @@ vi.mock("@/lib/services/documents", () => ({
   DocumentsService: { getByProject: vi.fn(), create: vi.fn(), delete: vi.fn() },
 }));
 
-const project = { id: "p1", name: "Alpha", status: "ACTIVE" as const, description: "", createdAt: "2026-01-01", createdByUserId: "u1" };
+const project = { id: "p1", name: "Alpha", status: "ACTIVE" as const, description: "", createdAt: "2026-01-01", ownerId: "u1" };
 const doc = { id: "d1", projectId: "p1", title: "Methods", category: "OTHER",
   contentEncrypted: null, fileStorageKey: null, version: 1,
   authorId: "author-123", createdAt: "2026-01-01", updatedAt: "2026-01-01" };

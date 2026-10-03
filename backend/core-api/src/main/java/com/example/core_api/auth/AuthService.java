@@ -98,11 +98,11 @@ public class AuthService implements UserDetailsService {
         // Step 5: Generate a JWT for the newly created user.
         String token = jwtService.generateToken(user);
 
-        // Step 6: Return only the safe fields — never expose the entity directly.
         return new AuthResponse(
                 token,
                 user.getEmail(),
-                user.getAuthorities().iterator().next().getAuthority() // e.g. "ROLE_MEMBER"
+                user.getAuthorities().iterator().next().getAuthority(), // e.g. "ROLE_MEMBER"
+                user.getId().toString()
         );
     }
 
@@ -140,7 +140,8 @@ public class AuthService implements UserDetailsService {
         return new AuthResponse(
                 token,
                 user.getEmail(),
-                user.getAuthorities().iterator().next().getAuthority()
+                user.getAuthorities().iterator().next().getAuthority(),
+                user.getId().toString()
         );
     }
 }

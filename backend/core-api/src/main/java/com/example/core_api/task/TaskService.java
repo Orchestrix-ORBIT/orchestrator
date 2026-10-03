@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.example.core_api.notification.NotificationService;
+
 @Service
 @Transactional
 public class TaskService {
@@ -21,11 +23,13 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
+    private final NotificationService notificationService;
 
-    public TaskService(TaskRepository taskRepository, ProjectRepository projectRepository, TeamMemberRepository teamMemberRepository) {
+    public TaskService(TaskRepository taskRepository, ProjectRepository projectRepository, TeamMemberRepository teamMemberRepository, NotificationService notificationService) {
         this.taskRepository = taskRepository;
         this.projectRepository = projectRepository;
         this.teamMemberRepository = teamMemberRepository;
+        this.notificationService = notificationService;
     }
 
     public TaskResponse createTask(UUID projectId, CreateTaskRequest request) {
@@ -50,6 +54,16 @@ public class TaskService {
                 .build();
 
         task = taskRepository.save(task);
+
+        if (task.getAssigneeId() != null) {
+            notificationService.notify(
+                task.getAssigneeId(), 
+                "TASK_ASSIGNED", 
+                "New Task Assigned", 
+                "You have been assigned to task: " + task.getTitle()
+            );
+        }
+
         return mapToResponse(task);
     }
 
@@ -97,6 +111,9 @@ public class TaskService {
             }
         }
 
+        UUID oldAssigneeId = task.getAssigneeId();
+        TaskStatus oldStatus = task.getStatus();
+
         if (request.getAssigneeId() != null && !request.getAssigneeId().equals(task.getAssigneeId())) {
             final UUID projectIdForQuery = task.getProjectId();
             Project project = projectRepository.findById(projectIdForQuery)
@@ -127,6 +144,23 @@ public class TaskService {
         }
 
         task = taskRepository.save(task);
+
+        if (task.getAssigneeId() != null && !task.getAssigneeId().equals(oldAssigneeId)) {
+            notificationService.notify(
+                task.getAssigneeId(), 
+                "TASK_REASSIGNED", 
+                "Task Reassigned", 
+                "You have been assigned to an existing task: " + task.getTitle()
+            );
+        } else if (task.getAssigneeId() != null && oldStatus != task.getStatus()) {
+            notificationService.notify(
+                task.getAssigneeId(), 
+                "TASK_STATUS_UPDATED", 
+                "Task Status Updated", 
+                "The task '" + task.getTitle() + "' is now " + task.getStatus()
+            );
+        }
+
         return mapToResponse(task);
     }
 

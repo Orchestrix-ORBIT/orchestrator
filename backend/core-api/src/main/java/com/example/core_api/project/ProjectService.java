@@ -59,6 +59,24 @@ public class ProjectService {
         projectRepository.deleteById(id);
     }
 
+    /** Update mutable fields: name, description, teamId (PATCH semantics — null means keep existing). */
+    public ProjectResponse updateProject(UUID id, CreateProjectRequest request) {
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + id));
+        if (request.getName() != null && !request.getName().isBlank()) {
+            project.setName(request.getName());
+        }
+        if (request.getDescription() != null) {
+            project.setDescription(request.getDescription());
+        }
+        // Allow linking / updating teamId (null means no-op; explicitly handle below)
+        if (request.getTeamId() != null) {
+            project.setTeamId(request.getTeamId());
+        }
+        project = projectRepository.save(project);
+        return mapToResponse(project);
+    }
+
     @Transactional(readOnly = true)
     public ProjectSummaryResponse getProjectSummary(UUID projectId) {
         Project project = projectRepository.findById(projectId)

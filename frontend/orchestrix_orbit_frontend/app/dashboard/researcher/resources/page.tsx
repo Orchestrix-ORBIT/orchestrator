@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LoadingState from "@/components/ui/LoadingState";
 import {
   ResourcesService,
   type Resource,
@@ -14,6 +15,7 @@ type ActiveTab = "Browse Resources" | "My Bookings";
 
 export default function ResearcherResourcesPage() {
   const [resources, setResources]     = useState<Resource[]>([]);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<any[]>([]);
   const [myBookings, setMyBookings]   = useState<Booking[]>([]);
   const [projects, setProjects]       = useState<Project[]>([]);
   const [activeTab, setActiveTab]     = useState<ActiveTab>("Browse Resources");
@@ -34,14 +36,16 @@ export default function ResearcherResourcesPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [r, b, p] = await Promise.all([
+        const [r, b, p, m] = await Promise.all([
           ResourcesService.getAll(),
           ResourcesService.getMyBookings(),
           ProjectsService.getAll(),
+          ResourcesService.getMaintenance().catch(() => []),
         ]);
         setResources(r);
         setMyBookings(b);
         setProjects(p);
+        setMaintenanceLogs(m || []);
         if (p.length > 0) setBookingProjectId(p[0].id);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load resources");
@@ -82,8 +86,13 @@ export default function ResearcherResourcesPage() {
     setShowBookingModal(true);
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading resources…</p>;
+  if (loading) return <LoadingState variant="researcher-resources" title="Loading Resources..." subtitle="Fetching available resources and your bookings" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
+
+  const effectiveResources = resources.map(r => ({
+    ...r,
+    effectiveStatus: getEffectiveStatus(r, maintenanceLogs),
+  }));
 
   return (
     <div>
@@ -106,11 +115,11 @@ export default function ResearcherResourcesPage() {
       {/* ── Resources list ───────────────────────────────────────────────── */}
       {activeTab === "Browse Resources" && (
         <div style={s.grid}>
-          {resources.map(r => (
+          {effectiveResources.map(r => (
             <div key={r.id} id={`resource-card-${r.id}`} style={s.card}>
               <div style={s.cardTop}>
-                <span style={s.resourceType}>{r.type}</span>
-                <span style={{ ...s.statusBadge, ...statusStyle(r.status) }}>{r.status.replace("_", " ")}</span>
+                 <span style={s.resourceType}>{r.type}</span>
+                <span style={{ ...s.statusBadge, ...statusStyle(r.effectiveStatus) }}>{r.effectiveStatus.replace("_", " ")}</span>
               </div>
               <h3 style={s.cardName}>{r.name}</h3>
               <p style={s.cardDesc}>{r.description || "No description"}</p>
@@ -118,16 +127,16 @@ export default function ResearcherResourcesPage() {
               {r.maxDurationHours && <p style={s.cardMeta}>⏱ Max {r.maxDurationHours}h</p>}
               <button
                 id={`btn-book-${r.id}`}
-                style={{ ...s.bookBtn, opacity: r.status === "AVAILABLE" ? 1 : 0.4 }}
-                disabled={r.status !== "AVAILABLE"}
+                style={{ ...s.bookBtn, opacity: r.effectiveStatus === "AVAILABLE" ? 1 : 0.4 }}
+                disabled={r.effectiveStatus !== "AVAILABLE"}
                 onClick={() => openBookingModal(r)}
               >
-                {r.status === "AVAILABLE" ? "Book Now" : "Unavailable"}
+                {r.effectiveStatus === "AVAILABLE" ? "Book Now" : "Unavailable"}
               </button>
             </div>
           ))}
           {resources.length === 0 && (
-            <p style={{ color: "#888", fontSize: 13 }}>No resources found.</p>
+            <p style={{ color: "#6b7280", fontSize: 13 }}>No resources found.</p>
           )}
         </div>
       )}
@@ -135,8 +144,13 @@ export default function ResearcherResourcesPage() {
       {/* ── My Bookings ──────────────────────────────────────────────────── */}
       {activeTab === "My Bookings" && (
         <div style={s.bookingList}>
+          {myBookings.some(b => b.status === "PENDING" || b.status === "PENDING_APPROVAL") && (
+            <div style={{ ...s.errorBanner, background: "#fff8e1", border: "1px solid #ffecb3", color: "#f57f17", marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>Note:</span> Your pending booking requests require approval from the Research Lead. You will be notified once they are reviewed.
+            </div>
+          )}
           {myBookings.length === 0 ? (
-            <p style={{ color: "#888", fontSize: 13 }}>No bookings yet.</p>
+            <p style={{ color: "#6b7280", fontSize: 13 }}>No bookings yet.</p>
           ) : myBookings.map(b => (
             <div key={b.id} id={`booking-row-${b.id}`} style={s.bookingRow}>
               <div>
@@ -146,7 +160,12 @@ export default function ResearcherResourcesPage() {
                 </div>
                 {b.purpose && <div style={s.bookingPurpose}>{b.purpose}</div>}
               </div>
-              <span style={{ ...s.statusBadge, ...bookingStatusStyle(b.status) }}>{b.status}</span>
+              <span 
+                style={{ ...s.statusBadge, ...bookingStatusStyle(b.status) }}
+                title={b.status === "PENDING" ? "Awaiting Lead Approval" : b.status}
+              >
+                {b.status}
+              </span>
             </div>
           ))}
         </div>
@@ -221,6 +240,60 @@ export default function ResearcherResourcesPage() {
   );
 }
 
+function parseMaintDates(m: any) {
+  if (!m) return null;
+  const sRaw = m.startDate || "";
+  const eRaw = m.endDate || "";
+  if (!sRaw && !eRaw) return null;
+  const cleanStart = sRaw.replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+  const cleanEnd = eRaw.replace(/\s*\(\d{2}:\d{2}\)/, '').trim();
+  let start = new Date(cleanStart);
+  let end = new Date(cleanEnd);
+  if (isNaN(start.getTime())) start = new Date(sRaw);
+  if (isNaN(end.getTime())) end = new Date(eRaw);
+  if (!isNaN(end.getTime()) && !cleanEnd.includes(":") && !eRaw.includes("T")) {
+    end.setHours(23, 59, 59, 999);
+  }
+  return {
+    start: !isNaN(start.getTime()) ? start : null,
+    end: !isNaN(end.getTime()) ? end : null,
+  };
+}
+
+function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = []): Resource["status"] {
+  const now = new Date();
+  const assetLogs = (maintenanceLogs || []).filter((m: any) => {
+    const isIdMatch = m.resourceId && resource.id && String(m.resourceId) === String(resource.id);
+    const isNameMatch = m.assetName && resource.name && String(m.assetName).trim().toLowerCase() === String(resource.name).trim().toLowerCase();
+    return isIdMatch || isNameMatch;
+  });
+
+  const activeLog = assetLogs.find((m) => {
+    const dates = parseMaintDates(m);
+    if (!dates || !dates.end) return false;
+    if (dates.start && dates.end) {
+      return now >= dates.start && now <= dates.end;
+    }
+    return now <= dates.end;
+  });
+
+  if (activeLog) {
+    return "MAINTENANCE";
+  }
+
+  if (resource.status === "MAINTENANCE") {
+    const hasActiveOrUpcoming = assetLogs.some((m) => {
+      const dates = parseMaintDates(m);
+      return dates?.end && now <= dates.end;
+    });
+    if (!hasActiveOrUpcoming) {
+      return "AVAILABLE";
+    }
+  }
+
+  return resource.status;
+}
+
 function statusStyle(status: string): React.CSSProperties {
   switch (status) {
     case "AVAILABLE":    return { background: "#e8f5e9", color: "#2e7d32" };
@@ -242,36 +315,36 @@ function bookingStatusStyle(status: BookingStatus): React.CSSProperties {
 /* ── Styles ─────────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
-  sub: { fontSize: 13, color: "#888888" },
+  title: { fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#6b7280" },
   tabRow: { display: "flex", gap: 6, marginBottom: 20 },
   tabOn: { padding: "8px 16px", fontSize: 13, fontWeight: 700, color: "#ffffff", background: "#161616", border: "1px solid #161616", borderRadius: 6, cursor: "pointer" },
-  tabOff: { padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "#616161", background: "#f5f5f5", border: "1px solid #e0e0e0", borderRadius: 6, cursor: "pointer" },
+  tabOff: { padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "#616161", background: "#f5f5f5", border: "1px solid #f3f4f6", borderRadius: 6, cursor: "pointer" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 },
-  card: { background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 20, display: "flex", flexDirection: "column", gap: 8 },
+  card: { background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 8 , boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)"},
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  resourceType: { fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.5px", textTransform: "uppercase" as const },
+  resourceType: { fontSize: 10, fontWeight: 700, color: "#6b7280", letterSpacing: "0.5px", textTransform: "uppercase" as const },
   statusBadge: { fontSize: 10, fontWeight: 700, letterSpacing: "0.5px", padding: "3px 8px", borderRadius: 4 },
-  cardName: { fontSize: 15, fontWeight: 600, color: "#161616", margin: 0 },
+  cardName: { fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 },
   cardDesc: { fontSize: 13, color: "#616161", lineHeight: 1.5, margin: 0 },
-  cardMeta: { fontSize: 12, color: "#888", margin: 0 },
+  cardMeta: { fontSize: 12, color: "#6b7280", margin: 0 },
   bookBtn: { marginTop: 8, padding: "9px 0", background: "#161616", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   bookingList: { display: "flex", flexDirection: "column", gap: 12 },
-  bookingRow: { background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  bookingName: { fontSize: 14, fontWeight: 600, color: "#161616", marginBottom: 4 },
-  bookingTime: { fontSize: 12, color: "#888" },
+  bookingRow: { background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 12, padding: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+  bookingName: { fontSize: 14, fontWeight: 600, color: "#111827", marginBottom: 4 },
+  bookingTime: { fontSize: 12, color: "#6b7280" },
   bookingPurpose: { fontSize: 12, color: "#aaa", marginTop: 4 },
-  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnSecondary: { padding: "10px 18px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnPrimary: { padding: "10px 18px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
+  btnSecondary: { padding: "10px 18px", background: "#ffffff", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
   modal: { background: "#ffffff", borderRadius: 10, padding: 28, width: "100%", maxWidth: 460 },
   modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616" },
-  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" },
+  modalTitle: { fontSize: 16, fontWeight: 700, color: "#111827" },
+  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#6b7280", cursor: "pointer" },
   modalForm: { display: "flex", flexDirection: "column", gap: 14 },
   modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
+  label: { fontSize: 12, fontWeight: 600, color: "#111827" },
   input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
   errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
 };

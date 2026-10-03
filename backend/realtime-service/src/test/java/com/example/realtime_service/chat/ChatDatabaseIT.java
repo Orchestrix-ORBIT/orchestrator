@@ -51,7 +51,7 @@ class ChatDatabaseIT {
     void savesAndReadsChatInTenantSchema() {
         SendChatMessageRequest request = new SendChatMessageRequest(
                 projectId, null, "A local integration message", "Researcher",
-                "integration_lab", null, null, null);
+                null, "integration_lab", null, null, null);
 
         chatController.sendMessage(request);
 
