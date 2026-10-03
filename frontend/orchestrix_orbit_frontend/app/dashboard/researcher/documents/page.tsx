@@ -254,7 +254,7 @@ export default function DocumentsPage() {
   // ── Loading state ────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <LoadingState variant="grid" title="Loading Knowledge & Documents…"
+      <LoadingState variant="documents" title="Loading Knowledge & Documents…"
         subtitle="Fetching research protocols, steering minutes, and pre-print papers"
       />
     );

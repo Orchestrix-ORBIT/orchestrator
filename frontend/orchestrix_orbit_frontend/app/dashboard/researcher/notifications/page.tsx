@@ -116,7 +116,7 @@ export default function NotificationsPage() {
 
   const filtered = notifications.filter((n) => n.categories.includes(activeTab));
 
-  if (loading) return <LoadingState variant="table" title="Loading Notifications..." subtitle="Fetching your recent notifications" />;
+  if (loading) return <LoadingState variant="researcher-notifications" title="Loading Notifications..." subtitle="Fetching your recent notifications" />;
 
   return (
     <div>

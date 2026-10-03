@@ -104,8 +104,8 @@ export const ResourcesService = {
     api.post<Booking>(`/api/resources/${resourceId}/bookings`, body),
 
   /** PATCH /api/resources/bookings/{bookingId}/status — approve/reject */
-  updateBookingStatus: (bookingId: string, status: BookingStatus) =>
-    api.patch<Booking>(`/api/resources/bookings/${bookingId}/status`, { status }),
+  updateBookingStatus: (bookingId: string, status: BookingStatus, reason?: string) =>
+    api.patch<Booking>(`/api/resources/bookings/${bookingId}/status`, { status, reason }),
 
   // ── Maintenance ───────────────────────────────────────────────────────────
 

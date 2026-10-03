@@ -95,7 +95,7 @@ export default function ResearcherHomePage() {
     .filter(b => b.status === "APPROVED" || b.status === "PENDING")
     .slice(0, 3);
 
-  if (loading) return <LoadingState title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
+  if (loading) return <LoadingState variant="researcher-home" title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
   if (error)   return <ErrorState message={error} />;
 
   const STAT_ITEMS = [

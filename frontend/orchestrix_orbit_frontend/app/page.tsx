@@ -160,29 +160,29 @@ export default function Home() {
   }
 
   return (
-    <div style={s.page}>
+    <div className="auth-page-container">
       
       {/* ── Enhanced Left Brand Panel ── */}
-      <div style={s.brandPanel}>
-        <div style={s.brandInner}>
-          <div style={s.logoRow}>
+      <div className="auth-brand-panel">
+        <div className="auth-glass-card" style={s.brandInner}>
+          <div className="auth-logo-row" style={s.logoRow}>
             <div style={s.logoBox}>O</div>
             <span style={s.logoName}>Orchestrix ORBIT</span>
           </div>
-          <p style={s.brandTagline}>
+          <p className="auth-brand-text" style={s.brandTagline}>
             Privacy-preserving research collaboration platform.
           </p>
-          <div style={s.divider} />
-          <p style={s.brandQuote}>
+          <div className="auth-brand-text" style={s.divider} />
+          <p className="auth-brand-text" style={s.brandQuote}>
             &ldquo;Designed for research teams that need security without compromise.&rdquo;
           </p>
         </div>
       </div>
 
       {/* ── Right Form Panel ── */}
-      <div style={s.formPanel}>
+      <div className="auth-form-panel">
         {/* ── Main Auth Card ────────────────────────────────────────────────── */}
-        <div style={s.authCard}>
+        <div className="auth-card" style={s.authCard}>
 
           {/* Tabs */}
           <div style={s.tabRow} role="tablist" aria-label="Account access">
@@ -243,7 +243,7 @@ export default function Home() {
                 placeholder="Enter your password"
                 value={siPass} onChange={setSiPass} />
 
-              <button id="btn-signin" type="submit" style={{ ...s.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
+              <button id="btn-signin" type="submit" className="auth-btn-primary" style={{ ...s.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
                 {loading ? "Signing in…" : "Sign in"}
               </button>
             </form>
@@ -283,7 +283,7 @@ export default function Home() {
                 placeholder="Repeat your password"
                 value={suConf} onChange={setSuConf} />
 
-              <button id="btn-signup" type="submit" style={{ ...s.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
+              <button id="btn-signup" type="submit" className="auth-btn-primary" style={{ ...s.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
                 {loading ? "Creating account…" : "Create account"}
               </button>
             </form>
@@ -302,42 +302,64 @@ function Field({
   placeholder: string; value: string;
   onChange: (v: string) => void;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (showPassword ? "text" : "password") : type;
+
   return (
     <div style={f.wrap}>
       <label htmlFor={id} style={f.label}>{label}</label>
-      <input
-        id={id}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={f.input}
-        required
-      />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+        <input
+          id={id}
+          className="auth-input-focus"
+          type={inputType}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ ...f.input, paddingRight: isPassword ? "40px" : "14px" }}
+          required
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            style={{
+              position: "absolute",
+              right: "10px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#6b7280",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "4px"
+            }}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ── Styles ───────────────────────────────────────────────────────────── */
 const s: Record<string, React.CSSProperties> = {
-  page: {
-    display: "flex",
-    minHeight: "100vh",
-    fontFamily: "var(--font)",
-    background: "#f9fafb",
-  },
-  
-  /* Enhanced Left Brand Panel */
-  brandPanel: {
-    flex: "0 0 45%",
-    background: "linear-gradient(135deg, #111827 0%, #1f2937 100%)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "48px 56px",
-    position: "relative",
-    overflow: "hidden",
-  },
+  // Container styles moved to globals.css for responsiveness
+
   brandInner: {
     maxWidth: 380,
     width: "100%",
@@ -389,14 +411,6 @@ const s: Record<string, React.CSSProperties> = {
   },
 
   /* Right Form Panel */
-  formPanel: {
-    flex: 1,
-    background: "#f9fafb",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "48px 40px",
-  },
   authCard: {
     width: "100%",
     maxWidth: 440,

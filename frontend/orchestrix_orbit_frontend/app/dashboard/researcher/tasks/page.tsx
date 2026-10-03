@@ -146,7 +146,7 @@ export default function ResearcherTasksPage() {
   }
 
 
-  if (loading) return <LoadingState variant="table" title="Loading Tasks..." subtitle="Fetching your assigned tasks" />;
+  if (loading) return <LoadingState variant="researcher-tasks" title="Loading Tasks..." subtitle="Fetching your assigned tasks" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (

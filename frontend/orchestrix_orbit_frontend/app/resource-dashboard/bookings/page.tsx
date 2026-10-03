@@ -7,6 +7,7 @@ import {
   type Booking,
   type BookingStatus,
 } from "@/lib/services/resources";
+import LoadingState from "@/components/ui/LoadingState";
 
 /*
  * This page shows ALL bookings across ALL resources.
@@ -79,7 +80,7 @@ export default function ResourceBookingsPage() {
     }
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading bookings…</p>;
+  if (loading) return <LoadingState variant="manager-bookings" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   const pending   = bookings.filter(b => b.status === "PENDING" || b.status === "PENDING_APPROVAL").length;

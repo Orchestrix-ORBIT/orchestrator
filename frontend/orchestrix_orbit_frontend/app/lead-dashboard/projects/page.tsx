@@ -27,6 +27,7 @@ export default function LeadProjectsPage() {
 
   const [projectToDelete, setProjectToDelete]     = useState<Project | null>(null);
   const [deleting, setDeleting]                   = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const [projectToEdit, setProjectToEdit]         = useState<Project | null>(null);
   const [editName, setEditName]                   = useState("");
@@ -111,6 +112,9 @@ export default function LeadProjectsPage() {
       const created = await ProjectsService.create(body);
 
       setProjects(prev => [created, ...prev]);
+      if (selectedMemberIds.length > 0) {
+        setProjectMemberCounts(prev => ({ ...prev, [created.id]: selectedMemberIds.length }));
+      }
       setShowModal(false);
       setNewName(""); setNewDesc(""); setSelectedMemberIds([]);
     } catch (err: unknown) {
@@ -203,12 +207,14 @@ export default function LeadProjectsPage() {
 
   async function confirmDeleteProject() {
     if (!projectToDelete) return;
+    if (deleteConfirmText !== projectToDelete.name) return;
     setDeleting(true);
     try {
       await ProjectsService.delete(projectToDelete.id);
       setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
       setProjectMemberCounts(prev => { const copy = { ...prev }; delete copy[projectToDelete.id]; return copy; });
       setProjectToDelete(null);
+      setDeleteConfirmText("");
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -245,7 +251,7 @@ export default function LeadProjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  if (loading) return <LoadingState variant="table" title="Loading Projects & Workspaces…" subtitle="Fetching research projects, member assignments, and workspace details" />;
+  if (loading) return <LoadingState variant="grid" title="Loading Projects & Workspaces…" subtitle="Fetching research projects, member assignments, and workspace details" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
@@ -253,18 +259,23 @@ export default function LeadProjectsPage() {
       {/* ── Top Header Row ─────────────────────────────────────────────────── */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Projects</h1>
-          <p style={s.sub}>{projects.length} workspace projects · {projects.filter(p => p.status === "ACTIVE").length} active</p>
+          <h1 style={s.title}>Workspace Projects</h1>
+          <p style={s.sub}>Manage active research initiatives and team assignments.</p>
         </div>
         
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <svg style={{ position: "absolute", left: 10, color: "#9ca3af" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               style={s.searchInput}
+              className="search-input-premium"
             />
             {searchQuery && (
               <button
@@ -273,23 +284,27 @@ export default function LeadProjectsPage() {
                 style={{
                   position: "absolute",
                   right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
+                  background: "#f3f4f6",
                   border: "none",
-                  fontSize: 14,
-                  color: "#9ca3af",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#6b7280",
                   cursor: "pointer",
-                  padding: "2px 4px",
+                  padding: "4px 6px",
+                  borderRadius: 4,
                   lineHeight: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
                 title="Clear search"
+                className="btn-secondary-hover"
               >
-                ✕
+                ESC
               </button>
             )}
           </div>
-          <button id="btn-new-project" className="btn-hover-lift" style={s.btnPrimary} onClick={() => setShowModal(true)}>
+          <button id="btn-new-project" style={s.btnPrimary} onClick={() => setShowModal(true)}>
             + New Project
           </button>
         </div>
@@ -305,10 +320,9 @@ export default function LeadProjectsPage() {
               ...s.filterTab,
               ...(filterStatus === st ? s.filterTabActive : {}),
             }}
-            className={filterStatus === st ? "" : "btn-secondary-hover"}
           >
             {st === "ALL" ? "All Projects" : st === "ACTIVE" ? "Active" : "Archived"}
-            <span style={s.filterCount}>
+            <span style={{...s.filterCount, background: filterStatus === st ? "#f3f4f6" : "rgba(0,0,0,0.06)"}}>
               {st === "ALL" ? projects.length : projects.filter(p => p.status === st).length}
             </span>
           </button>
@@ -323,15 +337,15 @@ export default function LeadProjectsPage() {
           const memberCount = projectMemberCounts[p.id] ?? 0;
 
           return (
-          <div key={p.id} id={`project-card-${p.id}`} style={s.card} className="card-depth">
+          <div key={p.id} id={`project-card-${p.id}`} style={s.card} className="stat-card-hover">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
               <div>
-                <h3 style={{ margin: 0, marginBottom: 4 }}>
-                  <Link href={`/lead-dashboard/projects/${p.id}`} style={{ fontSize: "clamp(16px, 1.5vw, 20px)", fontWeight: 700, color: "#111827", textDecoration: "none" }}>
+                <h3 style={{ margin: 0, marginBottom: 6 }}>
+                  <Link href={`/lead-dashboard/projects/${p.id}`} style={{ fontSize: 18, fontWeight: 700, color: "#111827", textDecoration: "none", letterSpacing: "-0.01em" }}>
                     {p.name}
                   </Link>
                 </h3>
-                <p style={{ fontSize: "clamp(12px, 1vw, 14px)", color: "#6b7280", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.5 }}>
                   {p.description || "No description provided."}
                 </p>
               </div>
@@ -340,14 +354,19 @@ export default function LeadProjectsPage() {
               </span>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              <div style={s.metaBadge}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M4 4h8M4 8h8M4 12h4" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                {doneCount}/{pTasks.length} tasks
+            {/* Premium Progress Bar */}
+            <div style={{ margin: "16px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "#4b5563", marginBottom: 8 }}>
+                <span>Task Progress</span>
+                <span>{doneCount} / {pTasks.length}</span>
               </div>
-              <div style={s.metaBadge} onClick={() => p.teamId && openMembersModal(p)}>
+              <div style={{ width: "100%", height: 6, background: "#f3f4f6", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${pTasks.length > 0 ? (doneCount / pTasks.length) * 100 : 0}%`, height: "100%", background: "#4f46e5", borderRadius: 3, transition: "width 0.5s ease" }} />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              <div style={s.metaBadge} onClick={() => p.teamId && openMembersModal(p)} className="btn-secondary-hover">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <circle cx="8" cy="6" r="3" />
                   <path d="M3 14c0-2.5 2-4 5-4s5 1.5 5 4" strokeLinecap="round" />
@@ -358,10 +377,14 @@ export default function LeadProjectsPage() {
 
             <div style={{ marginTop: "auto", borderTop: "1px solid #f3f4f6", paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => handleOpenEditModal(p)} style={s.actionTextBtn} className="btn-secondary-hover">Edit</button>
-                <button onClick={() => setProjectToDelete(p)} style={{ ...s.actionTextBtn, color: "#dc2626" }} className="btn-secondary-hover">Delete</button>
+                <button onClick={() => handleOpenEditModal(p)} style={s.actionTextBtn} className="btn-secondary-hover" title="Edit Project">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button onClick={() => { setProjectToDelete(p); setDeleteConfirmText(""); }} style={{ ...s.actionTextBtn, color: "#dc2626" }} className="btn-secondary-hover" title="Delete Project">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
               </div>
-              <Link href={`/lead-dashboard/projects/${p.id}`} style={s.viewBtnMinimal} className="btn-secondary-hover">
+              <Link href={`/lead-dashboard/projects/${p.id}`} style={s.viewBtnMinimal} className="btn-shiny">
                 Open Workspace →
               </Link>
             </div>
@@ -371,8 +394,18 @@ export default function LeadProjectsPage() {
 
         {filteredProjects.length === 0 && (
           <div style={s.empty}>
-            <p>No projects match your search or filter criteria.</p>
-            <button className="btn-hover-lift" style={s.btnPrimary} onClick={() => setShowModal(true)}>Create a project</button>
+            <div style={{ width: 48, height: 48, borderRadius: 24, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 4px 0" }}>No projects found</h3>
+              <p style={{ margin: 0 }}>We couldn't find any projects matching your search or filter criteria.</p>
+            </div>
+            <button style={{ ...s.btnPrimary, marginTop: 8 }} onClick={() => setShowModal(true)}>
+              + Create a new project
+            </button>
           </div>
         )}
       </div>
@@ -389,12 +422,12 @@ export default function LeadProjectsPage() {
               {createError && <div style={s.errorBanner}>{createError}</div>}
               <div style={s.field}>
                 <label style={s.label}>Project name *</label>
-                <input id="input-project-name" style={s.input} value={newName}
+                <input id="input-project-name" style={s.input} className="search-input-premium" value={newName}
                   onChange={e => setNewName(e.target.value)} placeholder="e.g. Neural Interface Study" required />
               </div>
               <div style={s.field}>
                 <label style={s.label}>Description</label>
-                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }}
+                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }} className="search-input-premium"
                   value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Project goals and scope" />
               </div>
               <div style={s.field}>
@@ -426,6 +459,7 @@ export default function LeadProjectsPage() {
                   <input
                     type="text"
                     style={s.input}
+                    className="search-input-premium"
                     placeholder="Search researcher by name or email..."
                     value={memberSearchQuery}
                     onChange={e => setMemberSearchQuery(e.target.value)}
@@ -499,12 +533,12 @@ export default function LeadProjectsPage() {
               {updateError && <div style={s.errorBanner}>{updateError}</div>}
               <div style={s.field}>
                 <label style={s.label}>Project name *</label>
-                <input id="input-edit-project-name" style={s.input} value={editName}
+                <input id="input-edit-project-name" style={s.input} className="search-input-premium" value={editName}
                   onChange={e => setEditName(e.target.value)} placeholder="e.g. Neural Interface Study" required />
               </div>
               <div style={s.field}>
                 <label style={s.label}>Description</label>
-                <textarea id="input-edit-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }}
+                <textarea id="input-edit-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }} className="search-input-premium"
                   value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Project goals and scope" />
               </div>
               <div style={s.field}>
@@ -536,6 +570,7 @@ export default function LeadProjectsPage() {
                   <input
                     type="text"
                     style={s.input}
+                    className="search-input-premium"
                     placeholder="Search researcher to add..."
                     value={editMemberSearchQuery}
                     onChange={e => setEditMemberSearchQuery(e.target.value)}
@@ -730,65 +765,59 @@ export default function LeadProjectsPage() {
         </div>
       )}
 
-      {/* ── Delete Confirmation Modal ────────────────────────────────────────── */}
+      {/* ── Premium SaaS Delete Confirmation Modal ──────────────────────────── */}
 
       {projectToDelete && (
-        <div style={s.overlay} onClick={() => setProjectToDelete(null)}>
-          <div style={{ ...s.modal, maxWidth: 460, borderRadius: 12, padding: 0, overflow: "hidden", boxShadow: "0 20px 40px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: "20px 24px", background: "#fef2f2", borderBottom: "1px solid #fee2e2", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 18, background: "#ffe4e6", color: "#e11d48", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
-                  !
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#9f1239", margin: 0 }}>Delete Project</h3>
-                  <p style={{ fontSize: 12, color: "#be123c", margin: 0, marginTop: 3, fontWeight: 500 }}>
-                    This action is permanent and cannot be undone.
-                  </p>
-                </div>
+        <div style={s.overlay} onClick={() => { setProjectToDelete(null); setDeleteConfirmText(""); }}>
+          <div style={{ ...s.modal, maxWidth: 420, padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 20, background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
               </div>
-              <button style={{ ...s.closeBtn, color: "#9f1239" }} onClick={() => setProjectToDelete(null)}>✕</button>
-            </div>
-
-            <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-              <p style={{ fontSize: 14, color: "#1f2937", lineHeight: 1.5, margin: 0 }}>
-                Are you sure you want to delete <strong style={{ color: "#111827", fontWeight: 700 }}>"{projectToDelete.name}"</strong>?
-              </p>
-              <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, margin: 0 }}>
-                All associated Kanban task cards, attached documents, meeting notes, and member assignments for this workspace will be permanently removed.
-              </p>
-              
-              <div style={{ background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.5px" }}>PROJECT ID</span>
-                <code style={{ fontSize: 11, color: "#374151", background: "#ffffff", padding: "2px 8px", border: "1px solid #f3f4f6", borderRadius: 4, fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                  {projectToDelete.id}
-                </code>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 4px 0" }}>Delete Project</h3>
+                <p style={{ fontSize: 13, color: "#4b5563", margin: 0, lineHeight: 1.5 }}>
+                  This action is permanent. All tasks, files, and team assignments for <strong style={{color: "#111827"}}>{projectToDelete.name}</strong> will be permanently removed.
+                </p>
               </div>
             </div>
 
-            <div style={{ padding: "16px 24px", background: "#fafafa", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 8, marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                To verify, type <strong style={{ color: "#111827", userSelect: "all" }}>{projectToDelete.name}</strong> below:
+              </label>
+              <input 
+                type="text" 
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                style={{ ...s.input, borderColor: deleteConfirmText === projectToDelete.name ? "#10b981" : "#d1d5db" }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
               <button
                 type="button"
-                style={{ ...s.btnSecondary, padding: "9px 18px", borderRadius: 6 }}
-                onClick={() => setProjectToDelete(null)}
+                style={{ ...s.btnSecondary, padding: "8px 16px" }}
+                onClick={() => { setProjectToDelete(null); setDeleteConfirmText(""); }}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteProject}
-                disabled={deleting}
+                disabled={deleting || deleteConfirmText !== projectToDelete.name}
                 style={{
-                  padding: "9px 20px",
-                  background: "#e11d48",
+                  padding: "8px 16px",
+                  background: "#dc2626",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: 6,
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: "pointer",
-                  opacity: deleting ? 0.6 : 1,
-                  boxShadow: "0 1px 2px rgba(225, 29, 72, 0.2)",
+                  cursor: (deleting || deleteConfirmText !== projectToDelete.name) ? "not-allowed" : "pointer",
+                  opacity: (deleting || deleteConfirmText !== projectToDelete.name) ? 0.5 : 1,
+                  transition: "all 0.2s"
                 }}
               >
                 {deleting ? "Deleting…" : "Delete Project"}
@@ -806,46 +835,51 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontSize: "clamp(20px, 1.8vw, 28px)", fontWeight: 700, color: "#111827", marginBottom: 4 },
   sub: { fontSize: "clamp(12px, 1vw, 15px)", color: "#6b7280" },
   searchInput: {
-    padding: "8px 28px 8px 14px",
+    padding: "8px 36px 8px 34px",
     fontSize: 13,
-    border: "1px solid #d0d0d0",
-    borderRadius: 6,
-    width: 220,
+    border: "1px solid rgba(0,0,0,0.08)",
+    borderRadius: 8,
+    width: 240,
     outline: "none",
-    background: "#ffffff",
+    background: "#f9fafb",
+    color: "#111827",
+    transition: "all 0.2s ease",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
   },
   btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSecondary: { padding: "9px 16px", background: "#ffffff", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  
-  filterRow: { display: "inline-flex", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 12, marginBottom: 20, borderBottom: "1px solid #eeeeee", paddingBottom: 12 },
-  filterTab: { padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#616161", background: "none", border: "none", borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 },
-  filterTabActive: { background: "#161616", color: "#ffffff" },
-  filterCount: { fontSize: 11, background: "rgba(0,0,0,0.06)", padding: "1px 6px", borderRadius: 10 },
+  filterRow: { display: "inline-flex", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 8, marginBottom: 32 },
+  filterTab: { padding: "6px 14px", fontSize: 13, fontWeight: 600, color: "#6b7280", background: "none", border: "none", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" },
+  filterTabActive: { background: "#ffffff", color: "#111827", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
+  filterCount: { fontSize: 11, padding: "1px 6px", borderRadius: 10, transition: "background 0.2s" },
 
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(clamp(280px, 25vw, 400px), 1fr))", gap: "clamp(16px, 1.5vw, 24px)" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(clamp(280px, 25vw, 400px), 1fr))", gap: 24 },
   card: {
-    padding: "clamp(20px, 2vw, 32px)",
+    padding: 24,
     display: "flex",
     flexDirection: "column",
-    gap: "clamp(12px, 1vw, 18px)",
+    background: "#ffffff",
+    borderRadius: 16,
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
   },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  badge: { fontSize: "clamp(10px, 0.8vw, 12px)", fontWeight: 700, letterSpacing: "0.5px", padding: "clamp(2px, 0.3vw, 4px) clamp(6px, 0.6vw, 10px)", borderRadius: 4 },
+  badge: { fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", padding: "4px 10px", borderRadius: 12 },
   activeStyle: { background: "#dcfce7", color: "#166534" },
   archivedStyle: { background: "#f3f4f6", color: "#4b5563" },
-  metaBadge: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: "clamp(11px, 0.9vw, 13px)", fontWeight: 500, color: "#4b5563", background: "#f9fafb", border: "1px solid #e5e7eb", padding: "4px 10px", borderRadius: 6, cursor: "pointer" },
-  actionTextBtn: { background: "none", border: "none", fontSize: "clamp(12px, 1vw, 14px)", fontWeight: 500, color: "#4b5563", cursor: "pointer", padding: "6px 10px", borderRadius: 6 },
-  viewBtnMinimal: { fontSize: "clamp(12px, 1vw, 14px)", fontWeight: 600, color: "#111827", textDecoration: "none", display: "inline-flex", alignItems: "center", padding: "6px 12px", borderRadius: 6 },
-  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#6b7280", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
-  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
-  modal: { background: "#ffffff", borderRadius: 12, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 20px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.06)" },
-  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#111827" },
-  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#6b7280", cursor: "pointer" },
-  modalForm: { display: "flex", flexDirection: "column", gap: 16 },
-  modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
+  metaBadge: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "#4b5563", background: "#f9fafb", border: "1px solid #e5e7eb", padding: "4px 10px", borderRadius: 8, cursor: "pointer" },
+  actionTextBtn: { background: "transparent", border: "none", color: "#6b7280", cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" },
+  viewBtnMinimal: { fontSize: 13, fontWeight: 600, color: "#111827", background: "#ffffff", border: "1px solid #e5e7eb", padding: "8px 16px", borderRadius: 8, textDecoration: "none", display: "inline-flex", alignItems: "center", transition: "all 0.2s" },
+  empty: { gridColumn: "1/-1", textAlign: "center", padding: "60px 20px", background: "#ffffff", border: "1px dashed #d1d5db", borderRadius: 16, color: "#6b7280", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.25)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 },
+  modal: { background: "#ffffff", borderRadius: 16, padding: "0 0 24px", width: "100%", maxWidth: 520, boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255,255,255,0.1)", overflow: "hidden" },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px" },
+  modalTitle: { fontSize: 20, fontWeight: 700, color: "#111827", letterSpacing: "-0.5px" },
+  closeBtn: { background: "#f3f4f6", border: "none", width: 28, height: 28, borderRadius: "50%", fontSize: 14, color: "#4b5563", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },
+  modalForm: { display: "flex", flexDirection: "column", gap: 20, padding: "0 24px" },
+  modalActions: { display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8, paddingTop: 16, borderTop: "1px solid #f3f4f6" },
   field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 12, fontWeight: 600, color: "#111827" },
-  input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
+  label: { fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 2 },
+  input: { padding: "10px 14px", fontSize: 14, border: "1px solid #e5e7eb", borderRadius: 8, background: "#f9fafb", color: "#111827", transition: "border 0.2s, box-shadow 0.2s", width: "100%", outline: "none" },
   errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
 };

@@ -29,9 +29,9 @@ public class ResourceBookingController {
     @ResponseStatus(HttpStatus.CREATED)
     public BookingResponse createBooking(
             @PathVariable("id") UUID resourceId,
+            @AuthenticationPrincipal User currentUser,
             @Valid @RequestBody CreateBookingRequest request) {
-        UUID userId = getAuthenticatedUserId();
-        return resourceService.createBooking(resourceId, request, userId);
+        return resourceService.createBooking(resourceId, request, currentUser);
     }
 
     @GetMapping("/{id}/bookings")
@@ -45,7 +45,7 @@ public class ResourceBookingController {
             @PathVariable UUID bookingId,
             @Valid @RequestBody UpdateBookingStatusRequest request) {
         ResourceAccess.requireManager(currentUser);
-        return resourceService.updateBookingStatus(bookingId, request.getStatus());
+        return resourceService.updateBookingStatus(bookingId, request.getStatus(), request.getReason());
     }
 
     @GetMapping("/bookings/me")

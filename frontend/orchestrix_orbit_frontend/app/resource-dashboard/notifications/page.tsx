@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface ResourceNotification {
   id: string;
@@ -79,7 +80,7 @@ export default function ResourceNotificationsPage() {
     return n.category === filter;
   });
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading operational notifications…</p>;
+  if (loading) return <LoadingState variant="manager-notifications" />;
 
   return (
     <div>

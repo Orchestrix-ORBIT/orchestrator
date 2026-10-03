@@ -120,6 +120,15 @@ public class AiSummaryService {
     }
 
     @Transactional
+    public AiSummaryResponse updateActionItems(UUID id, List<String> actionItems) {
+        AiSummary entity = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("AI Summary not found with id: " + id));
+        entity.setActionItems(toJson(actionItems));
+        AiSummary saved = repository.save(entity);
+        return mapToResponse(saved);
+    }
+
+    @Transactional
     public void deleteSummary(UUID id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("AI Summary not found with id: " + id);

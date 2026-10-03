@@ -234,6 +234,32 @@ export async function updateAiSummaryStatus(
 }
 
 /**
+ * Update the actionItems list directly in the backend.
+ * Used to track approval state securely without relying on title comparison.
+ */
+export async function updateAiSummaryActionItems(id: string, actionItems: string[]): Promise<void> {
+  try {
+    if (!id.startsWith("local-")) {
+      await api.patch(`/api/ai-summaries/${encodeURIComponent(id)}/action-items`, { actionItems });
+    }
+  } catch (err) {
+    console.error("Failed to update AI summary action items in backend:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(LOCAL_CACHE_KEY);
+      if (cached) {
+        const list: SavedAiSummary[] = JSON.parse(cached);
+        const updated = list.map((item) => (item.id === id ? { ...item, actionItems } : item));
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(updated));
+      }
+      window.dispatchEvent(new CustomEvent("ai_summaries_updated", { detail: { id, actionItems } }));
+    } catch (_) {}
+  }
+}
+
+/**
  * Delete an AI summary from backend database.
  */
 export async function deleteAiSummary(id: string): Promise<void> {

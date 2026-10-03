@@ -45,7 +45,7 @@ export default function ResearcherProjectsPage() {
     ARCHIVED: projects.filter(p => p.status === "ARCHIVED").length,
   };
 
-  if (loading) return <LoadingState variant="table" title="Loading projects…" subtitle="Fetching your assigned projects" />;
+  if (loading) return <LoadingState variant="researcher-projects" title="Loading projects…" subtitle="Fetching your assigned projects" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (

@@ -7,6 +7,7 @@ import { getEmail, getTenantSlug, getUserId } from "@/lib/auth";
 import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
 import { saveAiSummary } from "@/lib/services/aiSummaries";
 import { SavedSummariesService } from "@/lib/services/savedSummaries";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface Channel {
   id: string;
@@ -307,13 +308,32 @@ export default function ResearcherChatPage() {
     try {
       const currentProj = projects.find((p) => p.id === summaryProject.id);
       const topic = summaryResult.summary.length > 70 ? summaryResult.summary.slice(0, 67) + "..." : summaryResult.summary;
+      let serializedActionItems: string[] = [];
+      if (summaryResult.extracted_tasks && summaryResult.extracted_tasks.length > 0) {
+        serializedActionItems = summaryResult.extracted_tasks.map((t: any) => JSON.stringify({
+          title: t.title,
+          description: t.description || "",
+          priority: "MEDIUM",
+          assigneeName: t.assignee_name || "Unassigned",
+          assigneeId: t.assignee_id || "",
+        }));
+      } else {
+        serializedActionItems = (summaryResult.action_items || []).map((a: string) => JSON.stringify({
+          title: a,
+          description: "",
+          priority: "MEDIUM",
+          assigneeName: "Unassigned",
+          assigneeId: "",
+        }));
+      }
+
       await saveAiSummary({
         projectId: summaryProject.id,
         projectName: currentProj?.name || summaryProject.name,
         topic: topic || "Discussion Summary",
         summary: summaryResult.summary,
         keyFindings: summaryResult.key_points || [],
-        actionItems: summaryResult.action_items || [],
+        actionItems: serializedActionItems,
         deadlineSuggestions: [],
         confidence: 100,
         model: "LangChain Context Engine",
@@ -359,29 +379,10 @@ export default function ResearcherChatPage() {
 
   if (!mounted) return <div suppressHydrationWarning />;
 
+  if (loading) return <LoadingState variant="researcher-chat" title="Loading Channels & Chat..." subtitle="Connecting to WebSocket STOMP broker" />;
+
   return (
     <div style={{ position: "relative", flex: 1, width: "100%", display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }} suppressHydrationWarning>
-
-      {/* ── Loading overlay (covers only this white content area) ─────────── */}
-      {loading && (
-        <div style={{ position: "absolute", inset: 0, background: "#ffffff", zIndex: 50, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, minHeight: "100%" }}>
-          <style>{`@keyframes rc-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}} @keyframes rc-pulse{0%,100%{opacity:1}50%{opacity:.35}} .rc-ring{animation:rc-spin .85s linear infinite} .rc-d1{animation:rc-pulse 1.4s ease-in-out 0s infinite} .rc-d2{animation:rc-pulse 1.4s ease-in-out .2s infinite} .rc-d3{animation:rc-pulse 1.4s ease-in-out .4s infinite}`}</style>
-          <div style={{ position: "relative", width: 48, height: 48 }}>
-            <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "3px solid #e5e7eb" }} />
-            <div className="rc-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "3px solid transparent", borderTopColor: "#161616", borderRightColor: "#161616" }} />
-            <div style={{ position: "absolute", inset: "12px", borderRadius: "50%", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#161616" }} />
-            </div>
-          </div>
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", margin: 0, textAlign: "center" }}>Loading Channels &amp; Chat…</p>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0", textAlign: "center" }}>Connecting to WebSocket STOMP broker</p>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {["rc-d1","rc-d2","rc-d3"].map(c => <div key={c} className={c} style={{ width: 6, height: 6, borderRadius: "50%", background: "#9ca3af" }} />)}
-          </div>
-        </div>
-      )}
       {/* Page Header */}
       <div style={s.headerRow}>
         <h1 style={s.pageTitle}>Project Chat</h1>

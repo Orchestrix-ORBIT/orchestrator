@@ -58,7 +58,7 @@ export default function SavedChatSummaries() {
 
   const selected = summaries.find((item) => item.id === selectedId);
 
-  if (loading) return <LoadingState title="Loading Summaries..." subtitle="Fetching your saved AI chat summaries" />;
+  if (loading) return <LoadingState variant="researcher-ai-summaries" title="Loading Summaries..." subtitle="Fetching your saved AI chat summaries" />;
 
   if (error) return (
     <section style={{ marginTop: 24 }}>

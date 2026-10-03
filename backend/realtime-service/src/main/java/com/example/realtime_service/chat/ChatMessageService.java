@@ -1,6 +1,9 @@
 package com.example.realtime_service.chat;
 
+import com.example.realtime_service.auth.User;
 import com.example.realtime_service.auth.UserRepository;
+import com.example.realtime_service.auth.UserRole;
+import com.example.realtime_service.auth.UserStatus;
 import com.example.realtime_service.multitenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,11 +38,51 @@ public class ChatMessageService {
             displayName = "Researcher";
         }
 
+        // Prefer: 1) explicit senderId param, 2) senderId from request payload, 3) email lookup
         UUID validSenderId = senderId;
+        if (validSenderId == null && request.senderId() != null) {
+            validSenderId = request.senderId();
+            // Resolve display name from DB if not provided
+            if (displayName == null || displayName.isBlank()) {
+                final UUID resolvedId = validSenderId;
+                displayName = userRepository.findById(resolvedId)
+                        .map(u -> u.getDisplayName() != null ? u.getDisplayName() : u.getEmail())
+                        .orElse("Researcher");
+            }
+        }
+
+        final String finalDisplayName = displayName;
         if (validSenderId == null) {
-            validSenderId = userRepository.findByEmail(displayName)
-                    .map(u -> u.getId())
-                    .orElseGet(() -> userRepository.findAll().stream().findFirst().map(u -> u.getId()).orElse(UUID.randomUUID()));
+            // Last resort: look up by email (only works when senderName is actually an email)
+            if (finalDisplayName.contains("@")) {
+                validSenderId = userRepository.findByEmail(finalDisplayName)
+                        .map(u -> u.getId())
+                        .orElseGet(() -> {
+                            User newUser = User.builder()
+                                    .email(finalDisplayName)
+                                    .passwordHash("N/A")
+                                    .displayName(finalDisplayName)
+                                    .role(UserRole.MEMBER)
+                                    .status(UserStatus.ACTIVE)
+                                    .build();
+                            return userRepository.save(newUser).getId();
+                        });
+            } else {
+                // senderName is a display name, not an email — create a placeholder user
+                String generatedEmail = finalDisplayName.replace(" ", ".").toLowerCase() + "@system.local";
+                validSenderId = userRepository.findByEmail(generatedEmail)
+                        .map(u -> u.getId())
+                        .orElseGet(() -> {
+                            User newUser = User.builder()
+                                    .email(generatedEmail)
+                                    .passwordHash("N/A")
+                                    .displayName(finalDisplayName)
+                                    .role(UserRole.MEMBER)
+                                    .status(UserStatus.ACTIVE)
+                                    .build();
+                            return userRepository.save(newUser).getId();
+                        });
+            }
         }
 
         ChatMessage message = ChatMessage.builder()
@@ -137,5 +180,10 @@ public class ChatMessageService {
 
         Collections.reverse(result);
         return result;
+    }
+
+    @Transactional
+    public void deleteAllMessages() {
+        chatMessageRepository.deleteAll();
     }
 }

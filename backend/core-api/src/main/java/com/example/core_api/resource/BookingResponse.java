@@ -20,4 +20,5 @@ public class BookingResponse {
     private BookingStatus status;
     private String purpose;
     private OffsetDateTime createdAt;
+    private OffsetDateTime updatedAt;
 }

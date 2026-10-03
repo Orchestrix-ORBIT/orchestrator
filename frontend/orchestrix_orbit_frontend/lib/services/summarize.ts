@@ -6,6 +6,7 @@ const CONTEXT_ENGINE_URL =
 
 export interface ChatMessageForSummary {
   senderName: string;
+  senderId?: string;
   content: string;
   createdAt?: string;
 }
@@ -14,6 +15,7 @@ export interface SummaryResult {
   summary: string;
   key_points: string[];
   action_items: string[];
+  extracted_tasks?: { assignee_id: string; assignee_name: string; title: string; description: string }[];
   message_count: number;
   strategy: "stuff" | "map_reduce" | "none";
 }

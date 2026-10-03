@@ -7,6 +7,7 @@ import {
   type CreateResourceBody,
   type ResourceType,
 } from "@/lib/services/resources";
+import LoadingState from "@/components/ui/LoadingState";
 
 export default function ResourceAssetsPage() {
   const [resources, setResources]       = useState<Resource[]>([]);
@@ -59,7 +60,7 @@ export default function ResourceAssetsPage() {
     }
   }
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading assets…</p>;
+  if (loading) return <LoadingState variant="manager-assets" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (

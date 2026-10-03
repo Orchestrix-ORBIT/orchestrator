@@ -86,7 +86,7 @@ export default function ResearcherResourcesPage() {
     setShowBookingModal(true);
   }
 
-  if (loading) return <LoadingState variant="grid" title="Loading Resources..." subtitle="Fetching available resources and your bookings" />;
+  if (loading) return <LoadingState variant="researcher-resources" title="Loading Resources..." subtitle="Fetching available resources and your bookings" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   const effectiveResources = resources.map(r => ({
@@ -144,6 +144,11 @@ export default function ResearcherResourcesPage() {
       {/* ── My Bookings ──────────────────────────────────────────────────── */}
       {activeTab === "My Bookings" && (
         <div style={s.bookingList}>
+          {myBookings.some(b => b.status === "PENDING" || b.status === "PENDING_APPROVAL") && (
+            <div style={{ ...s.errorBanner, background: "#fff8e1", border: "1px solid #ffecb3", color: "#f57f17", marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>Note:</span> Your pending booking requests require approval from the Research Lead. You will be notified once they are reviewed.
+            </div>
+          )}
           {myBookings.length === 0 ? (
             <p style={{ color: "#6b7280", fontSize: 13 }}>No bookings yet.</p>
           ) : myBookings.map(b => (
@@ -155,7 +160,12 @@ export default function ResearcherResourcesPage() {
                 </div>
                 {b.purpose && <div style={s.bookingPurpose}>{b.purpose}</div>}
               </div>
-              <span style={{ ...s.statusBadge, ...bookingStatusStyle(b.status) }}>{b.status}</span>
+              <span 
+                style={{ ...s.statusBadge, ...bookingStatusStyle(b.status) }}
+                title={b.status === "PENDING" ? "Awaiting Lead Approval" : b.status}
+              >
+                {b.status}
+              </span>
             </div>
           ))}
         </div>

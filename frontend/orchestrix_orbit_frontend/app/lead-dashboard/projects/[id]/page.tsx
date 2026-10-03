@@ -28,6 +28,7 @@ import { ProjectsService } from "@/lib/services/projects";
 import { TasksService } from "@/lib/services/tasks";
 import { TeamsService } from "@/lib/services/teams";
 import { useTasksRealtime } from "@/lib/useTasksRealtime";
+import LoadingState from "@/components/ui/LoadingState";
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: "TODO", title: "To Do" },
@@ -131,6 +132,8 @@ export default function ProjectWorkspacePage({
   const [availableMembers, setAvailableMembers] = useState<any[]>([]);
   const [priorityInput, setPriorityInput] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
   const [columnInput, setColumnInput] = useState<TaskStatus>("TODO");
+  const [isCreateAssigneeOpen, setIsCreateAssigneeOpen] = useState(false);
+  const [isCreatePriorityOpen, setIsCreatePriorityOpen] = useState(false);
 
   // Drag and drop state
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -138,6 +141,10 @@ export default function ProjectWorkspacePage({
 
   // Confirmation modal state
   const [pendingMove, setPendingMove] = useState<{ taskId: string; taskTitle: string; from: TaskStatus; to: TaskStatus } | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+  const [modalAssigneeSearch, setModalAssigneeSearch] = useState("");
+  const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
 
   const STAGE_LABELS: Record<TaskStatus, string> = {
     TODO: "To Do",
@@ -299,14 +306,14 @@ export default function ProjectWorkspacePage({
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (isCompletedProject) return;
-    if (!window.confirm("Are you sure you want to delete this task? This action cannot be undone.")) return;
-    
+  const confirmDeleteTask = async () => {
+    if (isCompletedProject || !taskToDelete) return;
+    const taskId = taskToDelete.id;
     try {
       await TasksService.delete(projectId, taskId);
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       if (selectedTask?.id === taskId) setSelectedTask(null);
+      setTaskToDelete(null);
     } catch (err) {
       alert("Failed to delete task: " + (err instanceof Error ? err.message : String(err)));
     }
@@ -336,6 +343,19 @@ export default function ProjectWorkspacePage({
     }
   };
 
+  const handleUpdatePriority = async (taskId: string, priority: "LOW" | "MEDIUM" | "HIGH") => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, priority } : t)));
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask((prev) => (prev ? { ...prev, priority } : null));
+    }
+    try {
+      await TasksService.update(projectId, taskId, { priority: priority as any });
+    } catch (err) {
+      console.warn("Could not update priority:", err);
+    }
+    setIsPriorityDropdownOpen(false);
+  };
+
   const filteredTasks = tasks.filter(
     (t) =>
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -356,44 +376,25 @@ export default function ProjectWorkspacePage({
   }
 
   if (loading) {
-    return (
-      <div style={{ padding: "100px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{
-          width: 36,
-          height: 36,
-          border: "3px solid #e5e7eb",
-          borderTop: "3px solid #161616",
-          borderRadius: "50%",
-          animation: "spin 0.8s linear infinite",
-          marginBottom: 16,
-        }} />
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-        <p style={{ fontSize: 14, color: "#111827", fontWeight: 600, margin: 0 }}>
-          Loading Task Board…
-        </p>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: 0, marginTop: 4 }}>
-          Fetching project tasks and assigned team members
-        </p>
-      </div>
-    );
+    return <LoadingState variant="kanban" title="Loading Task Board…" subtitle="Fetching project tasks and assigned team members" />;
   }
 
   return (
     <div suppressHydrationWarning>
-      {/* ── Breadcrumb & Title Row ─────────────────────────────────────────── */}
       <div style={s.topNavRow}>
         <Link href="/lead-dashboard/projects" style={s.backLink}>
-          ← Back to Projects
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to Projects
         </Link>
-        <span style={s.projectTag}>
-          {currentProject.name} (ID: {projectId})
-        </span>
       </div>
 
       <div style={s.headerRow}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <h1 style={s.pageTitle}>Task Board</h1>
+            <span style={s.projectTag}>
+              {currentProject.name} <span style={{ color: "#d1d5db" }}>|</span> ID: {projectId.substring(0,8)}
+            </span>
             {isCompletedProject && (
               <span style={s.readOnlyBadge}>✓ Read-Only Mode (Completed)</span>
             )}
@@ -422,13 +423,62 @@ export default function ProjectWorkspacePage({
             <span style={s.progressSub}>({completedCount}/{totalCount})</span>
           </div>
 
-          <input
-            type="text"
-            placeholder="Filter cards..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={s.searchInput}
-          />
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <svg style={{ position: "absolute", left: 10, color: "#9ca3af" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              placeholder="Filter tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={s.searchInput}
+              className="search-input-premium"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  background: "#f3f4f6",
+                  border: "none",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#6b7280",
+                  cursor: "pointer",
+                  padding: "4px 6px",
+                  borderRadius: 4,
+                  lineHeight: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+                title="Clear filter"
+              >
+                ESC
+              </button>
+            )}
+            {!searchQuery && (
+              <div style={{
+                position: "absolute",
+                right: 8,
+                background: "transparent",
+                border: "1px solid #e5e7eb",
+                fontSize: 9,
+                fontWeight: 600,
+                color: "#9ca3af",
+                padding: "2px 6px",
+                borderRadius: 4,
+                lineHeight: 1,
+                pointerEvents: "none"
+              }}>
+                ⌘F
+              </div>
+            )}
+          </div>
 
           {!isCompletedProject && (
             <button
@@ -455,14 +505,19 @@ export default function ProjectWorkspacePage({
               onDragOver={(e) => {
                 if (isCompletedProject) return;
                 e.preventDefault();
+                if (dragOverCol !== col.id) setDragOverCol(col.id);
               }}
-              onDragEnter={() => {
+              onDragEnter={(e) => {
                 if (isCompletedProject) return;
-                setDragOverCol(col.id);
+                e.preventDefault();
+                if (dragOverCol !== col.id) setDragOverCol(col.id);
               }}
-              onDragLeave={() => {
+              onDragLeave={(e) => {
                 if (isCompletedProject) return;
-                setDragOverCol(null);
+                const related = e.relatedTarget as Node;
+                if (!e.currentTarget.contains(related)) {
+                  setDragOverCol(null);
+                }
               }}
               onDrop={(e) => {
                 if (isCompletedProject) return;
@@ -480,9 +535,12 @@ export default function ProjectWorkspacePage({
             >
               {/* Column Header */}
               <div style={s.colHeader}>
-                <span style={s.colTitle}>
-                  {isCompletedProject ? "All Completed Tasks" : col.title}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: col.id === "TODO" ? "#d1d5db" : col.id === "IN_PROGRESS" ? "#f59e0b" : col.id === "DONE" ? "#8b5cf6" : "#10b981" }} />
+                  <span style={s.colTitle}>
+                    {isCompletedProject ? "All Completed Tasks" : col.title}
+                  </span>
+                </div>
                 <span style={s.colCount}>{colTasks.length}</span>
               </div>
 
@@ -502,54 +560,61 @@ export default function ProjectWorkspacePage({
                       setDraggedTaskId(null);
                       setDragOverCol(null);
                     }}
-                    className="card-depth"
                     style={{
-                      padding: "14px 16px",
-                      cursor: "pointer",
-                      marginBottom: 10,
+                      padding: "16px",
+                      cursor: "grab",
+                      marginBottom: 12,
                       display: "flex",
                       flexDirection: "column",
-                      gap: 8,
+                      gap: 12,
+                      background: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      boxShadow: "0 2px 4px -1px rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02)",
                     }}
                   >
-                    <div style={s.taskCardTop}>
-                      <span style={s.taskId} title={`Full ID: ${task.id}`}>
-                        #{task.id.length > 8 ? task.id.substring(0, 8) : task.id}
-                      </span>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", letterSpacing: "0.2px" }} title={`Full ID: ${task.id}`}>
+                          {task.id.substring(0, 5).toUpperCase()}
+                        </span>
                         {task.isAiGenerated && (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedTask(task);
-                            }}
-                            style={s.aiBadge}
+                            onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                            style={{ ...s.aiBadge, background: "linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%)", color: "#4f46e5", border: "1px solid #c7d2fe" }}
                             title="Click to view AI details"
                           >
-                            AI
+                            ✦ AI
                           </button>
                         )}
-                        <span
-                          style={{
-                            ...s.priorityBadge,
-                            ...(task.priority === "HIGH"
-                              ? s.priHigh
-                              : task.priority === "MEDIUM"
-                              ? s.priMed
-                              : s.priLow),
-                          }}
-                        >
-                          {task.priority}
-                        </span>
                       </div>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "3px 8px",
+                          borderRadius: 12,
+                          letterSpacing: "0.5px",
+                          background: task.priority === "HIGH" ? "#fee2e2" : task.priority === "MEDIUM" ? "#fef3c7" : "#f3f4f6",
+                          color: task.priority === "HIGH" ? "#b91c1c" : task.priority === "MEDIUM" ? "#b45309" : "#4b5563",
+                          border: `1px solid ${task.priority === "HIGH" ? "#fecaca" : task.priority === "MEDIUM" ? "#fde68a" : "#e5e7eb"}`
+                        }}
+                      >
+                        {task.priority}
+                      </span>
                     </div>
 
-                    <h4 style={s.taskTitle}>{task.title}</h4>
-                    {task.description && <p style={s.taskDesc}>{task.description}</p>}
+                    <div>
+                      <h4 style={{ fontSize: 14, fontWeight: 600, color: "#111827", margin: "0 0 4px 0", lineHeight: 1.4 }}>{task.title}</h4>
+                      {task.description && <p style={{ fontSize: 13, color: "#6b7280", margin: 0, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{task.description}</p>}
+                    </div>
 
-                    <div style={s.taskCardBottom}>
-                      <span style={s.taskDue}>{task.dueDate}</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid #f3f4f6" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#9ca3af", fontSize: 11, fontWeight: 500 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        {task.dueDate}
+                      </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         {isCompletedProject ? (
@@ -607,7 +672,14 @@ export default function ProjectWorkspacePage({
                 ))}
 
                 {colTasks.length === 0 && (
-                  <div style={s.emptyCol}>No tasks in this column</div>
+                  <div style={s.emptyCol}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <line x1="12" y1="8" x2="12" y2="16" />
+                      <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                    Drag tasks here
+                  </div>
                 )}
               </div>
             </div>
@@ -617,32 +689,71 @@ export default function ProjectWorkspacePage({
 
       {/* ── Move Confirmation Modal ──────────────────────────────────────────── */}
       {pendingMove && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.25)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
           onClick={() => setPendingMove(null)}>
-          <div style={{ background: "#ffffff", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" }}
+          <div style={{ background: "#ffffff", borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255,255,255,0.1)", textAlign: "center" }}
             onClick={e => e.stopPropagation()}>
-            {/* Icon */}
-            <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#f0f4ff", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#3b5bdb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 10h10M12 7l3 3-3 3"/>
+            {/* Action Icon */}
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: pendingMove.to === "ACCEPTED" ? "#ecfdf5" : "#f0f4ff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <svg 
+                style={{ transition: "transform 0.2s", transform: ["TODO", "IN_PROGRESS", "DONE", "ACCEPTED"].indexOf(pendingMove.from) > ["TODO", "IN_PROGRESS", "DONE", "ACCEPTED"].indexOf(pendingMove.to) ? "scaleX(-1)" : "none" }}
+                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={pendingMove.to === "ACCEPTED" ? "#10b981" : "#3b5bdb"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                {pendingMove.to === "ACCEPTED" ? (
+                  <path d="M20 6L9 17l-5-5"/>
+                ) : (
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                )}
               </svg>
             </div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 6px" }}>Move Task?</h3>
-            <p style={{ fontSize: 13, color: "#374151", margin: "0 0 18px", lineHeight: 1.5 }}>
-              Move <strong>&ldquo;{pendingMove.taskTitle}&rdquo;</strong> from{" "}
-              <span style={{ fontWeight: 600, color: "#555" }}>{STAGE_LABELS[pendingMove.from]}</span>{" "}
-              →{" "}
-              <span style={{ fontWeight: 700, color: pendingMove.to === "ACCEPTED" ? "#2e7d32" : "#161616" }}>{STAGE_LABELS[pendingMove.to]}</span>?
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 8px", letterSpacing: "-0.5px" }}>
+              {pendingMove.to === "ACCEPTED" ? "Accept Task?" : "Move Task?"}
+            </h3>
+            <p style={{ fontSize: 14, color: "#4b5563", margin: "0 0 28px", lineHeight: 1.5 }}>
+              You are about to move <strong>&ldquo;{pendingMove.taskTitle}&rdquo;</strong> from{" "}
+              <span style={{ fontWeight: 600, color: "#111827" }}>{STAGE_LABELS[pendingMove.from]}</span>{" "}
+              to{" "}
+              <span style={{ fontWeight: 600, color: pendingMove.to === "ACCEPTED" ? "#059669" : "#3b5bdb" }}>{STAGE_LABELS[pendingMove.to]}</span>.
             </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: 12 }}>
               <button
                 onClick={() => setPendingMove(null)}
-                style={{ padding: "8px 18px", borderRadius: 7, border: "1px solid #d0d0d0", background: "#ffffff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}
+                style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", transition: "all 0.2s" }}
               >Cancel</button>
               <button
                 onClick={() => handleMoveTask(pendingMove.taskId, pendingMove.to)}
-                style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: pendingMove.to === "ACCEPTED" ? "#2e7d32" : "#161616", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}
-              >{pendingMove.to === "ACCEPTED" ? "Accept Task ✓" : "Confirm Move"}</button>
+                style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: "none", background: pendingMove.to === "ACCEPTED" ? "#059669" : "#111827", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}
+              >{pendingMove.to === "ACCEPTED" ? "Accept Task" : "Confirm Move"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ──────────────────────────────────────────── */}
+      {taskToDelete && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.25)", backdropFilter: "blur(4px)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setTaskToDelete(null)}>
+          <div style={{ background: "#ffffff", borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255,255,255,0.1)", textAlign: "center" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+              </svg>
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 8px", letterSpacing: "-0.5px" }}>
+              Delete Task?
+            </h3>
+            <p style={{ fontSize: 14, color: "#4b5563", margin: "0 0 28px", lineHeight: 1.5 }}>
+              Are you sure you want to delete <strong>&ldquo;{taskToDelete.title}&rdquo;</strong>? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => setTaskToDelete(null)}
+                style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", transition: "all 0.2s" }}
+              >Cancel</button>
+              <button
+                onClick={confirmDeleteTask}
+                style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: "none", background: "#dc2626", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 6px -1px rgba(220, 38, 38, 0.2)" }}
+              >Delete Task</button>
             </div>
           </div>
         </div>
@@ -650,159 +761,186 @@ export default function ProjectWorkspacePage({
 
       {/* ── Task Details Modal ─────────────────────────────────────────────────── */}
       {selectedTask && (
-        <div style={m.overlay} onClick={() => setSelectedTask(null)}>
-          <div style={{ ...m.modal, maxWidth: 560, borderRadius: 10, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ ...m.header, background: "#fcfcfc", borderBottom: "1px solid #eee", padding: "18px 24px" }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <h3 style={{ ...m.title, fontSize: 17, fontWeight: 700 }}>
-                    {selectedTask.isAiGenerated ? "⚡ AI Task Review" : "📋 Task Card Details"}
-                  </h3>
-                  <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "#666", background: "#f0f0f0", padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>
-                    #{selectedTask.id.length > 8 ? selectedTask.id.substring(0, 8) : selectedTask.id}
+        <div style={m.overlay} onClick={() => { setSelectedTask(null); setIsAssigneeDropdownOpen(false); setIsPriorityDropdownOpen(false); }}>
+          <div style={{ ...m.modal, maxWidth: 560, borderRadius: 10, overflow: "hidden" }} onClick={(e) => { e.stopPropagation(); setIsAssigneeDropdownOpen(false); setIsPriorityDropdownOpen(false); }}>
+            <div style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 13, fontFamily: "var(--font-mono)", color: "#6b7280", fontWeight: 500 }}>
+                  {selectedTask.id.substring(0, 8).toUpperCase()}
+                </span>
+                {selectedTask.isAiGenerated && (
+                  <span style={{ background: "#f5f3ff", color: "#6d28d9", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 12 }}>
+                    AI Generated
                   </span>
-                </div>
-                <p style={{ ...m.sub, fontSize: 11, color: "#9e9e9e", marginTop: 4, wordBreak: "break-all" }}>
-                  Full ID: <code style={{ background: "#f5f5f5", padding: "1px 5px", borderRadius: 3, fontSize: 11 }}>{selectedTask.id}</code>
-                </p>
+                )}
               </div>
-              <button onClick={() => setSelectedTask(null)} style={m.closeBtn}>✕</button>
+              <button onClick={() => setSelectedTask(null)} style={{ background: "none", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", padding: 0 }}>✕</button>
             </div>
 
-            <div style={{ ...m.body, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: 24 }}>
               {/* Task Title */}
-              <div>
-                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>TASK TITLE</span>
-                <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginTop: 4, lineHeight: 1.4 }}>{selectedTask.title}</p>
-              </div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: "#111827", margin: 0, lineHeight: 1.3, letterSpacing: "-0.5px" }}>
+                {selectedTask.title}
+              </h2>
 
-              {/* Description */}
-              <div style={{ background: "#f9fafb", border: "1px solid #f0f0f0", borderRadius: 6, padding: "12px 14px" }}>
-                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>DESCRIPTION</span>
-                <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.5, marginTop: 4 }}>
-                  {selectedTask.description || "No description provided for this task card."}
-                </p>
-              </div>
-
-              {/* Metadata Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 12, padding: "12px 14px" }}>
+              {/* Metadata Row */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center" }}>
                 {/* Status */}
-                <div>
-                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>STATUS</span>
-                  <div style={{ marginTop: 4 }}>
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: "3px 8px",
-                      borderRadius: 12,
-                      background: selectedTask.status === "ACCEPTED" ? "#e8f5e9" : selectedTask.status === "DONE" ? "#f3e8ff" : selectedTask.status === "IN_PROGRESS" ? "#e3f2fd" : "#f5f5f5",
-                      color: selectedTask.status === "ACCEPTED" ? "#2e7d32" : selectedTask.status === "DONE" ? "#6b21a8" : selectedTask.status === "IN_PROGRESS" ? "#1565c0" : "#616161",
-                      display: "inline-block"
-                    }}>
-                      {selectedTask.status === "ACCEPTED" ? "Accepted ✓" : selectedTask.status === "DONE" ? "Completed (Pending Review)" : selectedTask.status === "IN_PROGRESS" ? "In Progress" : "To Do"}
-                    </span>
-                  </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Status</span>
+                  <span style={{
+                    fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
+                    background: selectedTask.status === "ACCEPTED" ? "#ecfdf5" : selectedTask.status === "DONE" ? "#f5f3ff" : selectedTask.status === "IN_PROGRESS" ? "#eff6ff" : "#f3f4f6",
+                    color: selectedTask.status === "ACCEPTED" ? "#059669" : selectedTask.status === "DONE" ? "#7c3aed" : selectedTask.status === "IN_PROGRESS" ? "#2563eb" : "#4b5563"
+                  }}>
+                    {selectedTask.status === "ACCEPTED" ? "Accepted" : selectedTask.status === "DONE" ? "Completed" : selectedTask.status === "IN_PROGRESS" ? "In Progress" : "To Do"}
+                  </span>
                 </div>
-
+                
                 {/* Assignee */}
-                <div>
-                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>ASSIGNEE</span>
-                  <div style={{ marginTop: 4 }}>
-                    {!isCompletedProject ? (
-                      <select
-                        value={selectedTask.assignee || "Unassigned"}
-                        onChange={(e) => handleReassignTask(selectedTask.id, e.target.value)}
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          padding: "4px 8px",
-                          borderRadius: 6,
-                          border: "1px solid #d0d0d0",
-                          outline: "none",
-                          background: "#ffffff",
-                          color: "#111827",
-                          width: "100%",
-                          cursor: "pointer",
-                        }}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                  <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Assignee</span>
+                  {!isCompletedProject ? (
+                    <div className="custom-dropdown-container">
+                      <button
+                        onClick={() => { setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen); setIsPriorityDropdownOpen(false); }}
+                        style={{ fontSize: 13, fontWeight: 500, padding: "4px 8px", borderRadius: 6, border: "1px solid transparent", outline: "none", background: isAssigneeDropdownOpen ? "#f3f4f6" : "transparent", color: "#111827", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "background 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#f9fafb"}
+                        onMouseLeave={e => e.currentTarget.style.background = isAssigneeDropdownOpen ? "#f3f4f6" : "transparent"}
                       >
-                        <option value="Unassigned">Unassigned (UA)</option>
-                        {availableMembers.map((mem) => {
-                          const name = mem.displayName || mem.userDisplayName || mem.email;
-                          return (
-                            <option key={mem.id || mem.userId || name} value={name}>
-                              {name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 10,
-                          background: (!selectedTask.assignee || selectedTask.assignee === "Unassigned") ? "#e0e0e0" : "#161616",
-                          color: (!selectedTask.assignee || selectedTask.assignee === "Unassigned") ? "#616161" : "#ffffff",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center"
-                        }}>
-                          {getInitials(selectedTask.assignee)}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>
-                          {selectedTask.assignee || "Unassigned"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                        {selectedTask.assignee || "Unassigned"}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                      </button>
+                      {isAssigneeDropdownOpen && (
+                        <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)", zIndex: 100, minWidth: 200, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                          {/* Search Input */}
+                          <div style={{ padding: "8px", borderBottom: "1px solid #f3f4f6" }}>
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="Search members..."
+                              value={modalAssigneeSearch}
+                              onChange={(e) => setModalAssigneeSearch(e.target.value)}
+                              style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 4, outline: "none" }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          {/* Scrollable List */}
+                          <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+                            {[{ id: "unassigned", displayName: "Unassigned" }, ...availableMembers]
+                              .filter((mem) => {
+                                const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
+                                return name.toLowerCase().includes(modalAssigneeSearch.toLowerCase());
+                              })
+                              .map((mem) => {
+                                const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
+                                const isSelected = (selectedTask.assignee || "Unassigned") === name;
+                                return (
+                                  <button
+                                    key={mem.id || mem.userId || name}
+                                    onClick={() => { handleReassignTask(selectedTask.id, name); setIsAssigneeDropdownOpen(false); setModalAssigneeSearch(""); }}
+                                    style={{ padding: "8px 12px", background: isSelected ? "#f9fafb" : "transparent", border: "none", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#111827", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "background 0.1s" }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "#f3f4f6"}
+                                    onMouseLeave={e => e.currentTarget.style.background = isSelected ? "#f9fafb" : "transparent"}
+                                  >
+                                    {name}
+                                    {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                  </button>
+                                );
+                            })}
+                            {[{ id: "unassigned", displayName: "Unassigned" }, ...availableMembers].filter((mem) => {
+                                const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
+                                return name.toLowerCase().includes(modalAssigneeSearch.toLowerCase());
+                              }).length === 0 && (
+                              <div style={{ padding: "12px", textAlign: "center", fontSize: 12, color: "#9ca3af" }}>No matches found</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "#111827", padding: "4px 8px" }}>
+                      {selectedTask.assignee || "Unassigned"}
+                    </span>
+                  )}
                 </div>
 
                 {/* Priority */}
-                <div>
-                  <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: "#9e9e9e", fontWeight: 700 }}>PRIORITY</span>
-                  <div style={{ marginTop: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                  <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Priority</span>
+                  {!isCompletedProject ? (
+                    <div className="custom-dropdown-container">
+                      <button
+                        onClick={() => { setIsPriorityDropdownOpen(!isPriorityDropdownOpen); setIsAssigneeDropdownOpen(false); }}
+                        style={{
+                          fontSize: 11, fontWeight: 700, padding: "4px 8px", borderRadius: 6, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "opacity 0.2s",
+                          background: selectedTask.priority === "HIGH" ? "#fef2f2" : selectedTask.priority === "MEDIUM" ? "#fffbeb" : "#f3f4f6",
+                          color: selectedTask.priority === "HIGH" ? "#dc2626" : selectedTask.priority === "MEDIUM" ? "#d97706" : "#4b5563"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+                        onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                      >
+                        {selectedTask.priority}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                      </button>
+                      {isPriorityDropdownOpen && (
+                        <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)", zIndex: 100, minWidth: 120, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                          {(["LOW", "MEDIUM", "HIGH"] as const).map((pri) => {
+                            const isSelected = selectedTask.priority === pri;
+                            return (
+                              <button
+                                key={pri}
+                                onClick={() => handleUpdatePriority(selectedTask.id, pri)}
+                                style={{ padding: "8px 12px", background: isSelected ? "#f9fafb" : "transparent", border: "none", textAlign: "left", fontSize: 11, fontWeight: 700, color: pri === "HIGH" ? "#dc2626" : pri === "MEDIUM" ? "#d97706" : "#4b5563", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                                onMouseEnter={e => e.currentTarget.style.background = "#f3f4f6"}
+                                onMouseLeave={e => e.currentTarget.style.background = isSelected ? "#f9fafb" : "transparent"}
+                              >
+                                {pri}
+                                {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                     <span style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: "3px 8px",
-                      borderRadius: 3,
-                      background: selectedTask.priority === "HIGH" ? "#fde8e8" : selectedTask.priority === "MEDIUM" ? "#fff8e1" : "#f5f5f5",
-                      color: selectedTask.priority === "HIGH" ? "#c62828" : selectedTask.priority === "MEDIUM" ? "#f57f17" : "#616161",
-                      display: "inline-block"
+                      fontSize: 11, fontWeight: 700, padding: "4px 8px", borderRadius: 4,
+                      background: selectedTask.priority === "HIGH" ? "#fef2f2" : selectedTask.priority === "MEDIUM" ? "#fffbeb" : "#f3f4f6",
+                      color: selectedTask.priority === "HIGH" ? "#dc2626" : selectedTask.priority === "MEDIUM" ? "#d97706" : "#4b5563"
                     }}>
                       {selectedTask.priority}
                     </span>
-                  </div>
+                  )}
                 </div>
               </div>
 
-              {/* Activity / AI Context */}
-              <div style={{
-                background: selectedTask.isAiGenerated ? "#f5f3ff" : "#fafafa",
-                border: selectedTask.isAiGenerated ? "1px solid #ddd6fe" : "1px solid #eee",
-                borderRadius: 6,
-                padding: "12px 14px"
-              }}>
-                <span style={{ ...m.label, fontSize: 10, letterSpacing: "0.8px", color: selectedTask.isAiGenerated ? "#6d28d9" : "#9e9e9e", fontWeight: 700 }}>
-                  {selectedTask.isAiGenerated ? "🤖 AI CONTEXT & RECOMMENDATION" : "🕒 ACTIVITY LOG"}
-                </span>
-                <p style={{ fontSize: 12, color: selectedTask.isAiGenerated ? "#5b21b6" : "#616161", lineHeight: 1.5, marginTop: 4 }}>
+              {/* Description */}
+              <div>
+                <p style={{ fontSize: 14, color: selectedTask.description ? "#374151" : "#9ca3af", lineHeight: 1.6, margin: 0, fontStyle: selectedTask.description ? "normal" : "italic" }}>
+                  {selectedTask.description || "No description provided."}
+                </p>
+              </div>
+
+              {/* Activity Log */}
+              <div style={{ paddingTop: 16, borderTop: "1px solid #f3f4f6" }}>
+                <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>
                   {selectedTask.isAiGenerated
-                    ? "This task was automatically drafted by the localized context engine. Validate requirements before transitioning stages."
-                    : `Task active since ${selectedTask.dueDate || "recent sprint"}. All updates are synchronized in real-time across team workspaces.`}
+                    ? "✨ Drafted by Orchestrix Context Engine"
+                    : `Active since ${selectedTask.dueDate || "recent sprint"}`}
                 </p>
               </div>
             </div>
 
-            <div style={{ ...m.footer, padding: "14px 24px 18px", borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between" }}>
+            <div style={{ padding: "0 24px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               {!isCompletedProject ? (
                 <button
-                  onClick={() => handleDeleteTask(selectedTask.id)}
-                  style={{ ...m.btnSecondary, color: "#d32f2f", borderColor: "#ef5350", background: "#ffebee" }}
+                  onClick={() => setTaskToDelete({ id: selectedTask.id, title: selectedTask.title })}
+                  style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 13, fontWeight: 500, cursor: "pointer", padding: "8px 0", transition: "opacity 0.2s" }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
+                  onMouseLeave={e => e.currentTarget.style.opacity = "1"}
                 >
-                  Delete Task
+                  Delete task
                 </button>
               ) : (
                 <div />
@@ -829,59 +967,91 @@ export default function ProjectWorkspacePage({
 
             <form onSubmit={handleCreateTask} style={m.body}>
               <div style={m.field}>
-                <label style={m.label}>TASK TITLE *</label>
+                <label style={m.label}>Task title <span style={{color: "#ef4444"}}>*</span></label>
                 <input
                   required
                   placeholder="e.g. Implement AES-256 session token exchange"
                   value={titleInput}
                   onChange={(e) => setTitleInput(e.target.value)}
                   style={m.input}
+                  className="search-input-premium"
                 />
               </div>
 
               <div style={m.field}>
-                <label style={m.label}>DESCRIPTION</label>
+                <label style={m.label}>Description</label>
                 <textarea
                   rows={3}
                   placeholder="Acceptance criteria, technical notes..."
                   value={descInput}
                   onChange={(e) => setDescInput(e.target.value)}
                   style={m.textarea}
+                  className="search-input-premium"
                 />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div style={m.field}>
-                  <label style={m.label}>ASSIGNEE</label>
-                  <select
-                    value={assigneeInput}
-                    onChange={(e) => setAssigneeInput(e.target.value)}
-                    style={m.select}
-                  >
-                    <option value="">Select Assignee...</option>
-                    {availableMembers.map((mem: any) => {
-                      const id = mem.userId || mem.id;
-                      const name = mem.displayName || mem.userDisplayName || mem.email;
-                      return (
-                        <option key={id} value={id}>
-                          {name}
-                        </option>
-                      );
-                    })}
-                  </select>
+                <div style={{ ...m.field, position: "relative" }}>
+                  <label style={m.label}>Assignee</label>
+                  <div className="custom-dropdown-container" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreateAssigneeOpen(!isCreateAssigneeOpen); setIsCreatePriorityOpen(false); }}
+                      style={{ ...m.select, width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: "#ffffff", padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13 }}
+                    >
+                      {availableMembers.find(m => (m.userId || m.id) === assigneeInput)?.displayName || availableMembers.find(m => (m.userId || m.id) === assigneeInput)?.userDisplayName || availableMembers.find(m => (m.userId || m.id) === assigneeInput)?.email || "Unassigned"}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    {isCreateAssigneeOpen && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", zIndex: 100, width: "100%", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        <div style={{ padding: "8px", borderBottom: "1px solid #f3f4f6" }}>
+                          <input type="text" autoFocus placeholder="Search members..." value={assigneeSearchQuery} onChange={(e) => setAssigneeSearchQuery(e.target.value)} style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 4, outline: "none" }} onClick={(e) => e.stopPropagation()} />
+                        </div>
+                        <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+                          {[{ id: "", displayName: "Unassigned" }, ...availableMembers]
+                            .filter(mem => {
+                              const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
+                              return name.toLowerCase().includes(assigneeSearchQuery.toLowerCase());
+                            })
+                            .map(mem => {
+                              const id = mem.userId || mem.id || "";
+                              const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
+                              const isSelected = assigneeInput === id;
+                              return (
+                                <button type="button" key={id || "unassigned"} onClick={() => { setAssigneeInput(id); setIsCreateAssigneeOpen(false); setAssigneeSearchQuery(""); }} style={{ padding: "8px 12px", background: isSelected ? "#f9fafb" : "transparent", border: "none", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#111827", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }} onMouseEnter={e => e.currentTarget.style.background = "#f3f4f6"} onMouseLeave={e => e.currentTarget.style.background = isSelected ? "#f9fafb" : "transparent"}>
+                                  {name}
+                                  {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div style={m.field}>
-                  <label style={m.label}>PRIORITY</label>
-                  <select
-                    value={priorityInput}
-                    onChange={(e) => setPriorityInput(e.target.value as "LOW" | "MEDIUM" | "HIGH")}
-                    style={m.select}
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                  </select>
+                <div style={{ ...m.field, position: "relative" }}>
+                  <label style={m.label}>Priority</label>
+                  <div className="custom-dropdown-container" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreatePriorityOpen(!isCreatePriorityOpen); setIsCreateAssigneeOpen(false); }}
+                      style={{ ...m.select, width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: "#ffffff", padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, fontWeight: 600, color: priorityInput === "HIGH" ? "#dc2626" : priorityInput === "MEDIUM" ? "#d97706" : "#4b5563" }}
+                    >
+                      {priorityInput}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    {isCreatePriorityOpen && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", zIndex: 100, width: "100%", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        {(["LOW", "MEDIUM", "HIGH"] as const).map(pri => (
+                          <button type="button" key={pri} onClick={() => { setPriorityInput(pri); setIsCreatePriorityOpen(false); }} style={{ padding: "8px 12px", background: priorityInput === pri ? "#f9fafb" : "transparent", border: "none", textAlign: "left", fontSize: 13, fontWeight: 600, color: pri === "HIGH" ? "#dc2626" : pri === "MEDIUM" ? "#d97706" : "#4b5563", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }} onMouseEnter={e => e.currentTarget.style.background = "#f3f4f6"} onMouseLeave={e => e.currentTarget.style.background = priorityInput === pri ? "#f9fafb" : "transparent"}>
+                            {pri}
+                            {priorityInput === pri && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -909,38 +1079,49 @@ const s: Record<string, React.CSSProperties> = {
   topNavRow: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   backLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
     fontSize: 13,
-    color: "#616161",
+    color: "#4b5563",
     textDecoration: "none",
     fontWeight: 500,
+    background: "#f3f4f6",
+    padding: "6px 12px",
+    borderRadius: 20,
+    transition: "background 0.2s",
   },
   projectTag: {
     fontSize: 12,
-    color: "#9e9e9e",
-    fontWeight: 600,
+    color: "#6b7280",
+    fontWeight: 500,
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    padding: "4px 10px",
+    borderRadius: 12,
+    fontFamily: "var(--font-mono)",
   },
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    marginBottom: 24,
-    borderBottom: "1px solid #e5e7eb",
-    paddingBottom: 16,
+    marginBottom: 32,
   },
   pageTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 700,
     color: "#111827",
-    letterSpacing: "-0.5px",
+    letterSpacing: "-0.8px",
+    margin: 0,
   },
   pageSub: {
-    fontSize: 13,
-    color: "#9e9e9e",
-    marginTop: 4,
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 8,
+    margin: 0,
   },
   readOnlyBadge: {
     fontSize: 11,
@@ -988,23 +1169,28 @@ const s: Record<string, React.CSSProperties> = {
     color: "#9e9e9e",
   },
   searchInput: {
-    padding: "7px 12px",
+    padding: "8px 36px 8px 34px",
     fontSize: 13,
-    border: "1px solid #d0d0d0",
-    borderRadius: 4,
+    border: "1px solid rgba(0,0,0,0.08)",
+    borderRadius: 8,
+    width: 220,
     outline: "none",
-    width: 180,
-    background: "#ffffff",
+    background: "#f9fafb",
+    color: "#111827",
+    transition: "all 0.2s ease",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
   },
   btnPrimary: {
     padding: "8px 16px",
-    background: "#161616",
+    background: "linear-gradient(180deg, #1f2937 0%, #111827 100%)",
     color: "#ffffff",
-    border: "none",
-    borderRadius: 4,
+    border: "1px solid #030712",
+    borderRadius: 6,
     fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
+    fontWeight: 500,
+    cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255,255,255,0.1)",
+  },
   kanbanGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
@@ -1016,51 +1202,38 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
   },
   column: {
-    background: "linear-gradient(to bottom, #fcfcfc, #f4f5f7)",
-    border: "1px solid #e5e7eb",
-    borderRadius: 10,
-    padding: "16px",
-    minHeight: 450,
+    background: "transparent",
+    borderRadius: 8,
+    minHeight: "65vh",
     display: "flex",
     flexDirection: "column",
-    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025), inset 0 1px 0 rgba(255,255,255,1)",
+    transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
+    border: "2px solid transparent", // Keep space reserved for the border
   },
   columnOver: {
-    background: "#ebedf0",
-    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05), inset 0 2px 6px 0 rgba(0, 0, 0, 0.04)",
+    background: "rgba(59, 130, 246, 0.04)",
+    border: "2px dashed rgba(59, 130, 246, 0.4)",
   },
   completedColumn: {
-    background: "#ffffff",
+    background: "transparent",
   },
   colHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
-    padding: "10px 14px",
-    margin: "-16px -16px 16px -16px",
-    background: "linear-gradient(180deg, #f8f9fa 0%, #eef0f2 100%)",
-    borderBottom: "1px solid #d1d5db",
-    borderRadius: "10px 10px 0 0",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    marginBottom: 16,
+    padding: "0 4px",
   },
   colTitle: {
-    fontSize: 12,
-    fontWeight: 800,
-    color: "#4b5563",
-    letterSpacing: "0.5px",
-    textTransform: "uppercase" as const,
-    textShadow: "0 1px 0 rgba(255,255,255,0.8)",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    letterSpacing: "0.2px",
   },
   colCount: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#111827",
-    background: "#ffffff",
-    border: "1px solid #d1d5db",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-    padding: "2px 8px",
-    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#6b7280",
   },
   taskList: {
     display: "flex",
@@ -1174,11 +1347,18 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "default",
   },
   emptyCol: {
-    padding: "32px 12px",
+    padding: "40px 12px",
     textAlign: "center" as const,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 500,
     color: "#9ca3af",
+    border: "1px dashed #e5e7eb",
+    borderRadius: 10,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#fafafa",
   },
 };
 
@@ -1186,7 +1366,8 @@ const m: Record<string, React.CSSProperties> = {
   overlay: {
     position: "fixed" as const,
     inset: 0,
-    background: "rgba(0, 0, 0, 0.4)",
+    background: "rgba(0, 0, 0, 0.25)",
+    backdropFilter: "blur(4px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1195,64 +1376,71 @@ const m: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: "#ffffff",
-    border: "1px solid #f3f4f6",
-    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 16,
     width: "100%",
     maxWidth: 520,
-    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+    overflow: "visible",
   },
   header: {
-    padding: "18px 24px",
-    borderBottom: "1px solid #eeeeee",
+    padding: "24px 24px 16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
   },
   title: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 700,
     color: "#111827",
+    letterSpacing: "-0.5px",
   },
   sub: {
-    fontSize: 12,
-    color: "#9e9e9e",
+    fontSize: 13,
+    color: "#6b7280",
     marginTop: 2,
   },
   closeBtn: {
-    background: "none",
+    background: "#f3f4f6",
     border: "none",
-    fontSize: 15,
-    color: "#9e9e9e",
+    width: 28,
+    height: 28,
+    borderRadius: "50%",
+    fontSize: 14,
+    color: "#4b5563",
     cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "background 0.2s",
   },
   body: {
-    padding: "20px 24px",
+    padding: "0 24px 24px",
     display: "flex",
     flexDirection: "column",
-    gap: 14,
+    gap: 20,
   },
   section: {
     borderBottom: "1px solid #f3f4f6",
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   label: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 600,
-    color: "#9e9e9e",
-    letterSpacing: "0.5px",
-    display: "block",
+    color: "#374151",
+    marginBottom: 2,
   },
   mainTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 600,
     color: "#111827",
     marginTop: 4,
   },
   text: {
     fontSize: 13,
-    color: "#374151",
-    lineHeight: 1.4,
-    marginTop: 4,
+    color: "#4b5563",
+    lineHeight: 1.5,
+    marginTop: 6,
   },
   field: {
     display: "flex",
@@ -1260,51 +1448,69 @@ const m: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   input: {
-    padding: "8px 12px",
-    fontSize: 13,
-    border: "1px solid #d0d0d0",
-    borderRadius: 4,
+    padding: "10px 14px",
+    fontSize: 14,
+    border: "1px solid #e5e7eb",
+    borderRadius: 8,
     outline: "none",
+    background: "#f9fafb",
+    color: "#111827",
+    transition: "border 0.2s, box-shadow 0.2s",
   },
   textarea: {
-    padding: "8px 12px",
-    fontSize: 13,
-    border: "1px solid #d0d0d0",
-    borderRadius: 4,
+    padding: "10px 14px",
+    fontSize: 14,
+    border: "1px solid #e5e7eb",
+    borderRadius: 8,
     outline: "none",
+    background: "#f9fafb",
+    color: "#111827",
     resize: "none",
+    transition: "border 0.2s, box-shadow 0.2s",
   },
   select: {
-    padding: "8px 12px",
-    fontSize: 13,
-    border: "1px solid #d0d0d0",
-    borderRadius: 4,
-    background: "#ffffff",
+    padding: "10px 14px",
+    paddingRight: "36px",
+    fontSize: 14,
+    border: "1px solid #e5e7eb",
+    borderRadius: 8,
+    background: "#f9fafb url('data:image/svg+xml;utf8,<svg fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"%239ca3af\" xmlns=\"http://www.w3.org/2000/svg\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M8 9l4-4 4 4m0 6l-4 4-4-4\"></path></svg>') no-repeat right 12px center",
+    backgroundSize: "16px",
+    appearance: "none",
+    WebkitAppearance: "none",
     outline: "none",
+    color: "#111827",
+    transition: "border 0.2s, box-shadow 0.2s",
+    cursor: "pointer",
   },
   footer: {
     display: "flex",
     justifyContent: "flex-end",
-    gap: 8,
-    paddingTop: 10,
+    gap: 12,
+    paddingTop: 16,
+    borderTop: "1px solid #f3f4f6",
+    marginTop: 8,
   },
   btnPrimary: {
-    padding: "8px 16px",
-    background: "#161616",
+    padding: "10px 20px",
+    background: "linear-gradient(180deg, #1f2937 0%, #111827 100%)",
     color: "#ffffff",
-    border: "none",
-    borderRadius: 4,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
-  btnSecondary: {
-    padding: "8px 14px",
-    background: "#ffffff",
-    color: "#374151",
-    border: "1px solid #d0d0d0",
-    borderRadius: 4,
-    fontSize: 13,
+    border: "1px solid #030712",
+    borderRadius: 8,
+    fontSize: 14,
     fontWeight: 500,
     cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255,255,255,0.1)",
+  },
+  btnSecondary: {
+    padding: "10px 18px",
+    background: "#ffffff",
+    color: "#374151",
+    border: "1px solid #d1d5db",
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
 };

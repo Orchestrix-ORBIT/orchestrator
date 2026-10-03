@@ -69,7 +69,7 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <LoadingState variant="table" title="Loading Notifications & Activity…"
+      <LoadingState variant="notifications" title="Loading Notifications & Activity…"
         subtitle="Fetching real-time workspace alerts, task updates, and system mentions"
       />
     );
@@ -82,9 +82,11 @@ export default function NotificationsPage() {
     try {
       await NotificationsService.markAllRead();
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      window.dispatchEvent(new Event("notifications_updated"));
     } catch {
       // optimistic fallback — still update locally
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      window.dispatchEvent(new Event("notifications_updated"));
     } finally {
       setMarkingAll(false);
     }
@@ -95,6 +97,7 @@ export default function NotificationsPage() {
     setNotifications(prev =>
       prev.map(n => (n.id === id ? { ...n, read: !n.read } : n))
     );
+    window.dispatchEvent(new Event("notifications_updated"));
     try {
       await NotificationsService.toggleRead(id);
     } catch {
@@ -102,6 +105,7 @@ export default function NotificationsPage() {
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, read: !n.read } : n))
       );
+      window.dispatchEvent(new Event("notifications_updated"));
     }
   };
 

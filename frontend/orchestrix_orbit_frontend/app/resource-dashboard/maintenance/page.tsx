@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { ResourcesService, type Resource } from "@/lib/services/resources";
+import LoadingState from "@/components/ui/LoadingState";
 
 interface MaintenanceEvent {
   id: string;
@@ -479,7 +480,7 @@ export default function MaintenanceSchedulesPage() {
     return ev.status === filter;
   });
 
-  if (loading) return <p style={{ padding: 40, color: "#888", fontSize: 14 }}>Loading maintenance schedules…</p>;
+  if (loading) return <LoadingState variant="manager-maintenance" />;
 
   return (
     <div>

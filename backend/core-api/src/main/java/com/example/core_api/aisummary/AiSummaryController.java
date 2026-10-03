@@ -60,6 +60,15 @@ public class AiSummaryController {
         return service.updateStatus(id, request.getStatus());
     }
 
+    @PatchMapping("/{id}/action-items")
+    public AiSummaryResponse updateActionItems(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id,
+            @RequestBody UpdateAiSummaryActionItemsRequest request) {
+        requireAuthenticated(currentUser);
+        return service.updateActionItems(id, request.getActionItems());
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteSummary(

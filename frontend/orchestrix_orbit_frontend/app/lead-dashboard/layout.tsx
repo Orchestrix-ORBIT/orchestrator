@@ -12,6 +12,7 @@ export default function LeadDashboardLayout({
 }) {
   const [mounted, setMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -43,10 +44,10 @@ export default function LeadDashboardLayout({
   return (
     <div style={s.root} suppressHydrationWarning>
       {/* ── Fixed Sidebar ────────────────────────────────────────────────── */}
-      <Sidebar />
+      <Sidebar isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
 
       {/* ── Main Area ────────────────────────────────────────────────────── */}
-      <div style={s.main}>
+      <div style={{ ...s.main, marginLeft: isSidebarCollapsed ? 104 : 244 }}>
         {/* Topbar matching Researcher Dashboard */}
         <header style={s.topbar}>
           <div style={s.topbarRight}>
@@ -104,6 +105,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   main: {
     marginLeft: 244,
+    transition: "margin-left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
     flex: 1,
     display: "flex",
     flexDirection: "column",
