@@ -93,7 +93,7 @@ public class AuthService implements UserDetailsService {
 
         // Step 4: Persist the user to the current tenant's schema.
         // Hibernate knows which schema to use from TenantContext (set by TenantFilter).
-        userRepository.save(user);
+        user = userRepository.save(user);
 
         // Step 5: Generate a JWT for the newly created user.
         String token = jwtService.generateToken(user);
