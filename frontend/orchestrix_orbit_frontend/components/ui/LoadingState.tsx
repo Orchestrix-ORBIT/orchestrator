@@ -443,9 +443,9 @@ export default function LoadingState({
         {variant === "researcher-home" && (
           <>
             {/* Stat Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="card-depth" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 4, border: "none" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, marginBottom: 32 }}>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="card-depth" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 4, background: "#ffffff", borderRadius: 16, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
                   <div className="skeleton-line" style={{ width: "20%", height: 32, marginBottom: 6 }} />
                   <div className="skeleton-line" style={{ width: "40%", height: 10, marginTop: 6 }} />
                   <div className="skeleton-line" style={{ width: "60%", height: 12, marginTop: 4 }} />
@@ -454,33 +454,32 @@ export default function LoadingState({
             </div>
             
             {/* Split Columns */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
               {/* Left Column (My Tasks) */}
-              <div className="card-depth" style={{ padding: 24, border: "none" }}>
+              <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div className="skeleton-line" style={{ width: 80, height: 14 }} />
                   <div className="skeleton-line" style={{ width: 180, height: 12 }} />
                 </div>
                 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", paddingBottom: 10, borderBottom: "1px solid #f3f4f6", gap: 16 }}>
-                  {[1, 2, 3, 4, 5].map(i => (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", paddingBottom: 10, borderBottom: "1px solid #f3f4f6", gap: 16 }}>
+                  {[1, 2, 3, 4].map(i => (
                     <div key={i} className="skeleton-line" style={{ width: "60%", height: 10 }} />
                   ))}
                 </div>
                 
                 {[1, 2, 3, 4, 5].map(i => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, padding: "14px 0", borderBottom: i !== 5 ? "1px solid #f9fafb" : "none", alignItems: "center" }}>
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, padding: "14px 0", borderBottom: i !== 5 ? "1px solid #f9fafb" : "none", alignItems: "center" }}>
                     <div className="skeleton-line" style={{ width: "80%", height: 13 }} />
                     <div className="skeleton-line" style={{ width: "60%", height: 13 }} />
                     <div className="skeleton-line" style={{ width: 60, height: 20, borderRadius: 4 }} />
                     <div className="skeleton-line" style={{ width: "50%", height: 13 }} />
-                    <div className="skeleton-line" style={{ width: "40%", height: 13 }} />
                   </div>
                 ))}
               </div>
 
               {/* Right Column (Upcoming Bookings) */}
-              <div className="card-depth" style={{ padding: 24, border: "none" }}>
+              <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div className="skeleton-line" style={{ width: 120, height: 14 }} />
                   <div className="skeleton-line" style={{ width: 60, height: 12 }} />
@@ -687,46 +686,49 @@ export default function LoadingState({
 
         {/* VARIANT: RESEARCHER-AI-SUMMARIES */}
         {variant === "researcher-ai-summaries" && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) minmax(0, 2fr)", gap: 16 }}>
-            {/* List */}
-            <div style={{ display: "grid", alignContent: "start", gap: 8 }}>
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} style={{ padding: 14, background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8 }}>
-                  <div className="skeleton-line" style={{ width: "80%", height: 13, marginBottom: 8 }} />
-                  <div className="skeleton-line" style={{ width: "50%", height: 11 }} />
+          <>
+            {/* Stat Cards - 2 instead of 4 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 320px))", gap: 16, marginBottom: 32 }}>
+              {[1, 2].map((i) => (
+                <div key={i} className="card-depth" style={{ padding: "20px 22px 22px", display: "flex", flexDirection: "column", gap: 6, border: "none" }}>
+                  <div className="skeleton-line" style={{ width: "40%", height: 11 }} />
+                  <div className="skeleton-line" style={{ width: "20%", height: 32, marginTop: 4, marginBottom: 2 }} />
+                  <div className="skeleton-line" style={{ width: "60%", height: 12 }} />
                 </div>
               ))}
             </div>
             
-            {/* Detail */}
-            <article style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 10, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                 <div style={{ flex: 1 }}>
-                    <div className="skeleton-line" style={{ width: 180, height: 15, marginBottom: 8 }} />
-                    <div className="skeleton-line" style={{ width: 120, height: 11, marginBottom: 12 }} />
-                 </div>
-                 <div className="skeleton-line" style={{ width: 80, height: 26, borderRadius: 6 }} />
+            {/* Table Card */}
+            <div className="card-depth" style={{ padding: 0, border: "none", overflow: "hidden" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+                  <div className="skeleton-line" style={{ width: 140, height: 14 }} />
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <div className="skeleton-line" style={{ width: 60, height: 26, borderRadius: 4 }} />
+                  </div>
+                </div>
+                <div className="skeleton-line" style={{ width: 60, height: 14 }} />
               </div>
-              
-              <div style={{ padding: "12px 14px", background: "#f9f9f9", borderRadius: 8, borderLeft: "3px solid #4f46e5" }}>
-                 <div className="skeleton-line" style={{ width: "100%", height: 13, marginBottom: 6 }} />
-                 <div className="skeleton-line" style={{ width: "100%", height: 13, marginBottom: 6 }} />
-                 <div className="skeleton-line" style={{ width: "80%", height: 13 }} />
+              <div style={{ padding: "10px 16px", background: "#fafafa", borderTop: "1px solid #eeeeee", borderBottom: "1px solid #eeeeee", display: "grid", gridTemplateColumns: "3fr 2fr 2fr 1fr 1.5fr 60px", gap: 16 }}>
+                {[1, 2, 3, 4, 5, 6].map(j => (
+                  <div key={j} className="skeleton-line" style={{ width: ["40%", "60%", "70%", "80%", "50%", "100%"][j-1], height: 12, ...(j === 6 ? { marginLeft: "auto" } : {}) }} />
+                ))}
               </div>
-              
-              <div>
-                 <div className="skeleton-line" style={{ width: 100, height: 13, marginBottom: 8 }} />
-                 <div className="skeleton-line" style={{ width: "90%", height: 13, marginBottom: 6 }} />
-                 <div className="skeleton-line" style={{ width: "85%", height: 13 }} />
-              </div>
-              
-              <div style={{ marginTop: 8 }}>
-                 <div className="skeleton-line" style={{ width: 110, height: 13, marginBottom: 8 }} />
-                 <div className="skeleton-line" style={{ width: "70%", height: 13, marginBottom: 6 }} />
-                 <div className="skeleton-line" style={{ width: "60%", height: 13 }} />
-              </div>
-            </article>
-          </div>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} style={{ padding: "12px 16px", borderBottom: i !== 5 ? "1px solid #f3f4f6" : "none", display: "grid", gridTemplateColumns: "3fr 2fr 2fr 1fr 1.5fr 60px", gap: 16, alignItems: "center" }}>
+                  <div>
+                    <div className="skeleton-line" style={{ width: "80%", height: 14, marginBottom: 6 }} />
+                    <div className="skeleton-line" style={{ width: "40%", height: 11 }} />
+                  </div>
+                  <div className="skeleton-line" style={{ width: "60%", height: 14 }} />
+                  <div className="skeleton-line" style={{ width: "50%", height: 14 }} />
+                  <div className="skeleton-line" style={{ width: 50, height: 22, borderRadius: 12 }} />
+                  <div className="skeleton-line" style={{ width: "60%", height: 14 }} />
+                  <div className="skeleton-line" style={{ width: 24, height: 24, borderRadius: 4, marginLeft: "auto" }} />
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* VARIANT: RESEARCHER-NOTIFICATIONS */}
@@ -773,48 +775,53 @@ export default function LoadingState({
         {variant === "manager-overview" && (
           <div style={{ padding: "0" }}>
             {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-              <div className="skeleton-line" style={{ width: 220, height: 28, marginBottom: 6, borderRadius: 6 }} />
-              <div className="skeleton-line" style={{ width: 180, height: 14, borderRadius: 4 }} />
+            <div style={{ marginBottom: 32 }}>
+              <div className="skeleton-line" style={{ width: 240, height: 32, borderRadius: 6 }} />
             </div>
 
             {/* Stat Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, marginBottom: 32 }}>
               {[1, 2, 3, 4].map(i => (
-                <div key={i} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
-                  <div className="skeleton-line" style={{ width: 32, height: 32, borderRadius: 6 }} />
-                  <div className="skeleton-line" style={{ width: "50%", height: 10, marginTop: 10, borderRadius: 3 }} />
-                  <div className="skeleton-line" style={{ width: "35%", height: 12, marginTop: 6, borderRadius: 3 }} />
+                <div key={i} style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 16, padding: "24px 28px", display: "flex", flexDirection: "column", gap: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
+                  <div className="skeleton-line" style={{ width: "40%", height: 14, marginBottom: 12, borderRadius: 3 }} />
+                  <div className="skeleton-line" style={{ width: 32, height: 36, marginBottom: 10, borderRadius: 4 }} />
+                  <div className="skeleton-line" style={{ width: "60%", height: 14, borderRadius: 3 }} />
                 </div>
               ))}
             </div>
 
             {/* Recent Assets Table */}
-            <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 24 }}>
-              <div className="skeleton-line" style={{ width: 100, height: 16, marginBottom: 20, borderRadius: 4 }} />
+            <div style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 16, padding: "28px 32px", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <div>
+                  <div className="skeleton-line" style={{ width: 140, height: 20, marginBottom: 8, borderRadius: 4 }} />
+                  <div className="skeleton-line" style={{ width: 220, height: 14, borderRadius: 3 }} />
+                </div>
+                <div className="skeleton-line" style={{ width: 120, height: 36, borderRadius: 8 }} />
+              </div>
               <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <th style={{ width: "45%", paddingBottom: 10, borderBottom: "1px solid #f0f0f0", textAlign: "left" }}><div className="skeleton-line" style={{ width: 50, height: 10, borderRadius: 2 }} /></th>
-                    <th style={{ width: "15%", paddingBottom: 10, borderBottom: "1px solid #f0f0f0", textAlign: "left" }}><div className="skeleton-line" style={{ width: 40, height: 10, borderRadius: 2 }} /></th>
-                    <th style={{ width: "25%", paddingBottom: 10, borderBottom: "1px solid #f0f0f0", textAlign: "left" }}><div className="skeleton-line" style={{ width: 60, height: 10, borderRadius: 2 }} /></th>
-                    <th style={{ width: "15%", paddingBottom: 10, borderBottom: "1px solid #f0f0f0", textAlign: "left" }}><div className="skeleton-line" style={{ width: 40, height: 10, borderRadius: 2 }} /></th>
+                    <th style={{ width: "45%", paddingBottom: 16, borderBottom: "1px solid rgba(0,0,0,0.04)", textAlign: "left" }}><div className="skeleton-line" style={{ width: 50, height: 12, borderRadius: 2 }} /></th>
+                    <th style={{ width: "15%", paddingBottom: 16, borderBottom: "1px solid rgba(0,0,0,0.04)", textAlign: "left" }}><div className="skeleton-line" style={{ width: 40, height: 12, borderRadius: 2 }} /></th>
+                    <th style={{ width: "25%", paddingBottom: 16, borderBottom: "1px solid rgba(0,0,0,0.04)", textAlign: "left" }}><div className="skeleton-line" style={{ width: 60, height: 12, borderRadius: 2 }} /></th>
+                    <th style={{ width: "15%", paddingBottom: 16, borderBottom: "1px solid rgba(0,0,0,0.04)", textAlign: "left" }}><div className="skeleton-line" style={{ width: 40, height: 12, borderRadius: 2 }} /></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4, 5, 6].map(i => (
+                  {[1, 2, 3, 4, 5].map(i => (
                     <tr key={i}>
-                      <td style={{ padding: "10px 0", borderBottom: "1px solid #f8f8f8" }}>
-                        <div className="skeleton-line" style={{ width: ["80%", "70%", "85%", "75%", "90%", "65%"][i-1], height: 14, borderRadius: 4 }} />
+                      <td style={{ padding: "20px 0", borderBottom: i !== 5 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                        <div className="skeleton-line" style={{ width: ["80%", "70%", "85%", "75%", "90%"][i-1], height: 14, borderRadius: 4 }} />
                       </td>
-                      <td style={{ padding: "10px 0", borderBottom: "1px solid #f8f8f8" }}>
-                        <div className="skeleton-line" style={{ width: ["50%", "70%", "60%", "70%", "50%", "70%"][i-1], height: 14, borderRadius: 4 }} />
+                      <td style={{ padding: "20px 0", borderBottom: i !== 5 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                        <div className="skeleton-line" style={{ width: ["50%", "70%", "60%", "70%", "50%"][i-1], height: 14, borderRadius: 4 }} />
                       </td>
-                      <td style={{ padding: "10px 0", borderBottom: "1px solid #f8f8f8" }}>
-                        <div className="skeleton-line" style={{ width: ["70%", "80%", "60%", "90%", "60%", "80%"][i-1], height: 14, borderRadius: 4 }} />
+                      <td style={{ padding: "20px 0", borderBottom: i !== 5 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                        <div className="skeleton-line" style={{ width: ["70%", "80%", "60%", "90%", "60%"][i-1], height: 14, borderRadius: 4 }} />
                       </td>
-                      <td style={{ padding: "10px 0", borderBottom: "1px solid #f8f8f8" }}>
-                        <div className="skeleton-line" style={{ width: 65, height: 18, borderRadius: 4 }} />
+                      <td style={{ padding: "20px 0", borderBottom: i !== 5 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                        <div className="skeleton-line" style={{ width: 65, height: 24, borderRadius: 12 }} />
                       </td>
                     </tr>
                   ))}
@@ -828,46 +835,57 @@ export default function LoadingState({
         {variant === "manager-assets" && (
           <div style={{ padding: "0" }}>
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 }}>
               <div>
                 <div className="skeleton-line" style={{ width: 140, height: 28, marginBottom: 8, borderRadius: 6 }} />
                 <div className="skeleton-line" style={{ width: 120, height: 14, borderRadius: 4 }} />
               </div>
-              <div className="skeleton-line" style={{ width: 100, height: 38, borderRadius: 6 }} />
+              <div className="skeleton-line" style={{ width: 110, height: 38, borderRadius: 8 }} />
             </div>
 
             {/* Asset Table */}
-            <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
-              {/* Table Header */}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 100px 1fr 120px 80px 100px", gap: 0, padding: "12px 20px", borderBottom: "1px solid #f0f0f0", background: "#fafafa" }}>
-                {["100px", "50px", "70px", "60px", "60px", "60px"].map((w, idx) => (
-                  <div key={idx} className="skeleton-line" style={{ width: w, height: 10, borderRadius: 2 }} />
-                ))}
+            <div style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+                  <thead style={{ background: "#f9fafb" }}>
+                    <tr>
+                      {["35%", "15%", "20%", "10%", "10%", "10%"].map((w, idx) => (
+                        <th key={idx} style={{ width: w, padding: "16px 24px", borderBottom: "1px solid rgba(0,0,0,0.04)", textAlign: "left" }}>
+                          <div className="skeleton-line" style={{ width: [50, 40, 60, 50, 60, 50][idx], height: 12, borderRadius: 2 }} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                      <tr key={i}>
+                        <td style={{ padding: "16px 24px", borderBottom: i !== 6 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                            <div className="skeleton-line" style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0 }} />
+                            <div className="skeleton-line" style={{ width: ["70%", "60%", "75%", "65%", "80%", "55%"][i-1], height: 16, borderRadius: 4 }} />
+                          </div>
+                          <div className="skeleton-line" style={{ width: ["80%", "90%", "60%", "85%", "75%", "90%"][i-1], height: 12, borderRadius: 3, marginLeft: 18 }} />
+                        </td>
+                        <td style={{ padding: "16px 24px", borderBottom: i !== 6 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                          <div className="skeleton-line" style={{ width: ["40%", "70%", "60%", "50%", "40%", "60%"][i-1], height: 14, borderRadius: 3 }} />
+                        </td>
+                        <td style={{ padding: "16px 24px", borderBottom: i !== 6 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                          <div className="skeleton-line" style={{ width: ["80%", "60%", "90%", "70%", "50%", "80%"][i-1], height: 14, borderRadius: 3 }} />
+                        </td>
+                        <td style={{ padding: "16px 24px", borderBottom: i !== 6 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 70, height: 24, borderRadius: 12 }} />
+                        </td>
+                        <td style={{ padding: "16px 24px", borderBottom: i !== 6 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 30, height: 14, borderRadius: 3 }} />
+                        </td>
+                        <td style={{ padding: "16px 24px", borderBottom: i !== 6 ? "1px solid rgba(0,0,0,0.03)" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 60, height: 14, borderRadius: 3 }} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {/* Table Rows */}
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 100px 1fr 120px 80px 100px", gap: 0, padding: "14px 20px", borderBottom: i !== 6 ? "1px solid #f8f8f8" : "none", alignItems: "center" }}>
-                  <div style={{ paddingRight: 16 }}>
-                    <div className="skeleton-line" style={{ width: ["80%", "70%", "85%", "75%", "90%", "65%"][i-1], height: 16, borderRadius: 4, marginBottom: 6 }} />
-                    <div className="skeleton-line" style={{ width: ["60%", "90%", "50%", "80%", "70%", "90%"][i-1], height: 12, borderRadius: 3 }} />
-                  </div>
-                  <div>
-                    <div className="skeleton-line" style={{ width: ["40%", "70%", "60%", "50%", "40%", "60%"][i-1], height: 14, borderRadius: 3 }} />
-                  </div>
-                  <div>
-                    <div className="skeleton-line" style={{ width: ["80%", "60%", "90%", "70%", "50%", "80%"][i-1], height: 14, borderRadius: 3 }} />
-                  </div>
-                  <div>
-                    <div className="skeleton-line" style={{ width: 70, height: 20, borderRadius: 4 }} />
-                  </div>
-                  <div>
-                    <div className="skeleton-line" style={{ width: 30, height: 14, borderRadius: 3 }} />
-                  </div>
-                  <div>
-                    <div className="skeleton-line" style={{ width: 60, height: 14, borderRadius: 3 }} />
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -875,55 +893,85 @@ export default function LoadingState({
         {/* VARIANT: MANAGER-BOOKINGS */}
         {variant === "manager-bookings" && (
           <div style={{ padding: "0" }}>
-            {/* Header */}
-            <div style={{ marginBottom: 20 }}>
-              <div className="skeleton-line" style={{ width: 200, height: 28, marginBottom: 6, borderRadius: 6 }} />
-              <div className="skeleton-line" style={{ width: 180, height: 14, borderRadius: 4 }} />
+            {/* Header row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+              <div>
+                <div className="skeleton-line" style={{ width: 280, height: 32, marginBottom: 10, borderRadius: 6 }} />
+                <div className="skeleton-line" style={{ width: 440, height: 16, borderRadius: 4 }} />
+              </div>
             </div>
 
-            {/* Filter Tabs */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="skeleton-line" style={{ width: [70, 90, 100, 80][i-1], height: 28, borderRadius: 5 }} />
-              ))}
-            </div>
-
-            {/* Bookings List */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 18 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div style={{ flex: 1, paddingRight: 24 }}>
-                      {/* Resource Name */}
-                      <div className="skeleton-line" style={{ width: ["45%", "65%", "50%", "75%", "55%"][i-1], height: 16, marginBottom: 8, borderRadius: 4 }} />
-                      {/* User & Purpose */}
-                      <div className="skeleton-line" style={{ width: ["25%", "35%", "20%", "40%", "30%"][i-1], height: 12, marginBottom: 6, borderRadius: 3 }} />
-                      <div className="skeleton-line" style={{ width: ["35%", "45%", "30%", "50%", "40%"][i-1], height: 12, borderRadius: 3 }} />
-                    </div>
-                    {/* Status Badge */}
-                    <div className="skeleton-line" style={{ width: [75, 85, 70, 90, 80][i-1], height: 22, borderRadius: 4, flexShrink: 0 }} />
-                  </div>
-                  
-                  {/* Time Row (with mocked emoji space) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <div className="skeleton-line" style={{ width: 14, height: 14, borderRadius: "50%" }} />
-                    <div className="skeleton-line" style={{ width: ["40%", "30%", "45%", "35%", "50%"][i-1], height: 12, borderRadius: 3 }} />
-                  </div>
-
-                  {/* Location Row (with mocked emoji space) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                    <div className="skeleton-line" style={{ width: 14, height: 14, borderRadius: "50%" }} />
-                    <div className="skeleton-line" style={{ width: ["25%", "35%", "20%", "40%", "30%"][i-1], height: 12, borderRadius: 3 }} />
-                  </div>
-
-                  {/* Action Button (only on some cards) */}
-                  {i % 2 !== 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <div className="skeleton-line" style={{ width: 140, height: 28, borderRadius: 4, background: "transparent", border: "1px solid #e8e8e8" }} />
-                    </div>
-                  )}
+            {/* Stat Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+              {[1, 2, 3].map(i => (
+                <div key={i} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
+                  <div className="skeleton-line" style={{ width: 120, height: 12, marginBottom: 12, borderRadius: 3 }} />
+                  <div className="skeleton-line" style={{ width: 40, height: 32, marginBottom: 12, borderRadius: 4 }} />
+                  <div className="skeleton-line" style={{ width: 160, height: 12, borderRadius: 3 }} />
                 </div>
               ))}
+            </div>
+
+            {/* Table Card */}
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+              {/* Table Header Row */}
+              <div style={{ padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0" }}>
+                <div className="skeleton-line" style={{ width: 180, height: 16, borderRadius: 4 }} />
+                <div style={{ display: "flex", gap: 4, background: "#f8fafc", padding: 4, borderRadius: 10, border: "1px solid rgba(0,0,0,0.04)" }}>
+                  {[1, 2, 3, 4, 5].map(idx => (
+                    <div key={idx} className="skeleton-line" style={{ width: [60, 80, 90, 90, 80][idx-1], height: 32, borderRadius: 6 }} />
+                  ))}
+                </div>
+              </div>
+              <div style={{ padding: "0" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead style={{ borderBottom: "1px solid #f1f5f9" }}>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "35%" }}>
+                        <div className="skeleton-line" style={{ width: 180, height: 12, borderRadius: 3 }} />
+                      </th>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "20%" }}>
+                        <div className="skeleton-line" style={{ width: 120, height: 12, borderRadius: 3 }} />
+                      </th>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "15%" }}>
+                        <div className="skeleton-line" style={{ width: 90, height: 12, borderRadius: 3 }} />
+                      </th>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "15%" }}>
+                        <div className="skeleton-line" style={{ width: 80, height: 12, borderRadius: 3 }} />
+                      </th>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "15%" }}>
+                        <div className="skeleton-line" style={{ width: 70, height: 12, borderRadius: 3 }} />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <tr key={i}>
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 5 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: ["80%", "95%", "70%", "85%", "60%"][i-1], height: 14, marginBottom: 8, borderRadius: 3 }} />
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <div className="skeleton-line" style={{ width: 80, height: 20, borderRadius: 4 }} />
+                            <div className="skeleton-line" style={{ width: ["40%", "50%", "35%", "45%", "60%"][i-1], height: 12, borderRadius: 3 }} />
+                          </div>
+                        </td>
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 5 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 160, height: 14, borderRadius: 3 }} />
+                        </td>
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 5 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 90, height: 14, marginBottom: 8, borderRadius: 3 }} />
+                          <div className="skeleton-line" style={{ width: 70, height: 12, borderRadius: 3 }} />
+                        </td>
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 5 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 85, height: 26, borderRadius: 12 }} />
+                        </td>
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 5 ? "1px solid #f8fafc" : "none" }}>
+                           <div className="skeleton-line" style={{ width: 120, height: 32, borderRadius: 6, background: "transparent", border: "1px solid #e2e8f0" }} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -951,71 +999,68 @@ export default function LoadingState({
               ))}
             </div>
 
-            {/* Filter Bar */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "12px 20px", borderRadius: 8, border: "1px solid #e8e8e8", marginBottom: 24 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div className="skeleton-line" style={{ width: 50, height: 14, borderRadius: 3 }} />
-                {[70, 80, 80, 80].map((w, idx) => (
-                  <div key={idx} className="skeleton-line" style={{ width: w, height: 28, borderRadius: 4 }} />
-                ))}
-              </div>
-              <div className="skeleton-line" style={{ width: 90, height: 14, borderRadius: 3 }} />
-            </div>
-
             {/* Table Card */}
-            <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8 }}>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
               {/* Table Header Row */}
-              <div style={{ padding: "16px 20px", borderBottom: "1px solid #e8e8e8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div className="skeleton-line" style={{ width: 300, height: 14, borderRadius: 3 }} />
-                <div className="skeleton-line" style={{ width: 180, height: 12, borderRadius: 3 }} />
+              <div style={{ padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0" }}>
+                <div className="skeleton-line" style={{ width: 340, height: 16, borderRadius: 4 }} />
+                <div style={{ display: "flex", gap: 4, background: "#f8fafc", padding: 4, borderRadius: 10, border: "1px solid rgba(0,0,0,0.04)" }}>
+                  {[1, 2, 3, 4].map(idx => (
+                    <div key={idx} className="skeleton-line" style={{ width: [80, 80, 80, 80][idx-1], height: 32, borderRadius: 6 }} />
+                  ))}
+                </div>
               </div>
-              <div style={{ padding: 20 }}>
+              <div style={{ padding: "0" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
+                  <thead style={{ borderBottom: "1px solid #f1f5f9" }}>
                     <tr>
-                      <th style={{ textAlign: "left", paddingBottom: 16, borderBottom: "2px solid #f0f0f0", width: "25%" }}>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "25%" }}>
+                        <div className="skeleton-line" style={{ width: 150, height: 12, borderRadius: 3 }} />
+                      </th>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "15%" }}>
                         <div className="skeleton-line" style={{ width: 120, height: 12, borderRadius: 3 }} />
                       </th>
-                      <th style={{ textAlign: "left", paddingBottom: 16, borderBottom: "2px solid #f0f0f0", width: "15%" }}>
-                        <div className="skeleton-line" style={{ width: 100, height: 12, borderRadius: 3 }} />
-                      </th>
-                      <th style={{ textAlign: "left", paddingBottom: 16, borderBottom: "2px solid #f0f0f0", width: "20%" }}>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "15%" }}>
                         <div className="skeleton-line" style={{ width: 130, height: 12, borderRadius: 3 }} />
                       </th>
-                      <th style={{ textAlign: "left", paddingBottom: 16, borderBottom: "2px solid #f0f0f0", width: "25%" }}>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "20%" }}>
                         <div className="skeleton-line" style={{ width: 110, height: 12, borderRadius: 3 }} />
                       </th>
-                      <th style={{ textAlign: "left", paddingBottom: 16, borderBottom: "2px solid #f0f0f0", width: "10%" }}>
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "10%" }}>
                         <div className="skeleton-line" style={{ width: 50, height: 12, borderRadius: 3 }} />
                       </th>
-                      <th style={{ textAlign: "right", paddingBottom: 16, borderBottom: "2px solid #f0f0f0", width: "5%" }}>
-                        <div className="skeleton-line" style={{ width: 50, height: 12, borderRadius: 3, marginLeft: "auto" }} />
+                      <th style={{ textAlign: "left", padding: "16px 24px", width: "15%" }}>
+                        <div className="skeleton-line" style={{ width: 60, height: 12, borderRadius: 3 }} />
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[1, 2, 3, 4, 5].map(i => (
+                    {[1, 2, 3, 4].map(i => (
                       <tr key={i}>
-                        <td style={{ padding: "16px 0", borderBottom: "1px solid #f5f5f5" }}>
-                          <div className="skeleton-line" style={{ width: ["80%", "95%", "70%", "85%", "60%"][i-1], height: 14, marginBottom: 6, borderRadius: 3 }} />
-                          <div className="skeleton-line" style={{ width: ["40%", "50%", "35%", "45%", "30%"][i-1], height: 12, borderRadius: 3 }} />
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 4 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: ["80%", "95%", "70%", "85%"][i-1], height: 14, marginBottom: 8, borderRadius: 3 }} />
+                          <div className="skeleton-line" style={{ width: ["40%", "50%", "35%", "45%"][i-1], height: 22, borderRadius: 6 }} />
                         </td>
-                        <td style={{ padding: "16px 0", borderBottom: "1px solid #f5f5f5" }}>
-                          <div className="skeleton-line" style={{ width: 90, height: 14, marginBottom: 6, borderRadius: 3 }} />
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 4 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 90, height: 14, marginBottom: 8, borderRadius: 3 }} />
                           <div className="skeleton-line" style={{ width: 110, height: 12, borderRadius: 3 }} />
                         </td>
-                        <td style={{ padding: "16px 0", borderBottom: "1px solid #f5f5f5" }}>
-                          <div className="skeleton-line" style={{ width: ["60%", "70%", "55%", "65%", "50%"][i-1], height: 12, borderRadius: 3 }} />
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 4 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: ["60%", "70%", "55%", "65%"][i-1], height: 14, borderRadius: 3 }} />
                         </td>
-                        <td style={{ padding: "16px 0", borderBottom: "1px solid #f5f5f5" }}>
-                          <div className="skeleton-line" style={{ width: ["90%", "85%", "95%", "80%", "75%"][i-1], height: 12, marginBottom: 4, borderRadius: 3 }} />
-                          <div className="skeleton-line" style={{ width: ["60%", "70%", "50%", "55%", "40%"][i-1], height: 12, borderRadius: 3 }} />
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 4 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: ["90%", "85%", "95%", "80%"][i-1], height: 12, marginBottom: 6, borderRadius: 3 }} />
+                          <div className="skeleton-line" style={{ width: ["60%", "70%", "50%", "55%"][i-1], height: 12, borderRadius: 3 }} />
                         </td>
-                        <td style={{ padding: "16px 0", borderBottom: "1px solid #f5f5f5" }}>
-                          <div className="skeleton-line" style={{ width: 75, height: 22, borderRadius: 4 }} />
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 4 ? "1px solid #f8fafc" : "none" }}>
+                          <div className="skeleton-line" style={{ width: 75, height: 26, borderRadius: 12 }} />
                         </td>
-                        <td style={{ padding: "16px 0", borderBottom: "1px solid #f5f5f5", textAlign: "right" }}>
-                          <div className="skeleton-line" style={{ width: 65, height: 24, borderRadius: 4, marginLeft: "auto", border: "1px solid #e8e8e8", background: "transparent" }} />
+                        <td style={{ padding: "20px 24px", borderBottom: i !== 4 ? "1px solid #f8fafc" : "none" }}>
+                           <div style={{ display: "flex", gap: 8 }}>
+                              <div className="skeleton-line" style={{ width: 85, height: 32, borderRadius: 6, background: "transparent", border: "1px solid #e2e8f0" }} />
+                              <div className="skeleton-line" style={{ width: 75, height: 32, borderRadius: 6, background: "transparent", border: "1px solid #e2e8f0" }} />
+                              <div className="skeleton-line" style={{ width: 75, height: 32, borderRadius: 6, background: "transparent", border: "1px solid #e2e8f0" }} />
+                           </div>
                         </td>
                       </tr>
                     ))}
@@ -1070,12 +1115,12 @@ export default function LoadingState({
             </div>
 
             {/* Stat Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-              {[1, 2, 3, 4].map(i => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 24 }}>
+              {[1, 2].map(i => (
                 <div key={i} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 20 }}>
-                  <div className="skeleton-line" style={{ width: ["120px", "130px", "180px", "140px"][i-1], height: 12, marginBottom: 12, borderRadius: 3 }} />
+                  <div className="skeleton-line" style={{ width: ["120px", "140px"][i-1], height: 12, marginBottom: 12, borderRadius: 3 }} />
                   <div className="skeleton-line" style={{ width: 30, height: 32, marginBottom: 12, borderRadius: 4 }} />
-                  <div className="skeleton-line" style={{ width: ["140px", "160px", "170px", "150px"][i-1], height: 12, borderRadius: 3 }} />
+                  <div className="skeleton-line" style={{ width: ["140px", "150px"][i-1], height: 12, borderRadius: 3 }} />
                 </div>
               ))}
             </div>
@@ -1084,7 +1129,7 @@ export default function LoadingState({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "12px 20px", borderRadius: 8, border: "1px solid #e8e8e8", marginBottom: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div className="skeleton-line" style={{ width: 50, height: 14, borderRadius: 3 }} />
-                {[70, 80, 110, 100, 90, 80].map((w, idx) => (
+                {[70, 80, 100].map((w, idx) => (
                   <div key={idx} className="skeleton-line" style={{ width: w, height: 28, borderRadius: 4 }} />
                 ))}
               </div>

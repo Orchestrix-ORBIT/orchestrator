@@ -560,6 +560,7 @@ export default function ProjectWorkspacePage({
                       setDraggedTaskId(null);
                       setDragOverCol(null);
                     }}
+                    className="card-depth"
                     style={{
                       padding: "16px",
                       cursor: "grab",
@@ -568,9 +569,12 @@ export default function ProjectWorkspacePage({
                       flexDirection: "column",
                       gap: 12,
                       background: "#ffffff",
-                      border: "1px solid #e5e7eb",
+                      borderTop: "1px solid #e5e7eb",
+                      borderRight: "1px solid #e5e7eb",
+                      borderBottom: "1px solid #e5e7eb",
+                      borderLeft: task.status === "DONE" && !isCompletedProject ? "4px solid #8b5cf6" : "1px solid #e5e7eb",
                       borderRadius: 10,
-                      boxShadow: "0 2px 4px -1px rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02)",
+                      boxShadow: task.status === "DONE" && !isCompletedProject ? "0 4px 12px -2px rgba(139, 92, 246, 0.15)" : "0 2px 4px -1px rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -578,6 +582,11 @@ export default function ProjectWorkspacePage({
                         <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", letterSpacing: "0.2px" }} title={`Full ID: ${task.id}`}>
                           {task.id.substring(0, 5).toUpperCase()}
                         </span>
+                        {task.status === "DONE" && !isCompletedProject && (
+                          <span style={{ background: "#f3e8ff", color: "#6d28d9", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, border: "1px solid #e9d5ff" }}>
+                            Requires Review
+                          </span>
+                        )}
                         {task.isAiGenerated && (
                           <button
                             type="button"
@@ -621,28 +630,7 @@ export default function ProjectWorkspacePage({
                           <span style={s.completedBadge}>✓ Completed</span>
                         ) : (
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {task.status === "DONE" && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  requestMove(task.id, "ACCEPTED");
-                                }}
-                                style={{
-                                  padding: "4px 10px",
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  color: "#ffffff",
-                                  background: "#2e7d32",
-                                  border: "none",
-                                  borderRadius: 4,
-                                  cursor: "pointer",
-                                }}
-                                title="Accept this task"
-                              >
-                                Accept Task ✓
-                              </button>
-                            )}
+
                             <CustomStatusSelect
                               value={task.status}
                               onChange={(val) => requestMove(task.id, val)}

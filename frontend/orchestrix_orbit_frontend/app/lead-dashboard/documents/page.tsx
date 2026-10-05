@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import LoadingState from "@/components/ui/LoadingState";
 import { DocumentsService, type Document as BackendDoc } from "@/lib/services/documents";
 import { ProjectsService, type Project } from "@/lib/services/projects";
-import { getEmail } from "@/lib/auth";
+import { TeamsService, type TeamMember } from "@/lib/services/teams";
+import { getEmail, getUserId } from "@/lib/auth";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -50,6 +51,8 @@ interface DisplayDoc {
   backendCategory: string;
   date: string;
   author: string;          // email or UUID shortened
+  authorId: string;
+  allowedEditors: string[];
   status: "Drafting" | "Under Review" | "Approved" | "Archived";
   content: string;         // decrypted content
   projectName: string;
@@ -88,11 +91,177 @@ function mapBackendDoc(d: BackendDoc, projects: Project[]): DisplayDoc {
     }),
     // Use our new getAuthorDisplay for realistic names
     author:         getAuthorDisplay(d.authorId),
+    authorId:       d.authorId ?? "",
+    allowedEditors: d.allowedEditors ?? [],
     status:         "Approved",
     content:        d.contentEncrypted ?? "(No content — click Open to add content)",
     projectName:    project?.name ?? "Unknown Project",
     version:        d.version ?? 1,
   };
+}
+
+function FormProjectSelect({ projects, value, onChange, allowAll = false }: { projects: Project[], value: string, onChange: (val: string) => void, allowAll?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selectedLabel = value === "ALL" && allowAll ? "All Projects" : projects.find(p => p.id === value)?.name || (allowAll ? "All Projects" : "Select Project...");
+
+  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div style={{ position: "relative", width: "100%" }} onClick={(e) => e.stopPropagation()}>
+      <div 
+        onClick={() => setOpen(!open)}
+        style={{
+          background: "#ffffff", border: "1px solid #cbd5e1", fontSize: 14, color: "#111827",
+          padding: "12px 16px", borderRadius: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.02)", transition: "all 0.2s"
+        }}
+        onMouseOver={(e) => e.currentTarget.style.borderColor = "#94a3b8"}
+        onMouseOut={(e) => e.currentTarget.style.borderColor = "#cbd5e1"}
+      >
+        <span>{selectedLabel}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      {open && (
+        <>
+          <div style={{position: "fixed", inset: 0, zIndex: 99}} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+          <div style={{
+            position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 8, 
+            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)", zIndex: 100, minWidth: "100%",
+            maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column"
+          }}>
+            <div style={{ padding: "8px", borderBottom: "1px solid #f1f5f9", position: "sticky", top: 0, background: "#fff", zIndex: 2 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 10px", background: "#f8fafc" }}>
+                <svg style={{ color: "#9ca3af", marginRight: 8 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input 
+                  autoFocus type="text" placeholder="Search projects..." value={search} onChange={(e) => setSearch(e.target.value)}
+                  style={{ width: "100%", fontSize: 13, color: "#111827", outline: "none", border: "none", background: "transparent" }}
+                />
+              </div>
+            </div>
+            <div style={{ padding: "4px" }}>
+              {allowAll && (!search || "all projects".includes(search.toLowerCase())) && (
+                <div 
+                  onClick={(e) => { e.stopPropagation(); onChange("ALL"); setOpen(false); setSearch(""); }}
+                  style={{ padding: "10px 14px", fontSize: 13, fontWeight: value === "ALL" ? 600 : 500, color: value === "ALL" ? "#3b82f6" : "#334155", cursor: "pointer", background: value === "ALL" ? "#eff6ff" : "#fff", borderRadius: 6, transition: "background 0.1s ease", marginBottom: 2 }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = value === "ALL" ? "#eff6ff" : "#f8fafc")}
+                  onMouseOut={(e) => (e.currentTarget.style.background = value === "ALL" ? "#eff6ff" : "#fff")}
+                >
+                  All Projects
+                </div>
+              )}
+              {filteredProjects.map(p => (
+                <div 
+                  key={p.id} onClick={(e) => { e.stopPropagation(); onChange(p.id); setOpen(false); setSearch(""); }}
+                  style={{ padding: "10px 14px", fontSize: 13, fontWeight: value === p.id ? 600 : 500, color: value === p.id ? "#3b82f6" : "#334155", cursor: "pointer", background: value === p.id ? "#eff6ff" : "#fff", borderRadius: 6, transition: "background 0.1s ease", marginBottom: 2 }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = value === p.id ? "#eff6ff" : "#f8fafc")}
+                  onMouseOut={(e) => (e.currentTarget.style.background = value === p.id ? "#eff6ff" : "#fff")}
+                >
+                  {p.name}
+                </div>
+              ))}
+              {filteredProjects.length === 0 && (
+                <div style={{ padding: "12px 14px", fontSize: 13, color: "#9ca3af", textAlign: "center", fontStyle: "italic" }}>No projects found.</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FormCategorySelect({ value, onChange }: { value: string, onChange: (val: DocCategory) => void }) {
+  const [open, setOpen] = useState(false);
+  const options: DocCategory[] = ["Meeting Minutes", "Experimental Protocol", "Pre-Print Paper", "Archived Dataset", "Other"];
+  return (
+    <div style={{ position: "relative", width: "100%" }} onClick={(e) => e.stopPropagation()}>
+      <div 
+        onClick={() => setOpen(!open)}
+        style={{
+          background: "#ffffff", border: "1px solid #cbd5e1", fontSize: 14, color: "#111827",
+          padding: "12px 16px", borderRadius: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.02)", transition: "all 0.2s"
+        }}
+        onMouseOver={(e) => e.currentTarget.style.borderColor = "#94a3b8"}
+        onMouseOut={(e) => e.currentTarget.style.borderColor = "#cbd5e1"}
+      >
+        <span>{value}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      {open && (
+        <>
+          <div style={{position: "fixed", inset: 0, zIndex: 99}} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: 0, marginBottom: 4, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 8, 
+            boxShadow: "0 -10px 15px -3px rgba(0,0,0,0.1), 0 -4px 6px -2px rgba(0,0,0,0.05)", zIndex: 100, minWidth: "100%", overflow: "hidden",
+            padding: "4px"
+          }}>
+            {options.map(opt => (
+              <div 
+                key={opt} onClick={(e) => { e.stopPropagation(); onChange(opt); setOpen(false); }}
+                style={{ padding: "10px 14px", fontSize: 13, fontWeight: value === opt ? 600 : 500, color: value === opt ? "#3b82f6" : "#334155", cursor: "pointer", background: value === opt ? "#eff6ff" : "#fff", borderRadius: 6, transition: "background 0.1s ease", marginBottom: 2 }}
+                onMouseOver={(e) => (e.currentTarget.style.background = value === opt ? "#eff6ff" : "#f8fafc")}
+                onMouseOut={(e) => (e.currentTarget.style.background = value === opt ? "#eff6ff" : "#fff")}
+              >
+                {opt}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MemberMultiSelect({ members, value, onChange }: { members: TeamMember[], value: string[], onChange: (val: string[]) => void }) {
+  const [search, setSearch] = useState("");
+  const filtered = members.filter(m => {
+    const name = m.userDisplayName || m.displayName || "";
+    const email = m.userEmail || m.email || "";
+    return name.toLowerCase().includes(search.toLowerCase()) || email.toLowerCase().includes(search.toLowerCase());
+  });
+  const uniqueMembers = filtered.filter((m, i, arr) => arr.findIndex(x => x.userId === m.userId) === i);
+
+  return (
+    <div style={{ border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <input
+        type="text"
+        placeholder="Search members to grant edit access..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{ padding: "10px 12px", border: "none", borderBottom: "1px solid #e2e8f0", fontSize: 13, outline: "none", background: "#f8fafc", width: "100%", boxSizing: "border-box" }}
+      />
+      <div style={{ overflowY: "auto", padding: "8px 0", maxHeight: 220 }}>
+        {uniqueMembers.length === 0 ? (
+          <div style={{ padding: "8px 12px", fontSize: 12, color: "#9ca3af", fontStyle: "italic" }}>No members found.</div>
+        ) : uniqueMembers.map(m => {
+          const isSelected = value.includes(m.userId!);
+          return (
+            <div
+              key={m.userId}
+              onClick={() => {
+                if (isSelected) onChange(value.filter(id => id !== m.userId));
+                else onChange([...value, m.userId!]);
+              }}
+              style={{ display: "flex", alignItems: "center", padding: "10px 14px", cursor: "pointer", background: isSelected ? "#f8fafc" : "transparent", borderBottom: "1px solid #f1f5f9" }}
+              onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = "#f8fafc"; }}
+              onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+            >
+              <input type="checkbox" checked={isSelected} readOnly style={{ margin: "0 14px 0 4px", pointerEvents: "none", width: 16, height: 16, accentColor: "#0f172a" }} />
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#475569", marginRight: 12, flexShrink: 0 }}>
+                {(m.userDisplayName || m.displayName || "U").charAt(0).toUpperCase()}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: "#0f172a" }}>{m.userDisplayName || m.displayName || "Unknown User"}</span>
+                <span style={{ fontSize: 12, color: "#64748b" }}>{m.userEmail || m.email || ""}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -116,10 +285,23 @@ export default function DocumentsPage() {
   const [createProjectId, setCreateProjectId] = useState<string>("");
   const [creating, setCreating]               = useState(false);
   const [createError, setCreateError]         = useState<string | null>(null);
+  const [createAllowedEditors, setCreateAllowedEditors] = useState<string[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
 
   const [deleting, setDeleting]             = useState<string | null>(null);
+  const [docToDelete, setDocToDelete]       = useState<DisplayDoc | null>(null);
+
+  const [showEditSettingsModal, setShowEditSettingsModal] = useState<DisplayDoc | null>(null);
+  const [editSettingsTitle, setEditSettingsTitle] = useState("");
+  const [editSettingsCategory, setEditSettingsCategory] = useState<DocCategory>("Meeting Minutes");
+  const [editSettingsAllowedEditors, setEditSettingsAllowedEditors] = useState<string[]>([]);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [editSettingsError, setEditSettingsError] = useState<string | null>(null);
+
+  const [showAuthorsModal, setShowAuthorsModal] = useState<{ title: string; authors: { name: string, email: string, role: string }[] } | null>(null);
 
   const currentUserEmail = getEmail() || "lead@research.org";
+  const currentUserId = getUserId() || "";
 
   // ── Load projects + all docs on mount ───────────────────────────────────────
   useEffect(() => {
@@ -142,6 +324,14 @@ export default function DocumentsPage() {
               DocumentsService.getByProject(p.id).catch(() => [] as BackendDoc[])
             )
           );
+          const teamResults = await Promise.all(
+            uniqueProjects.map(p => 
+              p.teamId ? TeamsService.getTeamMembers(p.teamId).catch(() => []) : Promise.resolve([])
+            )
+          );
+          const flatMembers = teamResults.flat().filter(m => m.userId);
+          setMembers(flatMembers);
+
           const allDocs = results.flat().map(d => mapBackendDoc(d, uniqueProjects));
           allDocs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           setDocs(allDocs);
@@ -217,7 +407,7 @@ export default function DocumentsPage() {
 
   // ── Delete doc ───────────────────────────────────────────────────────────────
   const handleDeleteDoc = async (doc: DisplayDoc) => {
-    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
+    setDocToDelete(null);
     setDeleting(doc.id);
     try {
       await DocumentsService.delete(doc.projectId, doc.backendId);
@@ -227,6 +417,36 @@ export default function DocumentsPage() {
       alert("Delete failed: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setDeleting(null);
+    }
+  };
+
+  // ── Update settings ──────────────────────────────────────────────────────────
+  const handleUpdateSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditSettingsModal || !editSettingsTitle.trim()) return;
+    setSavingSettings(true);
+    setEditSettingsError(null);
+    try {
+      await DocumentsService.update(showEditSettingsModal.projectId, showEditSettingsModal.backendId, {
+        title: editSettingsTitle,
+        category: DISPLAY_TO_BACKEND[editSettingsCategory],
+        allowedEditors: editSettingsAllowedEditors,
+      });
+      const updatedDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      setDocs(prev => prev.map(d => d.id === showEditSettingsModal.id ? { 
+        ...d, 
+        title: editSettingsTitle, 
+        category: editSettingsCategory,
+        backendCategory: DISPLAY_TO_BACKEND[editSettingsCategory],
+        allowedEditors: editSettingsAllowedEditors,
+        date: updatedDate,
+        version: d.version + 1
+      } : d));
+      setShowEditSettingsModal(null);
+    } catch (err: unknown) {
+      setEditSettingsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -241,6 +461,7 @@ export default function DocumentsPage() {
         title:            titleInput.trim(),
         category:         DISPLAY_TO_BACKEND[categoryInput],
         contentEncrypted: contentInput || `## ${titleInput.trim()}\n\nDocument created by ${currentUserEmail}.\n`,
+        allowedEditors:   createAllowedEditors,
       });
       const project = projects.find(p => p.id === createProjectId);
       const newDoc: DisplayDoc = {
@@ -254,6 +475,8 @@ export default function DocumentsPage() {
           month: "short", day: "numeric", year: "numeric",
         }),
         author:         currentUserEmail,
+        authorId:       currentUserId,
+        allowedEditors: createAllowedEditors,
         status:         "Drafting",
         content:        created.contentEncrypted ?? contentInput,
         projectName:    project?.name ?? "Project",
@@ -263,6 +486,7 @@ export default function DocumentsPage() {
       setShowUploadModal(false);
       setTitleInput("");
       setContentInput("");
+      setCreateAllowedEditors([]);
       setCategoryInput("Meeting Minutes");
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : "Failed to create document");
@@ -413,19 +637,16 @@ export default function DocumentsPage() {
       </div>
 
       {/* ── Project Filter ───────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "12px 20px", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Filter by Project:</span>
-        <select
-          value={selectedProjectId}
-          onChange={e => handleFilterChange(e.target.value)}
-          className="select-premium"
-          style={{ padding: "8px 16px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc", outline: "none", fontWeight: 600, color: "#0f172a", minWidth: 220, cursor: "pointer", transition: "all 0.2s" }}
-        >
-          <option value="ALL">All Projects</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "16px 24px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -2px rgba(0,0,0,0.02)" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", flexShrink: 0 }}>Filter by Project:</span>
+        <div style={{ minWidth: 320, zIndex: 50 }}>
+          <FormProjectSelect
+            projects={projects}
+            value={selectedProjectId}
+            onChange={handleFilterChange}
+            allowAll
+          />
+        </div>
         {filterLoading && (
           <span style={{ fontSize: 12, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid #e0e0e0", borderTop: "2px solid #161616", display: "inline-block", animation: "spin 0.7s linear infinite" }} />
@@ -522,14 +743,67 @@ export default function DocumentsPage() {
                     </span>
                   </td>
                   <td style={s.td}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#475569" }}>
-                        {doc.author.charAt(0).toUpperCase()}
-                      </div>
-                      <span style={{ fontSize: 13, color: "#374151", whiteSpace: "nowrap", fontWeight: 500 }}>
-                        {doc.author.includes('(') ? doc.author.split('(')[0].trim() : doc.author.split('@')[0]}
-                      </span>
-                    </div>
+                    {(() => {
+                      const primary = doc.author.includes('(') ? doc.author.split('(')[0].trim() : doc.author.split('@')[0];
+                      const coAuthors = (doc.allowedEditors || []).map(id => {
+                        const m = members.find(x => x.userId === id);
+                        return (m?.userDisplayName || m?.displayName || m?.userEmail || "Researcher").split('@')[0];
+                      });
+                      const all = [primary, ...coAuthors];
+                      const display = all.slice(0, 3);
+                      const extra = all.length - 3;
+                      return (
+                        <div 
+                          style={{ display: "flex", alignItems: "center", cursor: "pointer", padding: "4px 8px", margin: "-4px -8px", borderRadius: 8, transition: "background 0.2s" }}
+                          onClick={() => {
+                            const primaryName = doc.author.includes('(') ? doc.author.split('(')[0].trim() : doc.author.split('@')[0];
+                            const primaryEmail = doc.author.includes('(') ? doc.author.split('(')[1].replace(')', '') : doc.author;
+                            const coAuthorsFull = (doc.allowedEditors || []).map(id => {
+                              const m = members.find(x => x.userId === id);
+                              return {
+                                name: m?.userDisplayName || m?.displayName || "Researcher",
+                                email: m?.userEmail || m?.email || "unknown@org.com",
+                                role: "Co-Author"
+                              };
+                            });
+                            setShowAuthorsModal({
+                              title: doc.title,
+                              authors: [
+                                { name: primaryName, email: primaryEmail, role: "Primary Author" },
+                                ...coAuthorsFull
+                              ]
+                            });
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.background = "#f1f5f9"}
+                          onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+                          title="Click to view all authors"
+                        >
+                          <div style={{ display: "flex", alignItems: "center" }}>
+                            {display.map((name, idx) => (
+                              <div key={idx} style={{
+                                width: 24, height: 24, borderRadius: "50%", background: "#e2e8f0", border: "2px solid #ffffff",
+                                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700,
+                                color: "#334155", marginLeft: idx === 0 ? 0 : -8, zIndex: 10 - idx
+                              }}>
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                            ))}
+                            {extra > 0 && (
+                              <div style={{
+                                width: 24, height: 24, borderRadius: "50%", background: "#cbd5e1", border: "2px solid #ffffff",
+                                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700,
+                                color: "#334155", marginLeft: -8, zIndex: 1
+                              }}>
+                                +{extra}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 13, color: "#3b82f6", whiteSpace: "nowrap", fontWeight: 600, marginLeft: 8 }}>
+                            {all.length > 1 ? `${all.length} Authors` : all[0]}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td style={{ ...s.td, fontSize: 12, color: "#9e9e9e" }}>{doc.date}</td>
                   <td style={{ ...s.td, textAlign: "right" as const }}>
@@ -537,14 +811,31 @@ export default function DocumentsPage() {
                       <button onClick={() => openDoc(doc)} style={s.btnOpen} className="btn-hover-light">
                         Open →
                       </button>
+                      <button 
+                        onClick={() => {
+                          setShowEditSettingsModal(doc);
+                          setEditSettingsTitle(doc.title);
+                          setEditSettingsCategory((doc.category as DocCategory) || "Meeting Minutes");
+                          setEditSettingsAllowedEditors(doc.allowedEditors || []);
+                        }} 
+                        style={{ ...s.btnOpen, padding: "6px 8px", display: "flex", alignItems: "center", color: "#6b7280" }} 
+                        className="btn-hover-light" 
+                        title="Edit Settings"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
                       <button
-                        onClick={() => handleDeleteDoc(doc)}
+                        onClick={() => setDocToDelete(doc)}
                         disabled={deleting === doc.id}
-                        style={s.btnDelete}
+                        style={{ ...s.btnDelete, padding: "6px 8px", display: "flex", alignItems: "center" }}
                         className="btn-hover-red"
                         title="Delete document"
                       >
-                        {deleting === doc.id ? "…" : "🗑"}
+                        {deleting === doc.id ? (
+                          <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #fecaca", borderTopColor: "#dc2626", animation: "spin 0.7s linear infinite", display: "inline-block" }} />
+                        ) : (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        )}
                       </button>
                     </div>
                   </td>
@@ -626,7 +917,7 @@ export default function DocumentsPage() {
       {/* ── Create Document Modal ─────────────────────────────────────────────── */}
       {showUploadModal && (
         <div style={m.overlay}>
-          <div style={m.modal}>
+          <div style={{ ...m.modal, maxWidth: 860 }}>
             <div style={m.header}>
               <div>
                 <h3 style={m.title}>Create Research Document</h3>
@@ -638,71 +929,77 @@ export default function DocumentsPage() {
               >✕</button>
             </div>
 
-            <form onSubmit={handleCreateDoc} style={m.body}>
+            <form onSubmit={handleCreateDoc} style={{ ...m.body, padding: "28px 32px 24px" }}>
               {createError && (
-                <div style={{ background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 4, padding: "10px 14px", fontSize: 13, color: "#c62828" }}>
+                <div style={{ background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 4, padding: "10px 14px", fontSize: 13, color: "#c62828", marginBottom: 20 }}>
                   {createError}
                 </div>
               )}
 
-              <div style={m.field}>
-                <label style={m.label}>DOCUMENT TITLE *</label>
-                <input
-                  required
-                  placeholder="e.g. Synthesis Protocol for Next Batch"
-                  value={titleInput}
-                  onChange={e => setTitleInput(e.target.value)}
-                  style={m.input}
-                />
+              <div style={{ display: "flex", gap: 32, flexDirection: "row", alignItems: "stretch" }}>
+                {/* Left Column */}
+                <div style={{ flex: 1.4, display: "flex", flexDirection: "column", gap: 24 }}>
+                  <div style={m.field}>
+                    <label style={m.label}>DOCUMENT TITLE *</label>
+                    <input
+                      required
+                      placeholder="e.g. Synthesis Protocol for Next Batch"
+                      value={titleInput}
+                      onChange={e => setTitleInput(e.target.value)}
+                      style={m.input}
+                    />
+                  </div>
+                  
+                  <div style={{ ...m.field, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <label style={m.label}>INITIAL CONTENT / OUTLINE</label>
+                    <textarea
+                      placeholder="Document outline, notes, or agenda..."
+                      value={contentInput}
+                      onChange={e => setContentInput(e.target.value)}
+                      style={{ ...m.textarea, flex: 1, minHeight: 220, resize: "none" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 24 }}>
+                  <div style={m.field}>
+                    <label style={m.label}>TARGET PROJECT *</label>
+                    <FormProjectSelect
+                      projects={projects}
+                      value={createProjectId}
+                      onChange={setCreateProjectId}
+                    />
+                  </div>
+
+                  <div style={m.field}>
+                    <label style={m.label}>DOCUMENT CATEGORY</label>
+                    <FormCategorySelect
+                      value={categoryInput}
+                      onChange={(val) => setCategoryInput(val)}
+                    />
+                  </div>
+
+                  <div style={{ ...m.field, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <label style={m.label}>GRANT EDIT ACCESS (OPTIONAL)</label>
+                    <div style={{ flex: 1 }}>
+                      <MemberMultiSelect
+                        members={members.filter(m => {
+                          const project = projects.find(p => p.id === createProjectId);
+                          return m.teamId === project?.teamId &&
+                                 m.userId !== currentUserId &&
+                                 m.role !== "LEAD" &&
+                                 !m.userId?.startsWith("dac");
+                        })}
+                        value={createAllowedEditors}
+                        onChange={setCreateAllowedEditors}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div style={m.field}>
-                <label style={m.label}>TARGET PROJECT *</label>
-                <select
-                  value={createProjectId}
-                  onChange={e => setCreateProjectId(e.target.value)}
-                  style={m.select}
-                  className="select-premium"
-                  required
-                >
-                  {projects.length === 0 ? (
-                    <option value="">No projects available</option>
-                  ) : (
-                    projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div style={m.field}>
-                <label style={m.label}>DOCUMENT CATEGORY</label>
-                <select
-                  value={categoryInput}
-                  onChange={e => setCategoryInput(e.target.value as DocCategory)}
-                  style={m.select}
-                  className="select-premium"
-                >
-                  <option value="Meeting Minutes">Meeting Minutes</option>
-                  <option value="Experimental Protocol">Experimental Protocol</option>
-                  <option value="Pre-Print Paper">Pre-Print Paper</option>
-                  <option value="Archived Dataset">Archived Dataset</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div style={m.field}>
-                <label style={m.label}>INITIAL CONTENT / OUTLINE</label>
-                <textarea
-                  rows={4}
-                  placeholder="Document outline, notes, or agenda..."
-                  value={contentInput}
-                  onChange={e => setContentInput(e.target.value)}
-                  style={m.textarea}
-                />
-              </div>
-
-              <div style={m.footer}>
+              <div style={{ ...m.footer, marginTop: 32, paddingTop: 20, borderTop: "1px solid #f1f5f9" }}>
                 <button
                   type="button"
                   onClick={() => { setShowUploadModal(false); setCreateError(null); }}
@@ -721,6 +1018,152 @@ export default function DocumentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Settings Modal ──────────────────────────────────────────────── */}
+      {showEditSettingsModal && (
+        <div style={m.overlay} onClick={() => setShowEditSettingsModal(null)}>
+          <div style={m.modalLarge} onClick={(e) => e.stopPropagation()}>
+            <div style={m.header}>
+              <div>
+                <h2 style={m.title}>Edit Document Settings</h2>
+                <p style={m.sub}>Update the title, category, or access control.</p>
+              </div>
+              <button onClick={() => setShowEditSettingsModal(null)} style={m.closeBtn}>×</button>
+            </div>
+            
+            {editSettingsError && (
+              <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "12px 20px", borderBottom: "1px solid #fecaca", fontSize: 13 }}>
+                {editSettingsError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateSettings} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+              <div style={m.bodyLarge}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, height: "100%" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    <div style={m.field}>
+                      <label style={m.label}>DOCUMENT TITLE *</label>
+                      <input 
+                        required autoFocus type="text" style={m.input} 
+                        value={editSettingsTitle} onChange={(e) => setEditSettingsTitle(e.target.value)} 
+                      />
+                    </div>
+                    <div style={m.field}>
+                      <label style={m.label}>TARGET PROJECT (READ-ONLY)</label>
+                      <input 
+                        disabled type="text" style={{...m.input, background: "#f8fafc", color: "#64748b"}} 
+                        value={showEditSettingsModal.projectName}
+                      />
+                    </div>
+                    <div style={m.field}>
+                      <label style={m.label}>DOCUMENT CATEGORY</label>
+                      <FormCategorySelect
+                        value={editSettingsCategory}
+                        onChange={(val) => setEditSettingsCategory(val)}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ ...m.field, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <label style={m.label}>MANAGE EDIT ACCESS</label>
+                    <div style={{ flex: 1 }}>
+                      <MemberMultiSelect
+                        members={members.filter(m => {
+                          const project = projects.find(p => p.id === showEditSettingsModal.projectId);
+                          return m.teamId === project?.teamId &&
+                                 m.userId !== currentUserId &&
+                                 m.role !== "LEAD" &&
+                                 !m.userId?.startsWith("dac");
+                        })}
+                        value={editSettingsAllowedEditors}
+                        onChange={setEditSettingsAllowedEditors}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ ...m.footer, marginTop: 32, paddingTop: 20, borderTop: "1px solid #f1f5f9" }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowEditSettingsModal(null); setEditSettingsError(null); }}
+                  style={m.btnSecondary}
+                  className="btn-hover-light"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSettings || !editSettingsTitle.trim()}
+                  style={{ ...m.btnPrimary, opacity: (savingSettings || !editSettingsTitle.trim()) ? 0.6 : 1 }}
+                  className="btn-hover-dark"
+                >
+                  {savingSettings ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Authors Modal ──────────────────────────────────────────────── */}
+      {showAuthorsModal && (
+        <div style={m.overlay} onClick={() => setShowAuthorsModal(null)}>
+          <div style={{ ...m.modal, maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div style={m.header}>
+              <div>
+                <h2 style={m.title}>Document Authors</h2>
+                <p style={m.sub}>{showAuthorsModal.title}</p>
+              </div>
+              <button onClick={() => setShowAuthorsModal(null)} style={m.closeBtn}>×</button>
+            </div>
+            <div style={{ padding: "20px 0", maxHeight: 400, overflowY: "auto" }}>
+              {showAuthorsModal.authors.map((author, idx) => (
+                <div key={idx} style={{ display: "flex", alignItems: "center", padding: "12px 32px", borderBottom: idx === showAuthorsModal.authors.length - 1 ? "none" : "1px solid #f1f5f9" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#f8fafc", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#475569", marginRight: 16, flexShrink: 0 }}>
+                    {author.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{author.name}</div>
+                    <div style={{ fontSize: 13, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{author.email}</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: author.role === "Primary Author" ? "#4f46e5" : "#64748b", background: author.role === "Primary Author" ? "#e0e7ff" : "#f1f5f9", padding: "4px 8px", borderRadius: 12, flexShrink: 0, marginLeft: 12 }}>
+                    {author.role}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={m.footer}>
+              <button onClick={() => setShowAuthorsModal(null)} style={m.btnSecondary} className="btn-hover-light">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ─────────────────────────────────────────── */}
+      {docToDelete && (
+        <div style={m.overlay} onClick={() => setDocToDelete(null)}>
+          <div style={{ ...m.modal, maxWidth: 420, padding: 32, textAlign: "center" as const, position: "relative" }} onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setDocToDelete(null)} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 20, transition: "color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.color = "#475569"} onMouseOut={(e) => e.currentTarget.style.color = "#94a3b8"}>×</button>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px auto" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 12 }}>Delete Document</h2>
+            <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.5, margin: "0 0 32px 0" }}>
+              Are you sure you want to delete <strong>"{docToDelete.title}"</strong>? This action cannot be undone and will permanently remove the document.
+            </p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setDocToDelete(null)} style={{ flex: 1, padding: "12px", borderRadius: 8, background: "#f1f5f9", color: "#475569", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = "#e2e8f0"} onMouseOut={(e) => e.currentTarget.style.background = "#f1f5f9"}>
+                Cancel
+              </button>
+              <button onClick={() => handleDeleteDoc(docToDelete)} style={{ flex: 1, padding: "12px", borderRadius: 8, background: "#ef4444", color: "#ffffff", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = "#dc2626"} onMouseOut={(e) => e.currentTarget.style.background = "#ef4444"}>
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

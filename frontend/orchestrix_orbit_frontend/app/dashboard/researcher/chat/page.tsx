@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import LoadingState from "@/components/ui/LoadingState";
 import { useWebSocketChat } from "@/lib/useWebSocketChat";
 import { getEmail, getTenantSlug, getUserId } from "@/lib/auth";
 import { summarizeMessages, SummaryResult } from "@/lib/services/summarize";
 import { saveAiSummary } from "@/lib/services/aiSummaries";
 import { SavedSummariesService } from "@/lib/services/savedSummaries";
-import LoadingState from "@/components/ui/LoadingState";
 
 interface Channel {
   id: string;
@@ -20,7 +20,9 @@ interface Channel {
 function getInitials(name: string): string {
   if (!name) return "U";
   const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
   return name.slice(0, 2).toUpperCase();
 }
 
@@ -33,6 +35,9 @@ function getSenderColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
+/** Convert email/raw string to readable display name.
+ *  1. Roster lookup by email. 2. Humanise local part.
+ */
 function getSenderDisplayName(m: { senderId?: string; senderName?: string }, members: any[]): string {
   const raw = m.senderName || "";
   if (!raw) return "Unknown";
@@ -69,8 +74,7 @@ export default function ResearcherChatPage() {
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [assignedProjectMembers, setAssignedProjectMembers] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
-
-  // AI Summarization state
+  // ── AI Summarization state ───────────────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [summarizing, setSummarizing] = useState(false);
@@ -79,8 +83,16 @@ export default function ResearcherChatPage() {
   const [summaryProject, setSummaryProject] = useState<{ id: string; name: string } | null>(null);
   const [savingSummary, setSavingSummary] = useState(false);
   const [summarySaved, setSummarySaved] = useState(false);
+  const [aiTriggered, setAiTriggered] = useState(false);
+  // Per-user task suggestions (lead only, FR-AI-07/08)
+  interface SuggestedTask { senderName: string; senderId?: string; title: string; description: string; priority: string; rejected: boolean; }
+  const [suggestedTasks, setSuggestedTasks] = useState<SuggestedTask[]>([]);
+  const [createdTaskTitles, setCreatedTaskTitles] = useState<Set<string>>(new Set());
+  const [approvingTask, setApprovingTask] = useState<string | null>(null); // senderName being approved
+  const [openAssigneeDropdownId, setOpenAssigneeDropdownId] = useState<string | null>(null);
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
 
-  // Industry Standard Chat state
+  // ── Industry Standard Chat state ──────────────────────────────────────────
   const [replyingTo, setReplyingTo] = useState<{ id: string; senderName: string; content: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -88,6 +100,7 @@ export default function ResearcherChatPage() {
   const [editingText, setEditingText] = useState("");
   const [editedContents, setEditedContents] = useState<Record<string, string>>({});
   const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({});
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [activeActionMsgId, setActiveActionMsgId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -100,7 +113,14 @@ export default function ResearcherChatPage() {
     setReactions((prev) => {
       const msgReactions = prev[msgId] || {};
       const currentCount = msgReactions[emoji] || 0;
-      return { ...prev, [msgId]: { ...msgReactions, [emoji]: currentCount > 0 ? 0 : 1 } };
+      const nextCount = currentCount > 0 ? 0 : 1;
+      return {
+        ...prev,
+        [msgId]: {
+          ...msgReactions,
+          [emoji]: nextCount,
+        },
+      };
     });
   };
 
@@ -129,20 +149,25 @@ export default function ResearcherChatPage() {
     showToast("Copied to clipboard!");
   };
 
-  // Close action toolbar on clicking anywhere else
+  // Close action toolbar on clicking anywhere else on screen
   useEffect(() => {
     if (!activeActionMsgId) return;
-    const handleOutsideClick = () => setActiveActionMsgId(null);
+    const handleOutsideClick = () => {
+      setActiveActionMsgId(null);
+    };
     window.addEventListener("click", handleOutsideClick);
-    return () => window.removeEventListener("click", handleOutsideClick);
+    return () => {
+      window.removeEventListener("click", handleOutsideClick);
+    };
   }, [activeActionMsgId]);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const currentUserEmail = getEmail() || "Researcher";
   const currentUserId = getUserId() || "";
 
-  // Derive friendly display name for the current user (resolved after teamMembers load)
   const currentDisplayName = React.useMemo(() => {
     return getSenderDisplayName({ senderName: currentUserEmail }, teamMembers);
   }, [currentUserEmail, teamMembers]);
@@ -153,6 +178,7 @@ export default function ResearcherChatPage() {
     return currentMember?.userId || currentMember?.id;
   }, [currentUserId, currentUserEmail, teamMembers]);
 
+  // Load real projects and team members from database API
   useEffect(() => {
     Promise.all([
       ProjectsService.getAll()
@@ -163,17 +189,20 @@ export default function ResearcherChatPage() {
               id: data[0].id,
               projectId: data[0].id,
               teamId: data[0].teamId,
-              name: `#${data[0].name.toLowerCase().replace(/\s+/g, "-")}`,
+              name: data[0].name.toLowerCase().replace(/\s+/g, "-"),
               project: data[0].name,
             });
           }
         })
         .catch((err) => console.warn("Could not fetch projects:", err)),
+
       TeamsService.getAllMembers()
         .then((data) => setTeamMembers(data))
         .catch((err) => console.warn("Could not fetch team members:", err)),
     ]).finally(() => setLoading(false));
   }, []);
+
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
   useEffect(() => {
     if (!selectedChannel) {
@@ -184,36 +213,48 @@ export default function ResearcherChatPage() {
     const localAssignedIds: string[] = assignmentsMap[selectedChannel.projectId] || [];
 
     if (selectedChannel.teamId) {
+      setIsLoadingMembers(true);
       TeamsService.getTeamMembers(selectedChannel.teamId)
         .then(members => {
-          const backendIds = members.map((m: any) => m.userId || m.id);
-          const allIds = Array.from(new Set([...backendIds, ...localAssignedIds]));
-          setAssignedProjectMembers(teamMembers.filter(m => allIds.includes(m.id || m.userId)));
+          setAssignedProjectMembers(members);
         })
         .catch(() => {
-          setAssignedProjectMembers(teamMembers.filter(m => localAssignedIds.includes(m.id || m.userId)));
+          setAssignedProjectMembers([]);
+        })
+        .finally(() => {
+          setIsLoadingMembers(false);
         });
     } else {
-      setAssignedProjectMembers(teamMembers.filter(m => localAssignedIds.includes(m.id || m.userId)));
+      setAssignedProjectMembers([]);
     }
   }, [selectedChannel, teamMembers]);
 
   const activeProjectId = selectedChannel ? selectedChannel.projectId : "";
-  const { messages: liveMessages, isConnected, isLoadingHistory, isLoadingMore, hasMore, sendMessage, loadMoreMessages } =
-    useWebSocketChat(activeProjectId, 15);
+  const {
+    messages: liveMessages,
+    isConnected,
+    isLoadingHistory,
+    isLoadingMore,
+    hasMore,
+    sendMessage,
+    loadMoreMessages,
+  } = useWebSocketChat(activeProjectId, 15);
 
   const messagesBoxRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
 
+  // Auto-scroll to bottom when channel changes or new message arrives
   useEffect(() => {
     if (!isLoadingHistory && messagesBoxRef.current && !isLoadingMore && prevScrollHeightRef.current === 0) {
       messagesBoxRef.current.scrollTop = messagesBoxRef.current.scrollHeight;
     }
   }, [liveMessages.length, isLoadingHistory, selectedChannel?.id]);
 
+  // Restore scroll position after loading older messages via reverse pagination
   useEffect(() => {
     if (messagesBoxRef.current && prevScrollHeightRef.current > 0) {
-      const heightDiff = messagesBoxRef.current.scrollHeight - prevScrollHeightRef.current;
+      const newScrollHeight = messagesBoxRef.current.scrollHeight;
+      const heightDiff = newScrollHeight - prevScrollHeightRef.current;
       messagesBoxRef.current.scrollTop = heightDiff;
       prevScrollHeightRef.current = 0;
     }
@@ -237,14 +278,6 @@ export default function ResearcherChatPage() {
     setReplyingTo(null);
   };
 
-  const handleTriggerAiEngine = () => {
-    setSelectionMode((prev) => !prev);
-    setSelectedIds(new Set());
-    setSummaryResult(null);
-    setSummaryError(null);
-    setSummarySaved(false);
-  };
-
   // Safe clipboard helper — falls back to execCommand for HTTP contexts
   const copyToClipboard = (text: string) => {
     if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
@@ -266,6 +299,15 @@ export default function ResearcherChatPage() {
     document.body.removeChild(el);
   };
 
+  const handleTriggerAiEngine = () => {
+    setSelectionMode((prev) => !prev);
+    setSelectedIds(new Set());
+    setSummaryResult(null);
+    setSummaryError(null);
+    setSummarySaved(false);
+    setAiTriggered(false);
+  };
+
   const handleSelectAll = () => {
     const allIds = new Set(filteredMessages.map((m) => m.id));
     setSelectedIds(allIds);
@@ -281,19 +323,60 @@ export default function ResearcherChatPage() {
 
   const handleSummarize = async () => {
     if (selectedIds.size === 0) return;
-    const selected = liveMessages
-      .filter((m) => selectedIds.has(m.id))
-      .map((m) => ({ senderName: m.senderName || "Researcher", content: m.content, createdAt: m.createdAt }));
+    // Capture the selected messages
+    const selectedMessages = liveMessages.filter((m) => selectedIds.has(m.id));
+    const selected = selectedMessages.map((m) => ({ 
+      senderName: m.senderName || "Lead", 
+      senderId: m.senderId || "",
+      content: m.content, 
+      createdAt: m.createdAt 
+    }));
+    
+    // Unique senders mapping to their user IDs for accurate task assignment
+    const senderMap = new Map<string, string>();
+    selectedMessages.forEach((m) => {
+      const name = m.senderName || "Researcher";
+      if (!senderMap.has(name)) {
+        senderMap.set(name, m.senderId || "");
+      }
+    });
+    const uniqueSenders = Array.from(senderMap.keys());
     setSummarizing(true);
     setSummaryError(null);
     setSummaryResult(null);
     setSummarySaved(false);
+    setSuggestedTasks([]);
+    setCreatedTaskTitles(new Set());
     try {
       const result = await summarizeMessages(selected, activeProjectId, getTenantSlug() || "myorg");
       setSummaryResult(result);
       setSummaryProject({ id: activeProjectId, name: selectedChannel?.project || "Chat" });
       setSelectionMode(false);
       setSelectedIds(new Set());
+
+      // Build suggested tasks strictly from the AI's extracted_tasks response
+      if (result.extracted_tasks && result.extracted_tasks.length > 0) {
+        const tasks: SuggestedTask[] = result.extracted_tasks.map((taskData) => ({
+          senderName: taskData.assignee_name,
+          senderId: taskData.assignee_id || undefined,
+          title: taskData.title,
+          description: taskData.description || `Extracted from chat summary in #${selectedChannel?.project || "project"}.`,
+          priority: "MEDIUM",
+          rejected: false,
+        }));
+        setSuggestedTasks(tasks);
+      } else if (result.action_items && result.action_items.length > 0 && uniqueSenders.length > 0) {
+        // Fallback to legacy behavior if AI didn't return extracted_tasks
+        const tasks: SuggestedTask[] = uniqueSenders.map((sender, idx) => ({
+          senderName: sender,
+          senderId: senderMap.get(sender) || undefined,
+          title: result.action_items[idx % result.action_items.length],
+          description: `Extracted from chat summary in #${selectedChannel?.project || "project"}.`,
+          priority: "MEDIUM",
+          rejected: false,
+        }));
+        setSuggestedTasks(tasks);
+      }
     } catch (err: any) {
       setSummaryError(err.message ?? "Summarization failed.");
     } finally {
@@ -306,26 +389,18 @@ export default function ResearcherChatPage() {
     setSavingSummary(true);
     setSummaryError(null);
     try {
-      const currentProj = projects.find((p) => p.id === summaryProject.id);
+      const currentProj = projects.find((p: any) => p.id === summaryProject.id);
       const topic = summaryResult.summary.length > 70 ? summaryResult.summary.slice(0, 67) + "..." : summaryResult.summary;
-      let serializedActionItems: string[] = [];
-      if (summaryResult.extracted_tasks && summaryResult.extracted_tasks.length > 0) {
-        serializedActionItems = summaryResult.extracted_tasks.map((t: any) => JSON.stringify({
+      
+      const serializedActionItems = suggestedTasks
+        .filter(t => !t.rejected && !createdTaskTitles.has(t.senderName))
+        .map(t => JSON.stringify({
           title: t.title,
-          description: t.description || "",
-          priority: "MEDIUM",
-          assigneeName: t.assignee_name || "Unassigned",
-          assigneeId: t.assignee_id || "",
+          description: t.description,
+          priority: t.priority,
+          assigneeName: t.senderName,
+          assigneeId: t.senderId,
         }));
-      } else {
-        serializedActionItems = (summaryResult.action_items || []).map((a: string) => JSON.stringify({
-          title: a,
-          description: "",
-          priority: "MEDIUM",
-          assigneeName: "Unassigned",
-          assigneeId: "",
-        }));
-      }
 
       await saveAiSummary({
         projectId: summaryProject.id,
@@ -337,16 +412,54 @@ export default function ResearcherChatPage() {
         deadlineSuggestions: [],
         confidence: 100,
         model: "LangChain Context Engine",
-        status: "Archived",
+        status: "Pending Approval",
         createdBy: currentUserEmail,
         messageCount: summaryResult.message_count,
       });
       setSummarySaved(true);
-      showToast("✓ Summary saved successfully!");
+      showToast("✓ Added to AI Summaries for review!");
     } catch (err) {
       setSummaryError(err instanceof Error ? err.message : "Could not save summary.");
     } finally {
       setSavingSummary(false);
+    }
+  };
+
+  const handleUpdateSuggestedTask = (senderName: string, field: "title" | "description" | "priority", value: string) => {
+    setSuggestedTasks((prev) => prev.map((t) => t.senderName === senderName ? { ...t, [field]: value } : t));
+  };
+
+  const handleRejectTask = (senderName: string) => {
+    setSuggestedTasks((prev) => prev.map((t) => t.senderName === senderName ? { ...t, rejected: true } : t));
+  };
+
+  const handleApproveTask = async (task: SuggestedTask) => {
+    if (!summaryProject || approvingTask) return;
+    setApprovingTask(task.senderName);
+    try {
+      const { TasksService } = await import("@/lib/services/tasks");
+      
+      let finalAssigneeId = task.senderId;
+      if (!finalAssigneeId) {
+        // Fallback: Find assignee by name in teamMembers
+        const member = teamMembers.find((m: any) =>
+          (m.displayName || m.userDisplayName || m.name || "").toLowerCase() === task.senderName.toLowerCase()
+        );
+        finalAssigneeId = member?.id || member?.userId;
+      }
+
+      await TasksService.create(summaryProject.id, {
+        title: task.title,
+        description: task.description,
+        priority: task.priority as any,
+        assigneeId: finalAssigneeId || undefined,
+      });
+      setCreatedTaskTitles((prev) => new Set(prev).add(task.senderName));
+      showToast(`✓ Task created for ${task.senderName}!`);
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : "Failed to create task.");
+    } finally {
+      setApprovingTask(null);
     }
   };
 
@@ -355,7 +468,7 @@ export default function ResearcherChatPage() {
     senderId: m.senderId,
     senderName: m.senderName || "Researcher",
     content: m.content,
-    createdAt: m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now",
+    createdAt: m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
     replyToId: m.replyToId,
     replyToSender: m.replyToSender,
     replyToContent: m.replyToContent,
@@ -365,48 +478,312 @@ export default function ResearcherChatPage() {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     const content = (editedContents[m.id] || m.content).toLowerCase();
-    return content.includes(q) || m.senderName.toLowerCase().includes(q);
+    const sender = m.senderName.toLowerCase();
+    return content.includes(q) || sender.includes(q);
   });
 
   const channelList: Channel[] = projects.map((p) => ({
     id: p.id,
     projectId: p.id,
     teamId: p.teamId,
-    name: `#${p.name.toLowerCase().replace(/\s+/g, "-")}`,
+    name: p.name.toLowerCase().replace(/\s+/g, "-"),
     project: p.name,
   }));
 
 
-  if (!mounted) return <div suppressHydrationWarning />;
+  if (!mounted) {
+    return <div suppressHydrationWarning />;
+  }
 
-  if (loading) return <LoadingState variant="researcher-chat" title="Loading Channels & Chat..." subtitle="Connecting to WebSocket STOMP broker" />;
+  if (loading) {
+    return <LoadingState variant="researcher-chat" title="Workspace Chat" />;
+  }
 
   return (
-    <div style={{ position: "relative", flex: 1, width: "100%", display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }} suppressHydrationWarning>
-      {/* Page Header */}
+    <div style={{ position: "relative", flex: 1, width: "100%", display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", paddingRight: 20, paddingBottom: 20 }} suppressHydrationWarning>
+      <style>{`
+        .chat-search-input {
+          padding: 6px 12px 6px 28px;
+          font-size: 12px;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          outline: none;
+          width: 160px;
+          background: #f8fafc;
+          color: #0f172a;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .chat-search-input:hover {
+          background: #ffffff;
+          border-color: #cbd5e1;
+        }
+        .chat-search-input:focus {
+          background: #ffffff;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          width: 220px;
+        }
+        .stomp-pill {
+          font-size: 11px;
+          font-weight: 600;
+          color: #475569;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          padding: 5px 12px;
+          border-radius: 16px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.2s ease;
+          cursor: default;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .stomp-pill:hover {
+          background: #f8fafc;
+          border-color: #cbd5e1;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        .chat-action-btn {
+          padding: 6px 14px;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #0f172a;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+          transition: all 0.2s ease;
+        }
+        .chat-action-btn:hover {
+          background: #f8fafc;
+          border-color: #cbd5e1;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+          transform: translateY(-1px);
+        }
+        .chat-action-btn.active-selection {
+          background: #161616;
+          color: #ffffff;
+          border: 1px solid #161616;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .chat-action-btn.active-selection:hover {
+          background: #2a2a2a;
+          transform: translateY(-1px);
+        }
+        
+        /* New AI Summarization UI Styles */
+        .selection-bar-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+          font-weight: 500;
+          color: #475569;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .selection-bar-btn:hover {
+          background: #ffffff;
+          border-color: #cbd5e1;
+          color: #0f172a;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        .selection-summarize-btn {
+          padding: 6px 16px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #ffffff;
+          background: #0f172a;
+          border: 1px solid #0f172a;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .selection-summarize-btn:hover:not(:disabled) {
+          background: #1e293b;
+          border-color: #1e293b;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .selection-summarize-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .summary-modal {
+          background: rgba(255, 255, 255, 0.98);
+          backdrop-filter: blur(12px);
+          border-radius: 16px;
+          width: 100%;
+          max-width: 640px;
+          max-height: 85vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 24px 48px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.5) inset;
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(10px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes slideUpBar {
+          from { opacity: 0; transform: translate(-50%, 20px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        .suggested-task-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 16px;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+        .suggested-task-card:hover {
+          border-color: #94a3b8;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+          transform: translateY(-2px);
+        }
+        
+        .task-input {
+          width: 100%;
+          padding: 8px 12px;
+          font-size: 13px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          color: #0f172a;
+          transition: all 0.2s ease;
+          outline: none;
+        }
+        .task-input:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          background: #ffffff;
+        }
+        
+        .task-textarea {
+          width: 100%;
+          padding: 8px 12px;
+          font-size: 13px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          color: #334155;
+          transition: all 0.2s ease;
+          outline: none;
+          resize: vertical;
+          min-height: 60px;
+          font-family: inherit;
+        }
+        .task-textarea:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          background: #ffffff;
+        }
+        
+        .task-select {
+          width: 120px;
+          padding: 8px 12px;
+          font-size: 12px;
+          font-weight: 500;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          color: #0f172a;
+          transition: all 0.2s ease;
+          outline: none;
+          cursor: pointer;
+          appearance: none;
+          background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2214%22%20height%3D%2214%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+          background-repeat: no-repeat;
+          background-position: right 8px center;
+          padding-right: 28px;
+        }
+        .task-select:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          background-color: #ffffff;
+        }
+        .task-select:hover {
+          border-color: #cbd5e1;
+        }
+        
+        .task-action-btn {
+          padding: 8px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: 1px solid transparent;
+        }
+        .task-action-btn.approve {
+          background: linear-gradient(135deg, #2563eb, #4f46e5);
+          color: #ffffff;
+          box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+        .task-action-btn.approve:hover {
+          background: linear-gradient(135deg, #1d4ed8, #4338ca);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+        }
+        .task-action-btn.reject {
+          background: #ffffff;
+          color: #64748b;
+          border-color: #e2e8f0;
+        }
+        .task-action-btn.reject:hover {
+          background: #f1f5f9;
+          color: #ef4444;
+          border-color: #fca5a5;
+        }
+      `}</style>
+      {/* ── Page Header ────────────────────────────────────────────────────── */}
       <div style={s.headerRow}>
-        <h1 style={s.pageTitle}>Project Chat</h1>
+        <h1 style={s.pageTitle}>Workspace Chat</h1>
       </div>
 
-      {/* Split Chat Panel */}
+      {/* ── Split Chat Panel ────────────────────────────────────────────────── */}
       <div style={s.chatLayout}>
         {/* Left: Channels List */}
         <div style={s.channelsCard}>
           <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #eeeeee" }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.6px", textTransform: "uppercase" }}>PROJECT CHANNELS</span>
           </div>
+
           <div style={s.channelList}>
             {channelList.length === 0 ? (
-              <div style={{ padding: "30px 16px", textAlign: "center", color: "#9e9e9e", fontSize: 12 }}>No active project channels</div>
+              <div style={{ padding: "30px 16px", textAlign: "center", color: "#9e9e9e", fontSize: 12 }}>
+                No active project channels
+              </div>
             ) : (
               channelList.map((ch) => {
                 const active = selectedChannel?.id === ch.id;
                 return (
-                  <div key={ch.id} onClick={() => setSelectedChannel(ch)} style={active ? s.channelItemActive : s.channelItem}>
+                  <div
+                    key={ch.id}
+                    onClick={() => setSelectedChannel(ch)}
+                    style={active ? s.channelItemActive : s.channelItem}
+                  >
                     <div style={s.channelTop}>
-                      <span style={active ? s.chNameActive : s.chName}>{ch.name}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? "#2563eb" : "#94a3b8"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+                        <span style={active ? s.chNameActive : s.chName}>{ch.name}</span>
+                      </span>
                     </div>
-                    <span style={s.chProject}>{ch.project}</span>
+                    <span style={{ ...s.chProject, marginLeft: 20 }}>{ch.project}</span>
                   </div>
                 );
               })
@@ -414,45 +791,54 @@ export default function ResearcherChatPage() {
           </div>
         </div>
 
-        {/* Right: Active Chat Conversation */}
+        {/* Right: Active Chat Conversation Box */}
         <div style={s.conversationCard}>
           {selectedChannel ? (
             <>
               {/* Conversation Header */}
               <div style={s.convHeader}>
                 <div>
-                  <h3 style={s.convTitle}>{selectedChannel.name}</h3>
+                  <h3 style={{ ...s.convTitle, display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+                    {selectedChannel.name}
+                  </h3>
                   <p style={s.convSub}>
-                    {selectedChannel.project} • {assignedProjectMembers.length > 0
-                      ? assignedProjectMembers.map(m => m.displayName || m.email).join(", ")
-                      : "No assigned project members"}
+                    {selectedChannel.project} • {isLoadingMembers ? (
+                      <span className="animate-pulse" style={{ display: 'inline-block', width: '120px', height: '10px', background: '#e2e8f0', borderRadius: '4px', marginLeft: '4px' }}></span>
+                    ) : (
+                      assignedProjectMembers.length > 0 ? assignedProjectMembers.map(m => m.displayName || m.email).join(", ") : "No assigned project members"
+                    )}
                   </p>
                 </div>
+
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {/* Search */}
                   <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                     <input
                       type="text"
                       placeholder="Search messages..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ padding: "5px 12px 5px 26px", fontSize: 12, borderRadius: 14, border: "1px solid #e2e8f0", outline: "none", width: 150, background: "#f8fafc", color: "#0f172a" }}
+                      className="chat-search-input"
                     />
                     <span style={{ position: "absolute", left: 8, fontSize: 11, color: "#94a3b8" }}>🔍</span>
                     {searchQuery && (
-                      <button type="button" onClick={() => setSearchQuery("")} style={{ position: "absolute", right: 6, background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 10 }}>✕</button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        style={{ position: "absolute", right: 6, background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 10 }}
+                      >
+                        ✕
+                      </button>
                     )}
                   </div>
-                  {/* Live indicator */}
-                  <div style={s.lockPill}>
-                    <span style={{ fontSize: 8, color: isConnected ? "#2e7d32" : "#ed6c02" }}>●</span>{" "}
-                    {isConnected ? "STOMP WebSocket Live" : "Connecting..."}
+                  <div className="stomp-pill">
+                    <span style={{ fontSize: 8, color: isConnected ? "#22c55e" : "#f59e0b" }}>●</span>{" "}
+                    {isConnected ? "Live Sync" : "Connecting..."}
                   </div>
-                  {/* Summarize */}
-                  <button
+                  <button 
                     id="btn-summarize-ai"
                     onClick={handleTriggerAiEngine}
-                    style={selectionMode ? { ...s.summarizeBtn, background: "#161616", color: "#fff", borderColor: "#161616" } : s.summarizeBtn}
+                    className={`chat-action-btn ${selectionMode ? 'active-selection' : ''}`}
                     title="Select messages to summarize with AI"
                   >
                     {selectionMode ? "✕ Cancel Selection" : (summarizing ? "Summarizing..." : "⚡ Summarize with AI")}
@@ -463,13 +849,31 @@ export default function ResearcherChatPage() {
               {/* Messages Stream */}
               <div ref={messagesBoxRef} onScroll={handleMessagesScroll} style={s.messagesBox}>
                 {isLoadingHistory ? (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 260, padding: 40 }}>
-                    <div style={{ width: 32, height: 32, border: "3px solid #e5e7eb", borderTop: "3px solid #161616", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: 12 }} />
-                    <p style={{ fontSize: 13, color: "#111827", fontWeight: 600, margin: 0 }}>Loading {selectedChannel.name} messages…</p>
-                    <p style={{ fontSize: 11, color: "#6b7280", margin: 0, marginTop: 2 }}>Fetching conversation history from database</p>
+                  <div className="animate-pulse" style={{ display: "flex", flexDirection: "column", gap: 24, padding: "10px 0" }}>
+                    <div style={{ alignSelf: "flex-start", width: "60%" }}>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f1f5f9" }} />
+                        <div style={{ width: 100, height: 12, background: "#f1f5f9", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ width: "100%", height: 50, background: "#f1f5f9", borderRadius: "16px 16px 16px 2px", marginLeft: 42 }} />
+                    </div>
+                    <div style={{ alignSelf: "flex-end", width: "40%" }}>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8, justifyContent: "flex-end" }}>
+                        <div style={{ width: 60, height: 12, background: "#e2e8f0", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ width: "100%", height: 40, background: "#e2e8f0", borderRadius: "16px 16px 2px 16px" }} />
+                    </div>
+                    <div style={{ alignSelf: "flex-start", width: "70%" }}>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f1f5f9" }} />
+                        <div style={{ width: 140, height: 12, background: "#f1f5f9", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ width: "100%", height: 70, background: "#f1f5f9", borderRadius: "16px 16px 16px 2px", marginLeft: 42 }} />
+                    </div>
                   </div>
                 ) : (
                   <>
+                    {/* Reverse Pagination Top Indicator */}
                     {isLoadingMore && (
                       <div style={{ textAlign: "center", padding: "8px 0", color: "#616161", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                         <div style={{ width: 14, height: 14, border: "2px solid #ccc", borderTop: "2px solid #161616", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -480,13 +884,19 @@ export default function ResearcherChatPage() {
                       <div style={{ textAlign: "center", padding: "4px 0 8px" }}>
                         <button
                           type="button"
-                          onClick={() => { if (messagesBoxRef.current) prevScrollHeightRef.current = messagesBoxRef.current.scrollHeight; loadMoreMessages(); }}
+                          onClick={() => {
+                            if (messagesBoxRef.current) {
+                              prevScrollHeightRef.current = messagesBoxRef.current.scrollHeight;
+                            }
+                            loadMoreMessages();
+                          }}
                           style={{ fontSize: 11, fontWeight: 600, color: "#4f46e5", background: "#f0f4ff", border: "1px solid #c7d2fe", padding: "4px 12px", borderRadius: 12, cursor: "pointer" }}
                         >
                           ↑ Load older messages
                         </button>
                       </div>
                     )}
+
                     {filteredMessages.length === 0 ? (
                       <div style={{ textAlign: "center", padding: "40px 20px", color: "#9e9e9e", fontSize: 13 }}>
                         {searchQuery ? `🔍 No messages found matching "${searchQuery}"` : `💬 No messages in ${selectedChannel.name} yet.`}
@@ -512,23 +922,51 @@ export default function ResearcherChatPage() {
                         return (
                           <div
                             key={m.id}
-                            onDoubleClick={(e) => { e.stopPropagation(); if (typeof window !== "undefined" && window.getSelection) window.getSelection()?.removeAllRanges(); setActiveActionMsgId((prev) => (prev === m.id ? null : m.id)); }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              if (typeof window !== "undefined" && window.getSelection) {
+                                window.getSelection()?.removeAllRanges();
+                              }
+                              setActiveActionMsgId((prev) => (prev === m.id ? null : m.id));
+                            }}
                             style={{
-                              position: "relative", display: "flex", justifyContent: isMe ? "flex-end" : "flex-start",
-                              alignItems: "flex-end", width: "100%", marginTop: 6, marginBottom: 2,
-                              paddingTop: selectionMode ? 4 : 0, paddingBottom: selectionMode ? 4 : 0,
-                              paddingLeft: selectionMode ? 4 : 0, paddingRight: selectionMode ? 4 : (isMe ? 4 : 0),
-                              borderRadius: selectionMode ? 8 : 0,
-                              background: selectionMode && isSelected ? "#f0f4ff" : "transparent",
+                              position: "relative",
+                              display: "flex",
+                              justifyContent: isMe ? "flex-end" : "flex-start",
+                              alignItems: "flex-end",
+                              width: "100%",
+                              marginTop: 2,
+                              marginBottom: 2,
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                              paddingLeft: 4,
+                              paddingRight: 4,
+                              borderRadius: 8,
+                              background: selectionMode && isSelected ? "#f8fafc" : "transparent",
+                              border: selectionMode && isSelected ? "1px solid #cbd5e1" : "1px solid transparent",
                               cursor: selectionMode ? "pointer" : "default",
+                              transition: "background 0.15s ease, border 0.15s ease",
                             }}
                             onClick={selectionMode ? () => handleToggleMessageSelect(m.id) : undefined}
                           >
-                            {/* Double-Click Quick Actions */}
+                            {/* Double-Click Quick Actions Bar */}
                             {activeActionMsgId === m.id && !isDeleted && !selectionMode && (
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                style={{ position: "absolute", top: -26, [isMe ? "right" : "left"]: isMe ? 8 : 40, background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 18, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 30 }}
+                                style={{
+                                  position: "absolute",
+                                  top: -26,
+                                  [isMe ? "right" : "left"]: isMe ? 8 : 40,
+                                  background: "#ffffff",
+                                  border: "1px solid #cbd5e1",
+                                  borderRadius: 18,
+                                  padding: "2px 8px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                                  zIndex: 30,
+                                }}
                               >
                                 <button title="Reply" type="button" onClick={(e) => { e.stopPropagation(); setActiveActionMsgId(null); setReplyingTo({ id: m.id, senderName: isMe ? "You" : m.senderName, content: displayContent }); }} style={s.actionBtn}>💬</button>
                                 <button title="Thumbs Up" type="button" onClick={(e) => { e.stopPropagation(); handleToggleReaction(m.id, "👍"); }} style={s.actionBtn}>👍</button>
@@ -540,15 +978,29 @@ export default function ResearcherChatPage() {
                               </div>
                             )}
 
-                            {selectionMode && <input type="checkbox" checked={isSelected} readOnly style={{ marginRight: 8, accentColor: "#4f46e5", alignSelf: "center" }} />}
-
-                            {/* Other-user Avatar */}
+                            {selectionMode && (
+                              <input type="checkbox" checked={isSelected} readOnly style={{ marginRight: 8, accentColor: "#4f46e5", alignSelf: "center" }} />
+                            )}
                             {!isMe && (
-                              <div style={{ width: 32, height: 32, borderRadius: "50%", background: senderColor, color: "#ffffff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 8, flexShrink: 0, marginBottom: 2, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                              <div style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "50%",
+                                background: senderColor,
+                                color: "#ffffff",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginRight: 8,
+                                flexShrink: 0,
+                                marginBottom: 2,
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                              }}>
                                 {getInitials(displaySender)}
                               </div>
                             )}
-
                             <div style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", maxWidth: "68%" }}>
                               <div style={isMe ? s.bubbleMe : s.bubbleThem}>
                                 <div style={s.msgHeader}>
@@ -562,33 +1014,71 @@ export default function ResearcherChatPage() {
 
                                 {/* Quoted Reply Snippet */}
                                 {m.replyToContent && !isDeleted && (
-                                  <div style={{ padding: "4px 8px", marginBottom: 6, borderRadius: 6, background: isMe ? "rgba(255,255,255,0.15)" : "#f1f5f9", borderLeft: `3px solid ${isMe ? "#ffffff" : "#2563eb"}`, fontSize: 11 }}>
-                                    <strong style={{ color: isMe ? "#dbeafe" : "#2563eb", display: "block" }}>{m.replyToSender || "Message"}</strong>
-                                    <span style={{ color: isMe ? "#f1f5f9" : "#475569", fontStyle: "italic" }}>{m.replyToContent}</span>
+                                  <div style={{
+                                    padding: "4px 8px",
+                                    marginBottom: 6,
+                                    borderRadius: 6,
+                                    background: isMe ? "rgba(255,255,255,0.15)" : "#f1f5f9",
+                                    borderLeft: `3px solid ${isMe ? "#ffffff" : "#2563eb"}`,
+                                    fontSize: 11,
+                                  }}>
+                                    <strong style={{ color: isMe ? "#dbeafe" : "#2563eb", display: "block" }}>
+                                      {m.replyToSender || "Message"}
+                                    </strong>
+                                    <span style={{ color: isMe ? "#f1f5f9" : "#475569", fontStyle: "italic" }}>
+                                      {m.replyToContent}
+                                    </span>
                                   </div>
                                 )}
 
                                 {isDeleted ? (
-                                  <p style={{ fontSize: 12, fontStyle: "italic", color: isMe ? "#e2e8f0" : "#94a3b8", margin: 0 }}>🚫 This message was deleted</p>
+                                  <p style={{ fontSize: 12, fontStyle: "italic", color: isMe ? "#e2e8f0" : "#94a3b8", margin: 0 }}>
+                                    🚫 This message was deleted
+                                  </p>
                                 ) : isEditing ? (
                                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                                    <input type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} style={{ padding: "4px 8px", fontSize: 12, borderRadius: 4, border: "1px solid #ccc", color: "#111827" }} />
+                                    <input
+                                      type="text"
+                                      value={editingText}
+                                      onChange={(e) => setEditingText(e.target.value)}
+                                      style={{
+                                        padding: "4px 8px",
+                                        fontSize: 12,
+                                        borderRadius: 4,
+                                        border: "1px solid #ccc",
+                                        color: "#111827",
+                                      }}
+                                    />
                                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                                       <button type="button" onClick={() => setEditingId(null)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "none", border: "1px solid #ccc", cursor: "pointer", color: isMe ? "#fff" : "#161616" }}>Cancel</button>
                                       <button type="button" onClick={() => handleSaveEdit(m.id)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#161616", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
                                     </div>
                                   </div>
                                 ) : (
-                                  <p style={{ fontSize: 13, lineHeight: 1.45, margin: 0, color: isMe ? "#f8fafc" : "#0f172a", wordBreak: "break-word" }}>{displayContent}</p>
+                                  <p style={{ fontSize: 13, lineHeight: 1.45, margin: 0, color: isMe ? "#f8fafc" : "#0f172a", wordBreak: "break-word" }}>
+                                    {displayContent}
+                                  </p>
                                 )}
                               </div>
 
-                              {/* Emoji Reactions */}
-                              {Object.entries(msgReactions).some(([, count]) => count > 0) && !isDeleted && (
+                              {/* Emoji Reactions Badges */}
+                              {Object.entries(msgReactions).some(([_, count]) => count > 0) && !isDeleted && (
                                 <div style={{ display: "flex", gap: 4, marginTop: 3 }}>
                                   {Object.entries(msgReactions).map(([emoji, count]) =>
                                     count > 0 ? (
-                                      <span key={emoji} onClick={() => handleToggleReaction(m.id, emoji)} style={{ fontSize: 11, background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 12, padding: "1px 6px", cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
+                                      <span
+                                        key={emoji}
+                                        onClick={() => handleToggleReaction(m.id, emoji)}
+                                        style={{
+                                          fontSize: 11,
+                                          background: "#ffffff",
+                                          border: "1px solid #cbd5e1",
+                                          borderRadius: 12,
+                                          padding: "1px 6px",
+                                          cursor: "pointer",
+                                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                        }}
+                                      >
                                         {emoji} {count}
                                       </span>
                                     ) : null
@@ -599,14 +1089,23 @@ export default function ResearcherChatPage() {
                           </div>
                         );
                       })
-                    )}
-                  </>
                 )}
-              </div>
+              </>
+            )}
+          </div>
 
-              {/* Reply Preview Banner */}
+              {/* Quoted Reply Preview Banner */}
               {replyingTo && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", background: "#e0e7ff", borderTop: "1px solid #bfdbfe", borderLeft: "4px solid #2563eb", fontSize: 12 }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 16px",
+                  background: "#e0e7ff",
+                  borderTop: "1px solid #bfdbfe",
+                  borderLeft: "4px solid #2563eb",
+                  fontSize: 12,
+                }}>
                   <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     <strong style={{ color: "#1d4ed8", marginRight: 6 }}>Replying to {replyingTo.senderName}:</strong>
                     <span style={{ color: "#475569", fontStyle: "italic" }}>"{replyingTo.content}"</span>
@@ -615,91 +1114,139 @@ export default function ResearcherChatPage() {
                 </div>
               )}
 
-              {/* Message Input */}
+              {/* Message Input Box */}
               <form onSubmit={handleSendMessage} style={s.inputRow}>
                 <input
-                  id="input-message"
                   type="text"
-                  placeholder={replyingTo ? `Replying to ${replyingTo.senderName}...` : `Message ${selectedChannel.name}...`}
+                  placeholder={replyingTo ? `Replying to ${replyingTo.senderName}...` : `Message #${selectedChannel.name}...`}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   style={s.msgInput}
                 />
-                <button id="btn-send" type="submit" style={s.btnSend}>Send</button>
+                <button type="submit" disabled={!inputText.trim() || !isConnected} style={{ ...s.btnSend, opacity: inputText.trim() && isConnected ? 1 : 0.6 }}>
+                  Send
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
               </form>
             </>
           ) : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 40, textAlign: "center", color: "#9e9e9e" }}>
               <span style={{ fontSize: 36, marginBottom: 12 }}>📁</span>
               <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", marginBottom: 6 }}>No Project Selected</h3>
-              <p style={{ fontSize: 13, maxWidth: 320, marginBottom: 16 }}>You'll see chat channels here once you're assigned to a project.</p>
-              <Link href="/dashboard/researcher/projects" style={{ background: "#161616", color: "#ffffff", padding: "8px 16px", borderRadius: 4, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>View My Projects</Link>
+              <p style={{ fontSize: 13, maxWidth: 320, marginBottom: 16 }}>Create a project in your workspace to enable real-time WebSocket chat rooms.</p>
+              <Link href="/lead-dashboard/projects" style={{ background: "#161616", color: "#ffffff", padding: "8px 16px", borderRadius: 4, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Create Your First Project</Link>
             </div>
           )}
         </div>
       </div>
 
-      {/* Floating selection toolbar */}
+      {/* ── Floating selection toolbar ─────────────────────────────────────── */}
       {selectionMode && (
         <div style={s.selectionToolbar}>
-          <span style={s.selectionCount}>{selectedIds.size} message{selectedIds.size > 1 ? "s" : ""} selected</span>
-          <button style={s.selectionClearBtn} onClick={() => setSelectedIds(new Set())}>Clear</button>
-          <button style={s.selectionClearBtn} onClick={handleSelectAll}>Select All</button>
-          <button id="btn-run-summarize" style={{ ...s.selectionSummarizeBtn, opacity: selectedIds.size === 0 ? 0.5 : 1 }} onClick={handleSummarize} disabled={summarizing || selectedIds.size === 0}>
-            {summarizing ? "Summarizing..." : `Summarize ${selectedIds.size > 0 ? `(${selectedIds.size})` : ""} →`}
-          </button>
+          <span style={s.selectionCount}>{selectedIds.size} message{selectedIds.size !== 1 ? "s" : ""} selected</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="selection-bar-btn" onClick={() => setSelectedIds(new Set())}>Clear</button>
+            <button className="selection-bar-btn" onClick={handleSelectAll}>Select All</button>
+            <button id="btn-run-summarize" className="selection-summarize-btn" onClick={handleSummarize} disabled={summarizing || selectedIds.size === 0}>
+              {summarizing ? "Summarizing..." : `Summarize ${selectedIds.size > 0 ? `(${selectedIds.size})` : ""} →`}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Summary Error Banner */}
-      {summaryError && (
+      {/* ── Summary Error Banner ───────────────────────────────────────────── */}
+      {summaryError && !summaryResult && (
         <div style={s.errorBanner}>
           ⚠️ {summaryError}
           <button style={s.errorClose} onClick={() => setSummaryError(null)}>✕</button>
         </div>
       )}
 
-      {/* Summary Modal */}
+      {/* ── Summary Modal ──────────────────────────────────────────────────── */}
       {summaryResult && (
-        <div style={s.modalOverlay} onClick={() => setSummaryResult(null)}>
-          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={s.modalOverlay} onClick={() => setOpenAssigneeDropdownId(null)}>
+          <div className="summary-modal" onClick={(e) => { e.stopPropagation(); setOpenAssigneeDropdownId(null); }}>
+
             <div style={s.modalHeader}>
-              <div style={s.modalTitle}>📄 AI Summary</div>
-              <div style={s.modalMeta}>{summaryResult.message_count} messages · {summaryResult.strategy}</div>
-              <button style={s.modalClose} onClick={() => setSummaryResult(null)}>✕</button>
+              <div style={{...s.modalTitle, display: "flex", alignItems: "center", gap: "8px"}}>
+                <span style={{
+                  background: "linear-gradient(135deg, #8b5cf6, #3b82f6)", 
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  fontWeight: 800
+                }}>✨ AI Generated Summary</span>
+              </div>
+              <div style={s.modalMeta}>{summaryResult.message_count} messages analyzed</div>
+              <button style={s.modalClose} onClick={() => { setSummaryResult(null); setSuggestedTasks([]); }}>✕</button>
             </div>
+            
             <div style={s.modalBody}>
-              <p style={s.summaryText}>{summaryResult.summary}</p>
+              <div style={s.modalSection}>
+                <div style={s.modalSectionTitle}>Executive Summary</div>
+                <p style={s.summaryText}>{summaryResult.summary}</p>
+              </div>
+
               {summaryResult.key_points.length > 0 && (
                 <div style={s.modalSection}>
-                  <div style={s.modalSectionTitle}>🔑 Key Points</div>
-                  <ul style={s.modalList}>{summaryResult.key_points.map((kp, i) => <li key={i} style={s.modalListItem}>{kp}</li>)}</ul>
+                  <div style={s.modalSectionTitle}>🔑 Key Takeaways</div>
+                  <ul style={s.modalList}>
+                    {summaryResult.key_points.map((kp, i) => <li key={i} style={s.modalListItem}>{kp}</li>)}
+                  </ul>
                 </div>
               )}
-              {summaryResult.action_items.length > 0 && (
-                <div style={s.modalSection}>
-                  <div style={s.modalSectionTitle}>✅ Action Items</div>
-                  <ul style={s.modalList}>{summaryResult.action_items.map((ai, i) => <li key={i} style={s.modalListItem}>{ai}</li>)}</ul>
-                </div>
-              )}
+
+              {/* Suggested Tasks removed for Researcher */}
             </div>
-            {summaryError && <p role="alert" style={{ color: "#b42318", padding: "0 20px" }}>{summaryError}</p>}
+
+            {summaryError && <p role="alert" style={{ color: "#b42318", padding: "0 24px", fontSize: 12, margin: 0 }}>{summaryError}</p>}
+            
             <div style={s.modalFooter}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button style={s.modalCopyBtn} onClick={handleSaveSummary} disabled={savingSummary || summarySaved}>
-                  {summarySaved ? "✓ Added to summaries" : savingSummary ? "Adding..." : "Add to summaries"}
+              <div style={{ display: "flex", gap: 10, width: "100%", justifyContent: "flex-end" }}>
+                <button className="selection-bar-btn" style={{ marginRight: "auto" }} onClick={() => copyToClipboard(`Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`)}>
+                  📋 Copy Text
                 </button>
-                <button style={s.modalCopyBtn} onClick={() => copyToClipboard(`Summary:\n${summaryResult.summary}\n\nKey Points:\n${summaryResult.key_points.map(k => `• ${k}`).join("\n")}\n\nAction Items:\n${summaryResult.action_items.map(a => `• ${a}`).join("\n")}`)}>📋 Copy</button>
-                <button style={s.modalCloseBtn} onClick={() => setSummaryResult(null)}>Close</button>
+                <button className="selection-bar-btn" onClick={() => { setSummaryResult(null); setSuggestedTasks([]); }}>
+                  Close
+                </button>
+                {summarySaved && (
+                  <Link href="/dashboard/researcher/ai-summaries" className="selection-bar-btn" style={{ textDecoration: "none", display: "flex", alignItems: "center" }}>
+                    Review in AI Summaries →
+                  </Link>
+                )}
+                <button
+                  className="selection-summarize-btn"
+                  onClick={handleSaveSummary}
+                  disabled={savingSummary || summarySaved}
+                  style={summarySaved ? { background: "#15803d", borderColor: "#15803d" } : {}}
+                >
+                  {savingSummary ? "Saving..." : summarySaved ? "✓ Saved to Database" : "💾 Save Summary"}
+                </button>
               </div>
             </div>
+
           </div>
         </div>
       )}
 
-      {/* Toast */}
+
+      {/* ── Toast Notification Banner ────────────────────────────────────── */}
       {toastMessage && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: "#161616", color: "#ffffff", padding: "10px 18px", borderRadius: 12, fontSize: 12, fontWeight: 600, boxShadow: "0 4px 14px rgba(0,0,0,0.18)", zIndex: 9999, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          background: "#161616",
+          color: "#ffffff",
+          padding: "10px 18px",
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 600,
+          boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}>
           <span>✓ {toastMessage}</span>
         </div>
       )}
@@ -708,51 +1255,336 @@ export default function ResearcherChatPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexShrink: 0 },
-  pageTitle: { fontSize: 24, fontWeight: 700, color: "#111827", letterSpacing: "-0.5px", margin: 0 },
-  chatLayout: { display: "flex", gap: 20, alignItems: "stretch", flex: 1, minHeight: 0, overflow: "hidden" },
-  channelsCard: { width: 320, minWidth: 300, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, display: "flex", flexDirection: "column", overflow: "hidden" },
-  channelList: { display: "flex", flexDirection: "column", flex: 1, overflowY: "auto" },
-  channelItem: { padding: "14px 18px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4, background: "#ffffff", transition: "background 0.1s" },
-  channelItemActive: { padding: "14px 18px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4, background: "#fafafa", borderLeft: "3px solid #161616" },
-  channelTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  chName: { fontSize: 13, fontWeight: 600, color: "#111827" },
-  chNameActive: { fontSize: 13, fontWeight: 700, color: "#111827" },
-  chProject: { fontSize: 11, color: "#9e9e9e" },
-  conversationCard: { flex: 1, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, display: "flex", flexDirection: "column", overflow: "hidden" },
-  convHeader: { padding: "16px 24px", borderBottom: "1px solid #eeeeee", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fafafa" },
-  convTitle: { fontSize: 15, fontWeight: 700, color: "#111827" },
-  convSub: { fontSize: 12, color: "#9e9e9e", marginTop: 2 },
-  lockPill: { fontSize: 11, fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "4px 10px", borderRadius: 14, display: "flex", alignItems: "center", gap: 6 },
-  messagesBox: { flex: 1, padding: "28px 24px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, background: "#fafafa" },
-  bubbleMe: { background: "#2563eb", color: "#ffffff", padding: "10px 16px", borderRadius: "16px 16px 2px 16px", minWidth: 160, maxWidth: "68%", boxShadow: "0 2px 6px rgba(37,99,235,0.25)", boxSizing: "border-box" as const, userSelect: "none" as const },
-  bubbleThem: { background: "#ffffff", color: "#0f172a", padding: "10px 16px", borderRadius: "16px 16px 16px 2px", border: "1px solid #e2e8f0", minWidth: 160, maxWidth: "68%", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", boxSizing: "border-box" as const, userSelect: "none" as const },
-  msgHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 4 },
-  inputRow: { display: "flex", gap: 10, padding: "12px 18px", borderTop: "1px solid #e2e8f0", background: "#ffffff" },
-  msgInput: { flex: 1, padding: "10px 16px", fontSize: 13, border: "1px solid #e2e8f0", borderRadius: 20, outline: "none", background: "#f8fafc", color: "#0f172a", transition: "border 0.15s ease" },
-  btnSend: { padding: "10px 22px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", transition: "transform 0.1s ease, background 0.15s ease" },
-  summarizeBtn: { padding: "6px 14px", background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, fontSize: 12, fontWeight: 600, color: "#1c1c1c", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.15s ease" },
-  selectionToolbar: { position: "fixed" as const, bottom: 80, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, background: "#161616", color: "#fff", borderRadius: 40, padding: "10px 20px", boxShadow: "0 4px 24px rgba(0,0,0,0.25)", zIndex: 200 },
-  selectionCount: { fontSize: 13, fontWeight: 500, color: "#e0e0e0" },
-  selectionClearBtn: { padding: "5px 12px", fontSize: 12, fontWeight: 500, color: "#ccc", background: "transparent", border: "1px solid #444", borderRadius: 20, cursor: "pointer" },
-  selectionSummarizeBtn: { padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#111827", background: "#ffffff", border: "none", borderRadius: 20, cursor: "pointer" },
-  errorBanner: { position: "fixed" as const, bottom: 140, left: "50%", transform: "translateX(-50%)", background: "#fff3e0", border: "1px solid #ffb74d", borderRadius: 12, padding: "10px 16px", fontSize: 13, color: "#e65100", display: "flex", alignItems: "center", gap: 10, zIndex: 200, maxWidth: 500 },
-  errorClose: { background: "none", border: "none", cursor: "pointer", color: "#e65100", fontWeight: 700, fontSize: 14 },
-  modalOverlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 24 },
-  modalBox: { background: "#ffffff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "80vh", display: "flex", flexDirection: "column" as const, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" },
-  modalHeader: { display: "flex", alignItems: "center", gap: 10, padding: "18px 20px 14px", borderBottom: "1px solid #f3f4f6" },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#111827", flex: 1 },
-  modalMeta: { fontSize: 11, color: "#9e9e9e", background: "#f5f5f5", borderRadius: 20, padding: "2px 10px" },
-  modalClose: { background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#9e9e9e", padding: 4 },
-  modalBody: { flex: 1, overflowY: "auto" as const, padding: "20px 24px", display: "flex", flexDirection: "column" as const, gap: 20 },
-  summaryText: { fontSize: 14, lineHeight: 1.7, color: "#374151", margin: 0, padding: "14px 16px", background: "#f9f9f9", borderRadius: 12, borderLeft: "3px solid #4f46e5" },
-  modalSection: { display: "flex", flexDirection: "column" as const, gap: 8 },
-  modalSectionTitle: { fontSize: 13, fontWeight: 700, color: "#111827", letterSpacing: "0.2px" },
-  modalList: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column" as const, gap: 6 },
-  modalListItem: { fontSize: 13, lineHeight: 1.6, color: "#374151" },
-  modalFooter: { display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 20px", borderTop: "1px solid #f0f0f0" },
-  modalCopyBtn: { padding: "7px 16px", fontSize: 13, fontWeight: 500, color: "#4f46e5", background: "#f0f0ff", border: "1px solid #c7d2fe", borderRadius: 12, cursor: "pointer" },
-  modalCloseBtn: { padding: "7px 16px", fontSize: 13, fontWeight: 600, color: "#fff", background: "#161616", border: "none", borderRadius: 12, cursor: "pointer" },
-  actionBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "2px 4px", borderRadius: 4 },
-  actionBtnDanger: { background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "2px 4px", borderRadius: 4, color: "#ef4444" },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    flexShrink: 0,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: "#0f172a",
+    letterSpacing: "-0.5px",
+    margin: 0,
+  },
+  pageSub: {
+    fontSize: 12,
+    color: "#6b7280",
+    margin: 0,
+    marginTop: 2,
+  },
+  statBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#ffffff",
+    border: "1px solid #f3f4f6",
+    borderRadius: 6,
+    padding: "6px 12px",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+  },
+  statBadgeLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#6b7280",
+    letterSpacing: "0.5px",
+  },
+  statBadgeValue: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#111827",
+  },
+  chatLayout: {
+    display: "flex",
+    gap: 20,
+    alignItems: "stretch",
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  channelsCard: {
+    width: 280,
+    minWidth: 260,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+  },
+  channelList: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    overflowY: "auto",
+  },
+  channelItem: {
+    padding: "14px 18px",
+    borderBottom: "1px solid #f3f4f6",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    margin: "4px 8px",
+    borderRadius: 8,
+    background: "transparent",
+    transition: "background 0.15s",
+  },
+  channelItemActive: {
+    padding: "14px 18px",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    margin: "4px 8px",
+    background: "#f1f5f9",
+    borderLeft: "4px solid #2563eb",
+    borderRadius: "0 8px 8px 0",
+  },
+  channelTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  chName: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#334155",
+  },
+  chNameActive: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#0f172a",
+  },
+  chProject: {
+    fontSize: 12,
+    color: "#64748b",
+  },
+  conversationCard: {
+    flex: 1,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+  },
+  convHeader: {
+    padding: "20px 24px",
+    borderBottom: "1px solid #e2e8f0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    background: "#ffffff",
+  },
+  convTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#0f172a",
+  },
+  convSub: {
+    fontSize: 13,
+    color: "#64748b",
+    marginTop: 4,
+  },
+  lockPill: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#15803d",
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    padding: "4px 10px",
+    borderRadius: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  messagesBox: {
+    flex: 1,
+    padding: "28px 24px 20px",
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    background: "#fafafa",
+  },
+  msgRowMe: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  msgRowThem: {
+    display: "flex",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+  },
+  bubbleMe: {
+    background: "#2563eb",
+    color: "#ffffff",
+    padding: "10px 16px",
+    borderRadius: "16px 16px 2px 16px",
+    minWidth: 160,
+    maxWidth: "68%",
+    boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)",
+    boxSizing: "border-box" as const,
+    userSelect: "none" as const,
+  },
+  bubbleThem: {
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "10px 16px",
+    borderRadius: "16px 16px 16px 2px",
+    border: "1px solid #e2e8f0",
+    minWidth: 160,
+    maxWidth: "68%",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+    boxSizing: "border-box" as const,
+    userSelect: "none" as const,
+  },
+  msgHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 4,
+  },
+  senderMe: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#a1a1aa",
+  },
+  senderThem: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#4f46e5",
+  },
+  msgTime: {
+    fontSize: 10,
+    color: "#94a3b8",
+  },
+  msgText: {
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  inputRow: {
+    display: "flex",
+    gap: 12,
+    padding: "16px 24px",
+    borderTop: "1px solid #e2e8f0",
+    background: "#ffffff",
+  },
+  msgInput: {
+    flex: 1,
+    padding: "14px 20px",
+    fontSize: 14,
+    border: "1px solid #e2e8f0",
+    borderRadius: 24,
+    outline: "none",
+    background: "#f8fafc",
+    color: "#0f172a",
+    transition: "all 0.2s ease",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
+  },
+  btnSend: {
+    padding: "0 24px",
+    background: "#2563eb",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: 24,
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(37, 99, 235, 0.2)",
+    transition: "transform 0.1s ease, background 0.15s ease",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  summarizeBtn: {
+    padding: "6px 14px",
+    background: "#ffffff",
+    border: "1px solid #f3f4f6",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#1c1c1c",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+    transition: "all 0.15s ease",
+  },
+
+  // ── Summarization UI styles ───────────────────────────────────────────────
+  selectionToolbar: {
+    position: "fixed" as const,
+    bottom: 30,
+    left: "50%",
+    transform: "translateX(-50%)",
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    background: "#ffffff",
+    borderRadius: 12,
+    padding: "12px 24px",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05)",
+    border: "1px solid #e2e8f0",
+    zIndex: 200,
+    animation: "slideUpBar 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+  },
+  selectionCount: { fontSize: 13, fontWeight: 700, color: "#0f172a", marginRight: 8 },
+  errorBanner: {
+    position: "fixed" as const, bottom: 90, left: "50%", transform: "translateX(-50%)",
+    background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8,
+    padding: "10px 16px", fontSize: 13, color: "#dc2626", fontWeight: 500,
+    display: "flex", alignItems: "center", gap: 10, zIndex: 200, maxWidth: 500,
+    boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
+  },
+  errorClose: { background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontWeight: 700, fontSize: 14, transition: "color 0.15s ease" },
+  modalOverlay: {
+    position: "fixed" as const, inset: 0, background: "rgba(15, 23, 42, 0.6)",
+    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 24,
+    backdropFilter: "blur(2px)",
+  },
+  modalHeader: { display: "flex", alignItems: "center", gap: 12, padding: "20px 28px", borderBottom: "1px solid rgba(226, 232, 240, 0.8)" },
+  modalTitle: { fontSize: 18, fontWeight: 700, color: "#0f172a", flex: 1, letterSpacing: "-0.01em" },
+  modalMeta: { fontSize: 12, fontWeight: 600, color: "#64748b", background: "#f1f5f9", borderRadius: 8, padding: "4px 10px", border: "1px solid #e2e8f0" },
+  modalClose: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8", padding: 4, transition: "color 0.2s ease" },
+  modalBody: {
+    flex: 1, overflowY: "auto" as const, padding: "28px",
+    display: "flex", flexDirection: "column" as const, gap: 28,
+    background: "#fafafa",
+  },
+  summaryText: {
+    fontSize: 14, lineHeight: 1.6, color: "#334155", margin: 0,
+    padding: "20px", background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
+  },
+  modalSection: { display: "flex", flexDirection: "column" as const, gap: 10 },
+  modalSectionTitle: { fontSize: 13, fontWeight: 700, color: "#0f172a", letterSpacing: "0.2px", textTransform: "uppercase" as const },
+  modalList: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column" as const, gap: 8 },
+  modalListItem: { fontSize: 14, lineHeight: 1.5, color: "#334155" },
+  modalFooter: { display: "flex", justifyContent: "flex-end", gap: 10, padding: "16px 24px", borderTop: "1px solid #e2e8f0", background: "#ffffff" },
+
+  actionBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 13,
+    padding: "2px 4px",
+    borderRadius: 4,
+  },
+  actionBtnDanger: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 13,
+    padding: "2px 4px",
+    borderRadius: 4,
+    color: "#ef4444",
+  },
 };

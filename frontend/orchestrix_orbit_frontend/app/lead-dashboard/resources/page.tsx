@@ -17,6 +17,7 @@ interface ResourceItem {
   availableSlot: string;
   location?: string;
   description?: string;
+  maxDurationHours?: number;
   booking?: any;
 }
 
@@ -428,8 +429,9 @@ export default function ResourcesPage() {
             project: computed.project,
             availableSlot: computed.availableSlot,
             nextAvailableTime: (computed as any).nextAvailableTime || undefined,
-            location: r.metadata?.location || r.location,
+            location: r.location,
             description: r.description,
+            maxDurationHours: r.maxDurationHours,
           };
         });
 
@@ -893,7 +895,16 @@ export default function ResourcesPage() {
                     <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "var(--font-mono)" }}>ID: RES-0{r.id.length > 8 ? r.id.substring(0, 4) : r.id}</span>
                   </div>
                 </td>
-                <td style={{ ...s.td, color: "#616161" }}>{r.type}</td>
+                <td style={{ ...s.td, color: "#616161" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span>{r.type}</span>
+                    {r.maxDurationHours && (
+                      <span style={{ fontSize: 10, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4, padding: "1px 6px", display: "inline-block", width: "fit-content" }}>
+                        ⏱ Max {r.maxDurationHours}h
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td style={{ ...s.td, color: "#111827", fontSize: 12 }}>{r.availableSlot}</td>
                 <td style={s.td}>
                   {r.project !== "-" ? (
@@ -1488,7 +1499,7 @@ export default function ResourcesPage() {
         </div>
       )}
       {selectedStatusDetail && (
-        <div style={m.overlay} onClick={() => setSelectedStatusDetail(null)} className="glass-modal">
+        <div style={m.overlay} onClick={() => setSelectedStatusDetail(null)}>
           <div style={{ ...m.modal, maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ ...m.header, padding: "24px 32px 20px" }}>
               <div>
@@ -1502,7 +1513,7 @@ export default function ResourcesPage() {
               <button onClick={() => setSelectedStatusDetail(null)} style={m.closeBtn}>✕</button>
             </div>
 
-            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 24, background: "#fafafa" }}>
+            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 24, background: "#fafafa", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
               {/* Dynamic Status Banner */}
               {(() => {
                 let bannerBg = "#f9fafb", bannerBorder = "#e5e7eb", bannerColor = "#374151";
@@ -1630,7 +1641,11 @@ export default function ResourcesPage() {
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.5px", textTransform: "uppercase", display: "block", marginBottom: 6 }}>MAX SESSION LIMIT</span>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: "#111827", margin: 0, lineHeight: 1.4 }}>4 Hours max duration per session (Fair Access Policy)</p>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: "#111827", margin: 0, lineHeight: 1.4 }}>
+                        {selectedStatusDetail.maxDurationHours
+                          ? `${selectedStatusDetail.maxDurationHours} hour${selectedStatusDetail.maxDurationHours > 1 ? "s" : ""} max per session (Fair Access Policy)`
+                          : "No limit specified"}
+                      </p>
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.5px", textTransform: "uppercase", display: "block", marginBottom: 6 }}>FACILITY LOCATION</span>
@@ -1702,7 +1717,7 @@ export default function ResourcesPage() {
 
       {/* ── Booking Request Modal ────────────────────────────────────────────── */}
       {showBookingModal && (
-        <div style={m.overlay} className="glass-modal" onClick={() => { setIsResourceDropdownOpen(false); setIsProjectDropdownOpen(false); }}>
+        <div style={m.overlay} onClick={() => { setIsResourceDropdownOpen(false); setIsProjectDropdownOpen(false); }}>
           <div style={{ ...m.modal, maxWidth: 640 }} onClick={(e) => { e.stopPropagation(); setIsResourceDropdownOpen(false); setIsProjectDropdownOpen(false); }}>
             <div style={{ ...m.header, padding: "24px 32px 20px" }}>
               <div>
@@ -1713,7 +1728,7 @@ export default function ResourcesPage() {
             </div>
 
             {bookingSuccess ? (
-              <div style={{ padding: "48px 32px", textAlign: "center", background: "#fafafa" }}>
+              <div style={{ padding: "48px 32px", textAlign: "center", background: "#fafafa", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
                 <span style={{ fontSize: 32, background: "#dcfce7", color: "#166534", padding: "16px", borderRadius: "50%" }}>✓</span>
                 <h4 style={{ fontSize: 18, fontWeight: 800, color: "#111827", marginTop: 24, letterSpacing: "-0.01em" }}>
                   Booking Request Confirmed!
@@ -1723,7 +1738,7 @@ export default function ResourcesPage() {
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleBookingSubmit} style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, background: "#fafafa" }}>
+              <form onSubmit={handleBookingSubmit} style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, background: "#fafafa", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 12 }}>
                   <div style={m.field}>
                     <label style={m.label}>RESERVATION DATE *</label>
@@ -1758,8 +1773,8 @@ export default function ResourcesPage() {
 
                 <div style={{ ...m.field, position: "relative" }}>
                   <label style={m.label}>SELECT RESOURCE *</label>
-                  <div 
-                    style={{ ...m.input, cursor: "text", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}
+                  <div
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: 8, background: "#ffffff", cursor: "text" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsProjectDropdownOpen(false);
@@ -1775,18 +1790,17 @@ export default function ResourcesPage() {
                         if (!isResourceDropdownOpen) setIsResourceDropdownOpen(true);
                       }}
                       onFocus={() => setIsResourceDropdownOpen(true)}
-                      style={{ border: "none", outline: "none", width: "100%", background: "transparent", fontSize: 13, color: "#111827" }}
+                      className="no-default-input"
+                      style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: "#111827", boxShadow: "none", padding: 0, margin: 0, appearance: "none", WebkitAppearance: "none" }}
                     />
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          setIsResourceDropdownOpen(!isResourceDropdownOpen); 
-                          setIsProjectDropdownOpen(false);
-                        }}
-                        style={{ color: "#9ca3af", fontSize: 10, cursor: "pointer", padding: "0 4px" }}
-                      >{isResourceDropdownOpen ? "▲" : "▼"}</span>
-                    </div>
+                    <span 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setIsResourceDropdownOpen(!isResourceDropdownOpen); 
+                        setIsProjectDropdownOpen(false);
+                      }}
+                      style={{ color: "#9ca3af", fontSize: 10, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}
+                    >{isResourceDropdownOpen ? "▲" : "▼"}</span>
                   </div>
                   {isResourceDropdownOpen && (
                     <div 
@@ -1840,7 +1854,7 @@ export default function ResourcesPage() {
                 <div style={{ ...m.field, position: "relative" }}>
                   <label style={m.label}>TARGET RESEARCH PROJECT *</label>
                   <div 
-                    style={{ ...m.input, cursor: "text", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: 8, background: "#ffffff", cursor: "text" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsResourceDropdownOpen(false);
@@ -1856,18 +1870,17 @@ export default function ResourcesPage() {
                         if (!isProjectDropdownOpen) setIsProjectDropdownOpen(true);
                       }}
                       onFocus={() => setIsProjectDropdownOpen(true)}
-                      style={{ border: "none", outline: "none", width: "100%", background: "transparent", fontSize: 13, color: "#111827" }}
+                      className="no-default-input"
+                      style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: "#111827", boxShadow: "none", padding: 0, margin: 0, appearance: "none", WebkitAppearance: "none" }}
                     />
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          setIsProjectDropdownOpen(!isProjectDropdownOpen); 
-                          setIsResourceDropdownOpen(false);
-                        }}
-                        style={{ color: "#9ca3af", fontSize: 10, cursor: "pointer", padding: "0 4px" }}
-                      >{isProjectDropdownOpen ? "▲" : "▼"}</span>
-                    </div>
+                    <span 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setIsProjectDropdownOpen(!isProjectDropdownOpen); 
+                        setIsResourceDropdownOpen(false);
+                      }}
+                      style={{ color: "#9ca3af", fontSize: 10, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}
+                    >{isProjectDropdownOpen ? "▲" : "▼"}</span>
                   </div>
                   {isProjectDropdownOpen && (
                     <div 
@@ -1911,11 +1924,69 @@ export default function ResourcesPage() {
                   const currentSlotStatus = currentSelectedObj
                     ? checkResourceSlotStatus(currentSelectedObj, dateInput, startTimeInput, endTimeInput, allBookingsState, dbMaintenanceLogs)
                     : { isBookable: true, label: "Available", reason: "" };
-                    
-                  const isFormValid = !!(selectedResource && selectedProject && dateInput && startTimeInput && endTimeInput && currentSlotStatus.isBookable);
+
+                  // User-concurrency check: does the current lead already have a DIFFERENT resource booked at this slot?
+                  const leadUserConflict = (() => {
+                    if (!dateInput || !startTimeInput || !endTimeInput) return null;
+                    const { slotStart, slotEnd } = getSlotStartEndDates(dateInput, startTimeInput, endTimeInput);
+                    if (!slotStart || !slotEnd) return null;
+                    // Find any lead booking on a different resource overlapping this slot
+                    return allBookingsState.find((b: any) => {
+                      // Only check the lead's own bookings (filter by userEmail or bookedBy containing "lead" / "Dinuka")
+                      const isMyBooking = b.userEmail?.includes("lead@") ||
+                        b.bookedBy?.toLowerCase().includes("lead") ||
+                        b.bookedBy?.toLowerCase().includes("dinuka");
+                      if (!isMyBooking) return false;
+                      // Must be a different resource
+                      const isDifferentResource =
+                        String(b.resourceId) !== String(selectedResource) &&
+                        (!b.resourceName || b.resourceName !== currentSelectedObj?.name);
+                      if (!isDifferentResource) return false;
+                      if (b.status === "CANCELLED" || b.status === "REJECTED") return false;
+                      return new Date(b.startTime) < slotEnd && new Date(b.endTime) > slotStart;
+                    }) || null;
+                  })();
+
+                  const isBlocked = !currentSlotStatus.isBookable || !!leadUserConflict;
+                  const isFormValid = !!(selectedResource && selectedProject && dateInput && startTimeInput && endTimeInput && !isBlocked);
+
+                  // Max duration client-side check
+                  const leadMaxDurViolation = (() => {
+                    if (!currentSelectedObj || !dateInput || !startTimeInput || !endTimeInput) return null;
+                    const max = currentSelectedObj.maxDurationHours;
+                    if (!max) return null;
+                    const start = new Date(`${dateInput}T${startTimeInput}`);
+                    const end   = new Date(`${dateInput}T${endTimeInput}`);
+                    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+                    const durationHours = (end.getTime() - start.getTime()) / 3600000;
+                    if (durationHours > max) return { requested: Math.round(durationHours * 10) / 10, max };
+                    return null;
+                  })();
+
+                  const isBlockedFinal = isBlocked || !!leadMaxDurViolation;
+                  const isFormValidFinal = isFormValid && !leadMaxDurViolation;
 
                   return (
                     <>
+                      {/* Max duration info banner (shows when a resource is selected) */}
+                      {currentSelectedObj?.maxDurationHours && (
+                        <div style={{
+                          background: "#eff6ff",
+                          border: "1px solid #bfdbfe",
+                          borderRadius: 6,
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          color: "#1d4ed8",
+                          fontWeight: 500,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, flexShrink: 0 }}>⏱</span>
+                          <span><strong>Max session:</strong> {currentSelectedObj.maxDurationHours} hour{currentSelectedObj.maxDurationHours > 1 ? "s" : ""} per booking (fair-access policy). Exceeding this limit will be rejected.</span>
+                        </div>
+                      )}
+
                       {/* Local slot conflict (client-side check) */}
                       {!currentSlotStatus.isBookable && selectedResource && (
                         <div style={{
@@ -1932,6 +2003,47 @@ export default function ResourcesPage() {
                         }}>
                           <span>⚠️</span>
                           <span>Cannot Book: <strong>{currentSelectedObj?.name}</strong> is {currentSlotStatus.reason}. Please select another time or resource.</span>
+                        </div>
+                      )}
+
+                      {/* User-concurrency conflict warning */}
+                      {currentSlotStatus.isBookable && leadUserConflict && (
+                        <div style={{
+                          background: "#fff3cd",
+                          border: "1px solid #ffc107",
+                          borderRadius: 6,
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          color: "#856404",
+                          fontWeight: 500,
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                        }}>
+                          <span style={{ flexShrink: 0 }}>🚫</span>
+                          <span>
+                            <strong>Scheduling Conflict:</strong> You already have <strong>{(leadUserConflict as any).resourceName || "another resource"}</strong> booked during this time slot.
+                            Only one resource can be in use per person at a time. Choose a non-overlapping slot.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Max duration violation warning */}
+                      {leadMaxDurViolation && (
+                        <div style={{
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
+                          borderRadius: 6,
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          color: "#991b1b",
+                          fontWeight: 500,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}>
+                          <span style={{ flexShrink: 0 }}>⏱</span>
+                          <span><strong>Duration too long:</strong> This resource allows a maximum of <strong>{leadMaxDurViolation.max}h</strong> per booking. Your selection is <strong>{leadMaxDurViolation.requested}h</strong>. Please shorten your slot.</span>
                         </div>
                       )}
 
@@ -1971,18 +2083,27 @@ export default function ResourcesPage() {
                           style={{
                             ...m.btnPrimary,
                             padding: "10px 24px",
-                            background: !isFormValid ? "#9ca3af" : "#161616",
-                            cursor: !isFormValid ? "not-allowed" : "pointer",
-                            opacity: !isFormValid ? 0.7 : 1,
+                            background: !isFormValidFinal ? "#9ca3af" : "#161616",
+                            cursor: !isFormValidFinal ? "not-allowed" : "pointer",
+                            opacity: !isFormValidFinal ? 0.7 : 1,
                           }}
-                          disabled={isSubmitting || !isFormValid}
+                          disabled={isSubmitting || !isFormValidFinal}
                         >
-                          {!currentSlotStatus.isBookable && selectedResource ? "Cannot Book (Unavailable)" : isSubmitting ? "Confirming..." : "Confirm Reservation"}
+                          {!currentSlotStatus.isBookable && selectedResource
+                            ? "Cannot Book (Unavailable)"
+                            : leadMaxDurViolation
+                            ? `Exceeds ${leadMaxDurViolation.max}h Limit`
+                            : leadUserConflict
+                            ? "Scheduling Conflict"
+                            : isSubmitting
+                            ? "Confirming..."
+                            : "Confirm Reservation"}
                         </button>
                       </div>
                     </>
                   );
                 })()}
+
               </form>
             )}
           </div>
@@ -2043,7 +2164,7 @@ export default function ResourcesPage() {
                 </div>
               )}
             </div>
-            <div style={{ padding: "16px 24px", borderTop: "1px solid #eeeeee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "16px 24px", borderTop: "1px solid #eeeeee", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
               <div style={{ display: "flex", gap: 8 }}>
                 {(bookingDetailsModal.status === "PENDING" || bookingDetailsModal.status === "PENDING_APPROVAL") && (
                   <button 
@@ -2096,7 +2217,7 @@ export default function ResourcesPage() {
 
       {/* ── Resource Details Modal ────────────────────────────────── */}
       {resourceDetailsModal && (
-        <div style={m.overlay} onClick={() => setResourceDetailsModal(null)} className="glass-modal">
+        <div style={m.overlay} onClick={() => setResourceDetailsModal(null)}>
           <div style={{ ...m.modal, maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ ...m.header, padding: "24px 32px 20px" }}>
               <div>
@@ -2112,7 +2233,7 @@ export default function ResourcesPage() {
               <button onClick={() => setResourceDetailsModal(null)} style={m.closeBtn}>✕</button>
             </div>
 
-            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, background: "#fafafa" }}>
+            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, background: "#fafafa", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
               {resourceDetailsModal.description && (
                 <div style={{ background: "#ffffff", padding: "20px 24px", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
                   <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>RESOURCE DESCRIPTION</p>
@@ -2120,9 +2241,18 @@ export default function ResourcesPage() {
                 </div>
               )}
               
-              <div style={{ background: "#ffffff", padding: "20px 24px", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.02)", display: "flex", flexDirection: "column", gap: 8 }}>
-                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>CATEGORY / SPECIFICATION</p>
-                <p style={{ margin: 0, fontSize: 14, color: "#111827", fontWeight: 600, textTransform: "uppercase" }}>{resourceDetailsModal.type}</p>
+              <div style={{ display: "grid", gridTemplateColumns: resourceDetailsModal.maxDurationHours ? "1fr 1fr" : "1fr", gap: 16 }}>
+                <div style={{ background: "#ffffff", padding: "20px 24px", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.02)", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>CATEGORY / SPECIFICATION</p>
+                  <p style={{ margin: 0, fontSize: 14, color: "#111827", fontWeight: 600, textTransform: "uppercase" }}>{resourceDetailsModal.type}</p>
+                </div>
+                {resourceDetailsModal.maxDurationHours && (
+                  <div style={{ background: "#eff6ff", padding: "20px 24px", borderRadius: 12, border: "1px solid #bfdbfe", boxShadow: "0 1px 3px rgba(0,0,0,0.02)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: "#1d4ed8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>⏱ MAX SESSION DURATION</p>
+                    <p style={{ margin: 0, fontSize: 14, color: "#1e40af", fontWeight: 700 }}>{resourceDetailsModal.maxDurationHours} hour{resourceDetailsModal.maxDurationHours > 1 ? "s" : ""} per booking</p>
+                    <p style={{ margin: 0, fontSize: 11, color: "#3b82f6" }}>Fair-access policy enforced</p>
+                  </div>
+                )}
               </div>
 
               {/* Footer Actions */}
@@ -2141,14 +2271,14 @@ export default function ResourcesPage() {
       )}
       {/* ── Rejection Modal ──────────────────────────────────────────────────── */}
       {rejectionModal && (
-        <div style={m.overlay} className="glass-modal" onClick={() => setRejectionModal(null)}>
+        <div style={m.overlay} onClick={() => setRejectionModal(null)}>
           <div style={{ ...m.modal, maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ ...m.header, padding: "24px 32px 20px" }}>
               <h3 style={{ ...m.title, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>Reject Booking Request</h3>
               <button onClick={() => setRejectionModal(null)} style={m.closeBtn}>✕</button>
             </div>
             
-            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 24, background: "#fafafa" }}>
+            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 24, background: "#fafafa", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
               <p style={{ fontSize: 14, color: "#4b5563", margin: 0, lineHeight: 1.6 }}>
                 Provide a reason for rejecting the booking request for <strong style={{ color: "#111827" }}>{rejectionModal.booking.resourceName}</strong> by <strong style={{ color: "#111827" }}>{rejectionModal.booking.userName || rejectionModal.booking.bookedBy || "the researcher"}</strong>. This will be sent as a notification.
               </p>
@@ -2217,9 +2347,9 @@ const s: Record<string, React.CSSProperties> = {
 };
 
 const m: Record<string, React.CSSProperties> = {
-  overlay: { position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20, backdropFilter: "blur(4px)" },
-  modal: { background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, width: "100%", maxWidth: 640, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", overflow: "hidden" },
-  header: { padding: "24px 32px 20px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20, backdropFilter: "blur(4px)" },
+  modal: { background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, width: "100%", maxWidth: 640, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", overflow: "visible" },
+  header: { padding: "24px 32px 20px", background: "#f8fafc", borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" },
   title: { fontSize: 18, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.01em" },
   sub: { fontSize: 13, color: "#64748b", marginTop: 4 },
   closeBtn: { background: "none", border: "none", fontSize: 20, color: "#94a3b8", cursor: "pointer", transition: "color 0.2s" },

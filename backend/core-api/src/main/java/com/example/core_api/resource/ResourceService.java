@@ -63,6 +63,7 @@ public class ResourceService {
             });
         }
         cancelConflictingBookingsForMaintenance(saved);
+        notifyManagers("Maintenance Scheduled", "A maintenance window for '" + saved.getAssetName() + "' has been scheduled starting " + saved.getStartDate() + ".");
         return saved;
     }
 
@@ -103,6 +104,13 @@ public class ResourceService {
             }
         }
         cancelConflictingBookingsForMaintenance(saved);
+        if (oldStatus != null && !oldStatus.equalsIgnoreCase(saved.getStatus())) {
+            if ("Completed".equalsIgnoreCase(saved.getStatus())) {
+                notifyManagers("Maintenance Completed", "The maintenance for '" + saved.getAssetName() + "' has been successfully completed.");
+            } else if ("In Progress".equalsIgnoreCase(saved.getStatus())) {
+                notifyManagers("Maintenance Started", "The maintenance window for '" + saved.getAssetName() + "' is now in progress.");
+            }
+        }
         return saved;
     }
 
@@ -180,8 +188,19 @@ public class ResourceService {
      * MEMBER / GUEST / RESEARCHER / ROLE_RESEARCHER -> PENDING (requires Lead approval).
      */
     public BookingResponse createBooking(UUID resourceId, CreateBookingRequest request, User currentUser) {
+        // ── Guard 1: End must be after Start ──────────────────────────────────────
         if (request.getEndTime().isBefore(request.getStartTime()) || request.getEndTime().isEqual(request.getStartTime())) {
             throw new IllegalArgumentException("End time must be after start time.");
+        }
+
+        // ── Guard 2: No booking in the past ───────────────────────────────────────
+        java.time.OffsetDateTime nowUtc = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        if (request.getEndTime().isBefore(nowUtc)) {
+            throw new IllegalArgumentException("Cannot create a booking that has already ended. Please choose a future time slot.");
+        }
+        if (request.getStartTime().isBefore(nowUtc.minusMinutes(5))) {
+            // Allow 5-minute grace for clock skew, but reject clearly past start times
+            throw new IllegalArgumentException("Booking start time cannot be in the past. Please choose a current or future start time.");
         }
 
         UUID userId = currentUser.getId();
@@ -190,10 +209,56 @@ public class ResourceService {
         Resource resource = resourceRepository.findById(resourceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + resourceId));
 
-        // Layer 1: Advisory lock
-        bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+        // ── Guard 3: No booking on a resource under MAINTENANCE ───────────────────
+        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
+            throw new ResourceBookingConflictException(
+                    "\"" + resource.getName() + "\" is currently under maintenance and cannot be booked. " +
+                    "Please check back once maintenance is complete.");
+        }
 
-        // Layer 2: Overlap check
+        // ── Guard 4: Enforce maxDurationHours from resource metadata ──────────────
+        String meta = resource.getMetadata();
+        if (meta != null) {
+            java.util.regex.Matcher hoursMatcher = java.util.regex.Pattern
+                    .compile("\"maxDurationHours\"\\s*:\\s*(\\d+)").matcher(meta);
+            if (hoursMatcher.find()) {
+                try {
+                    int maxHours = Integer.parseInt(hoursMatcher.group(1));
+                    long requestedHours = java.time.Duration.between(request.getStartTime(), request.getEndTime()).toHours();
+                    if (requestedHours > maxHours) {
+                        throw new IllegalArgumentException(
+                                "Booking duration of " + requestedHours + " hour(s) exceeds the maximum allowed " +
+                                maxHours + " hour(s) for \"" + resource.getName() + "\". Please shorten your booking.");
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        // ── LOCKING STRATEGY (two-phase) ──────────────────────────────────────────
+        //
+        // We acquire TWO transaction-level advisory locks, always in a FIXED ORDER
+        // (lower hash first) to prevent deadlocks between concurrent transactions:
+        //
+        //  Lock A (user-level):     prevents the same user from concurrently booking
+        //                           two different resources in overlapping slots.
+        //  Lock B (resource-level): prevents two different users from double-booking
+        //                           the same resource in the same slot.
+        //
+        // Both locks are automatically released when the transaction commits/rolls back.
+        // ──────────────────────────────────────────────────────────────────────────
+        long userLockKey     = Math.abs((long) userId.toString().hashCode());
+        long resourceLockKey = Math.abs((long) resourceId.toString().hashCode());
+
+        // Always acquire in ascending key order to avoid deadlocks
+        if (userLockKey <= resourceLockKey) {
+            bookingRepository.acquireUserAdvisoryLock(userId.toString());
+            bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+        } else {
+            bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+            bookingRepository.acquireUserAdvisoryLock(userId.toString());
+        }
+
+        // Layer 2a: Resource-level overlap check (prevents double-booking same resource)
         List<ResourceBooking> conflicts = bookingRepository.findOverlappingBookings(
                 resourceId, request.getStartTime(), request.getEndTime());
 
@@ -205,6 +270,27 @@ public class ResourceService {
             throw new ResourceBookingConflictException(
                     "\"" + resource.getName() + "\" is already booked from " + bookedFrom +
                     " to " + bookedUntil + " (UTC). Please choose a different time slot.");
+        }
+
+        // Layer 2b: User-concurrency check (a user can only use ONE resource at any given time)
+        // A user CAN book the same resource for multiple future slots (e.g., Monday & Wednesday).
+        // But they CANNOT have two DIFFERENT resources booked at the same time.
+        // SAFE: the user-level advisory lock above guarantees this read-check-write is atomic.
+        List<ResourceBooking> userConflicts = bookingRepository.findUserConcurrentBookingsOnOtherResources(
+                userId, resourceId, request.getStartTime(), request.getEndTime());
+
+        if (!userConflicts.isEmpty()) {
+            ResourceBooking conflicting = userConflicts.get(0);
+            Resource conflictingResource = resourceRepository.findById(conflicting.getResourceId())
+                    .orElse(null);
+            String conflictingName = conflictingResource != null ? conflictingResource.getName() : "another resource";
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("h:mm a, MMM d").withZone(ZoneId.of("UTC"));
+            String slotFrom  = fmt.format(conflicting.getStartTime());
+            String slotUntil = fmt.format(conflicting.getEndTime());
+            throw new ResourceBookingConflictException(
+                    "You already have \"" + conflictingName + "\" booked from " + slotFrom +
+                    " to " + slotUntil + " (UTC). A researcher can only use one resource at a time. " +
+                    "Please choose a non-overlapping time slot or cancel your other booking first.");
         }
 
         // DEBUG: log the actual role so we can see what value the DB returned
@@ -245,9 +331,6 @@ public class ResourceService {
             String message = "A booking request for \"" + resource.getName() + "\" was submitted by "
                     + currentUser.getEmail() + " and is awaiting your approval.";
             List<User> leads = userRepository.findByRoleIn(java.util.List.of(
-                com.example.core_api.auth.UserRole.ADMIN,
-                com.example.core_api.auth.UserRole.OWNER,
-                com.example.core_api.auth.UserRole.ROLE_ADMIN,
                 com.example.core_api.auth.UserRole.LEAD,
                 com.example.core_api.auth.UserRole.ROLE_LEAD
             ));
@@ -405,6 +488,17 @@ public class ResourceService {
             }
         } catch (Exception e) {
             log.error("Failed to process maintenance overlaps for maintenance id={}", maintenance.getId(), e);
+        }
+    }
+
+    private void notifyManagers(String title, String message) {
+        List<com.example.core_api.auth.User> managers = userRepository.findByRoleIn(java.util.List.of(
+            com.example.core_api.auth.UserRole.ADMIN,
+            com.example.core_api.auth.UserRole.OWNER,
+            com.example.core_api.auth.UserRole.ROLE_ADMIN
+        ));
+        for (com.example.core_api.auth.User manager : managers) {
+            notificationService.notify(manager.getId(), "Maintenance", title, message);
         }
     }
 }

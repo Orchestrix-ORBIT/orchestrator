@@ -463,6 +463,7 @@ export default function LeadProjectsPage() {
                     placeholder="Search researcher by name or email..."
                     value={memberSearchQuery}
                     onChange={e => setMemberSearchQuery(e.target.value)}
+                    onBlur={() => setTimeout(() => setMemberSearchQuery(""), 150)}
                   />
                   {memberSearchQuery.trim() !== "" && (
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
@@ -481,7 +482,8 @@ export default function LeadProjectsPage() {
                           return (
                             <div
                               key={id}
-                              onClick={() => {
+                              onMouseDown={(e) => {
+                                e.preventDefault();
                                 toggleMember(id);
                                 setMemberSearchQuery("");
                               }}
@@ -574,6 +576,7 @@ export default function LeadProjectsPage() {
                     placeholder="Search researcher to add..."
                     value={editMemberSearchQuery}
                     onChange={e => setEditMemberSearchQuery(e.target.value)}
+                    onBlur={() => setTimeout(() => setEditMemberSearchQuery(""), 150)}
                   />
                   {editMemberSearchQuery.trim() !== "" && (
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
@@ -592,7 +595,8 @@ export default function LeadProjectsPage() {
                           return (
                             <div
                               key={id}
-                              onClick={() => {
+                              onMouseDown={(e) => {
+                                e.preventDefault();
                                 toggleEditMember(id);
                                 setEditMemberSearchQuery("");
                               }}
@@ -872,7 +876,7 @@ const s: Record<string, React.CSSProperties> = {
   viewBtnMinimal: { fontSize: 13, fontWeight: 600, color: "#111827", background: "#ffffff", border: "1px solid #e5e7eb", padding: "8px 16px", borderRadius: 8, textDecoration: "none", display: "inline-flex", alignItems: "center", transition: "all 0.2s" },
   empty: { gridColumn: "1/-1", textAlign: "center", padding: "60px 20px", background: "#ffffff", border: "1px dashed #d1d5db", borderRadius: 16, color: "#6b7280", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 },
   overlay: { position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.25)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 },
-  modal: { background: "#ffffff", borderRadius: 16, padding: "0 0 24px", width: "100%", maxWidth: 520, boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255,255,255,0.1)", overflow: "hidden" },
+  modal: { background: "#ffffff", borderRadius: 16, padding: "0 0 24px", width: "100%", maxWidth: 520, boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255,255,255,0.1)", overflow: "visible" },
   modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px" },
   modalTitle: { fontSize: 20, fontWeight: 700, color: "#111827", letterSpacing: "-0.5px" },
   closeBtn: { background: "#f3f4f6", border: "none", width: 28, height: 28, borderRadius: "50%", fontSize: 14, color: "#4b5563", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },

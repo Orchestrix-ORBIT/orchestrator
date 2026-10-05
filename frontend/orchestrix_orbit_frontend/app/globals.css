@@ -46,6 +46,31 @@ a { text-decoration: none; color: inherit; }
 button { font-family: var(--font); cursor: pointer; }
 input, textarea { font-family: var(--font); }
 
+/* Strip all browser/Tailwind Forms defaults from transparent search inputs inside dropdowns */
+.no-default-input {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+}
+.no-default-input:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  ring: none !important;
+}
+
+/* glass-modal overlay - reduced blur for consistency */
+.glass-modal {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
 .auth-tab-button:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;

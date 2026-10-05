@@ -43,6 +43,10 @@ public class Document {
     @Column(name = "file_storage_key", length = 512)
     private String fileStorageKey;
 
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "allowed_editors", columnDefinition = "TEXT")
+    private java.util.List<String> allowedEditors;
+
     @Column(nullable = false)
     @Builder.Default
     private int version = 1;
