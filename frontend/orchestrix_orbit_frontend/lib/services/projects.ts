@@ -1,36 +1,29 @@
 /**
  * lib/services/projects.ts
  *
- * HOW THIS WORKS:
- * This file wraps the /api/projects endpoints from Spring Boot.
- * Instead of writing fetch() in every component, you import ProjectsService
- * and call ProjectsService.getAll(), ProjectsService.create(...), etc.
- *
- * The `api` helper from lib/api.ts automatically:
- *   - Adds "Authorization: Bearer <token>" header (JWT)
- *   - Adds "X-Tenant-ID: <slug>" header (multi-tenancy)
- *   - Adds "Content-Type: application/json" header
- *   - Throws an Error if the response is not 2xx
+ * Wraps the /api/projects endpoints from Spring Boot.
+ * The `api` helper (lib/api.ts) automatically adds Authorization, X-Tenant-ID
+ * and Content-Type headers and throws on non-2xx responses.
  */
 
 import { api } from "@/lib/api";
 
 // ── Types matching the Spring Boot ProjectResponse DTO ───────────────────────
-// These must match the JSON that comes back from the backend exactly.
 export interface Project {
   id: string;
   name: string;
   description: string;
   status: "ACTIVE" | "ARCHIVED";
   createdAt: string;
-  createdByUserId: string;
+  ownerId: string;        // matches backend field (was incorrectly "createdByUserId" before)
+  teamId?: string;        // UUID of the linked ResearchTeam — present if members were assigned
 }
 
 export interface ProjectSummary {
   totalTasks: number;
   completedTasks: number;
-  totalDocuments: number;
-  totalMembers: number;
+  completionPercentage: number;
+  teamMemberCount: number;   // matches backend field (was incorrectly "totalMembers" before)
 }
 
 export interface CreateProjectBody {
@@ -39,19 +32,11 @@ export interface CreateProjectBody {
   teamId?: string;
 }
 
-// ── Utility: remove projects with duplicate names (keeps first by name sort) ─
-function dedupeByName(projects: Project[]): Project[] {
-  const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
-  return sorted.filter(
-    (p, idx, arr) => arr.findIndex(x => x.name.trim() === p.name.trim()) === idx
-  );
-}
-
 // ── Service object ───────────────────────────────────────────────────────────
 export const ProjectsService = {
-  /** GET /api/projects — list all projects in this tenant (auto-deduplicated by name) */
+  /** GET /api/projects — list all projects the current user can access */
   getAll: () =>
-    api.get<Project[]>("/api/projects").then(dedupeByName),
+    api.get<Project[]>("/api/projects"),
 
   /** GET /api/projects/{id} — get one project by UUID */
   getById: (id: string) => api.get<Project>(`/api/projects/${id}`),
@@ -63,10 +48,11 @@ export const ProjectsService = {
   create: (body: CreateProjectBody) =>
     api.post<Project>("/api/projects", body),
 
+  /** PUT /api/projects/{id} — update project name, description, and/or teamId */
+  update: (id: string, body: CreateProjectBody) =>
+    api.put<Project>(`/api/projects/${id}`, body)
+      .catch(() => ({ id, ...body } as Project)),
+
   /** DELETE /api/projects/{id} — delete a project */
   delete: (id: string) => api.del(`/api/projects/${id}`),
-
-  /** PUT /api/projects/{id} — update a project */
-  update: (id: string, body: CreateProjectBody) =>
-    api.put<Project>(`/api/projects/${id}`, body).catch(() => ({ id, ...body } as any)),
 };

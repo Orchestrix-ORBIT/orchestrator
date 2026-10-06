@@ -24,8 +24,8 @@ describe("lead project page", () => {
     render(<LeadProjectsPage />);
     expect(screen.getByText(/Loading Projects & Workspaces/)).toBeInTheDocument();
     finish([
-      { id: "p1", name: "Alpha", status: "ACTIVE", description: "", createdAt: "2026-01-01", createdByUserId: "u1" },
-      { id: "p2", name: "Beta", status: "ARCHIVED", description: "", createdAt: "2026-01-01", createdByUserId: "u1" },
+      { id: "p1", name: "Alpha", status: "ACTIVE", description: "", createdAt: "2026-01-01", ownerId: "u1" },
+      { id: "p2", name: "Beta", status: "ARCHIVED", description: "", createdAt: "2026-01-01", ownerId: "u1" },
     ]);
     expect(await screen.findByText("Alpha")).toBeInTheDocument();
     await userEvent.setup().type(screen.getByPlaceholderText("Search projects..."), "Beta");
@@ -42,7 +42,7 @@ describe("lead project page", () => {
   it("creates a project and shows a failed submission for retry", async () => {
     vi.mocked(ProjectsService.getAll).mockResolvedValue([]);
     vi.mocked(ProjectsService.create).mockRejectedValueOnce(new Error("Permission denied"))
-      .mockResolvedValueOnce({ id: "p1", name: "New study", description: "", status: "ACTIVE", createdAt: "2026-01-01", createdByUserId: "u1" });
+      .mockResolvedValueOnce({ id: "p1", name: "New study", description: "", status: "ACTIVE", createdAt: "2026-01-01", ownerId: "u1" });
     render(<LeadProjectsPage />);
     const user = userEvent.setup();
     await screen.findByRole("heading", { name: "Projects" });
@@ -63,7 +63,7 @@ describe("lead project page", () => {
     vi.mocked(TeamsService.createTeam).mockResolvedValue({ id: "team-1", name: "Study team", createdByUserId: "u1", createdAt: "2026-01-01" });
     vi.mocked(TeamsService.addMember).mockResolvedValue(undefined);
     vi.mocked(ProjectsService.create).mockResolvedValue({
-      id: "p1", name: "Study", description: "", status: "ACTIVE", createdAt: "2026-01-01", createdByUserId: "u1",
+      id: "p1", name: "Study", description: "", status: "ACTIVE", createdAt: "2026-01-01", ownerId: "u1",
     });
     render(<LeadProjectsPage />);
     const user = userEvent.setup();

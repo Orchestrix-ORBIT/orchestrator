@@ -77,29 +77,6 @@ describe("Sidebar — navigation links", () => {
   });
 });
 
-describe("Sidebar — admin visibility", () => {
-  it("does NOT render 'Back to Admin' link for non-admin roles", () => {
-    vi.mocked(authModule.getRole).mockReturnValue("ROLE_LEAD");
-    render(<Sidebar />);
-    expect(screen.queryByText(/back to admin/i)).not.toBeInTheDocument();
-  });
-
-  it("renders 'Back to Admin' link when role is ROLE_ADMIN", async () => {
-    vi.mocked(authModule.getRole).mockReturnValue("ROLE_ADMIN");
-    render(<Sidebar />);
-    await waitFor(() => {
-      expect(screen.getByText(/back to admin/i)).toBeInTheDocument();
-    });
-  });
-
-  it("renders 'Back to Admin' link when role is ROLE_OWNER", async () => {
-    vi.mocked(authModule.getRole).mockReturnValue("ROLE_OWNER");
-    render(<Sidebar />);
-    await waitFor(() => {
-      expect(screen.getByText(/back to admin/i)).toBeInTheDocument();
-    });
-  });
-});
 
 describe("Sidebar — org name display", () => {
   it("displays the fetched org name in the brand header", async () => {

@@ -2,6 +2,7 @@ package com.example.core_api.chat;
 
 import com.example.core_api.auth.UserRepository;
 import com.example.core_api.multitenancy.TenantContext;
+import com.example.core_api.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ public class ChatMessageService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public ChatMessageResponse saveMessage(SendChatMessageRequest request, UUID senderId) {
@@ -49,6 +51,17 @@ public class ChatMessageService {
                 .build();
 
         ChatMessage saved = chatMessageRepository.save(message);
+
+        if (request.mentionedUserIds() != null && !request.mentionedUserIds().isEmpty()) {
+            for (UUID mentionedUserId : request.mentionedUserIds()) {
+                notificationService.notify(
+                    mentionedUserId,
+                    "CHAT_MENTION",
+                    "New Chat Mention",
+                    "You were mentioned in a chat message by " + displayName
+                );
+            }
+        }
 
         return new ChatMessageResponse(
                 saved.getId(),

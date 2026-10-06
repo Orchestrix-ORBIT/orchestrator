@@ -30,7 +30,7 @@ export default function AdminDashboardLayout({
   }, [router]);
 
   if (!mounted || !authorized) {
-    return <div style={{ minHeight: "100vh", background: "#f5f5f5" }} suppressHydrationWarning />;
+    return <div style={{ minHeight: "100vh", background: "#f9fafb" }} suppressHydrationWarning />;
   }
 
   return (
@@ -71,9 +71,10 @@ const s: Record<string, React.CSSProperties> = {
   root: {
     display: "flex",
     minHeight: "100vh",
-    background: "#f5f5f5",
+    background: "#f9fafb",
   },
   main: {
+    marginLeft: 252,
     flex: 1,
     display: "flex",
     flexDirection: "column",
@@ -81,13 +82,15 @@ const s: Record<string, React.CSSProperties> = {
   },
   topbar: {
     height: 48,
-    background: "#ffffff",
-    borderBottom: "1px solid #e8e8e8",
+    background: "#f9fafb",
+    borderBottom: "1px solid #e5e7eb",
     display: "flex",
     alignItems: "center",
-    justifyContent: "flex-end",
-    padding: "0 24px",
-    flexShrink: 0,
+    justifyContent: "space-between",
+    padding: "0 32px",
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
   },
   topbarRight: {
     display: "flex",
@@ -98,7 +101,7 @@ const s: Record<string, React.CSSProperties> = {
     width: 32,
     height: 32,
     borderRadius: 6,
-    border: "1px solid #e8e8e8",
+    border: "1px solid #f3f4f6",
     background: "#ffffff",
     display: "flex",
     alignItems: "center",

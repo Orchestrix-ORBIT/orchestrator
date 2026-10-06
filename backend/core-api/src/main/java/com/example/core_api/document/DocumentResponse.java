@@ -35,6 +35,8 @@ public class DocumentResponse {
     // Tracks how many times this document's content has been updated
     private int version;
 
+    private java.util.List<String> allowedEditors;
+
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
@@ -59,6 +61,7 @@ public class DocumentResponse {
                 .contentEncrypted(document.getContentEncrypted())
                 .fileStorageKey(document.getFileStorageKey())
                 .version(document.getVersion())
+                .allowedEditors(document.getAllowedEditors() != null ? document.getAllowedEditors() : java.util.Collections.emptyList())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();

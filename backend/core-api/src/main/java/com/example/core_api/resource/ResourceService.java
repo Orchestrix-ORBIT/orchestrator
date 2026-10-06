@@ -2,9 +2,13 @@ package com.example.core_api.resource;
 
 import com.example.core_api.exception.ResourceNotFoundException;
 import com.example.core_api.exception.ResourceBookingConflictException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.example.core_api.notification.NotificationService;
 
 import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
@@ -21,22 +25,27 @@ import com.example.core_api.project.Project;
 @Transactional
 public class ResourceService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResourceService.class);
+
     private final ResourceRepository resourceRepository;
     private final ResourceBookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final ResourceMaintenanceRepository maintenanceRepository;
     private final ProjectRepository projectRepository;
+    private final NotificationService notificationService;
 
-    public ResourceService(ResourceRepository resourceRepository, 
-                           ResourceBookingRepository bookingRepository, 
+    public ResourceService(ResourceRepository resourceRepository,
+                           ResourceBookingRepository bookingRepository,
                            UserRepository userRepository,
                            ResourceMaintenanceRepository maintenanceRepository,
-                           ProjectRepository projectRepository) {
+                           ProjectRepository projectRepository,
+                           NotificationService notificationService) {
         this.resourceRepository = resourceRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.maintenanceRepository = maintenanceRepository;
         this.projectRepository = projectRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -45,15 +54,91 @@ public class ResourceService {
     }
 
     public ResourceMaintenance createMaintenance(ResourceMaintenance maintenance) {
+        validateNoMaintenanceConflict(maintenance, null);
         ResourceMaintenance saved = maintenanceRepository.save(maintenance);
-        // Automatically set resource status to MAINTENANCE ONLY if maintenance is active ("In Progress")
         if (maintenance.getResourceId() != null && "In Progress".equalsIgnoreCase(maintenance.getStatus())) {
             resourceRepository.findById(maintenance.getResourceId()).ifPresent(res -> {
                 res.setStatus(ResourceStatus.MAINTENANCE);
                 resourceRepository.save(res);
             });
         }
+        cancelConflictingBookingsForMaintenance(saved);
+        notifyManagers("Maintenance Scheduled", "A maintenance window for '" + saved.getAssetName() + "' has been scheduled starting " + saved.getStartDate() + ".");
         return saved;
+    }
+
+    public ResourceMaintenance updateMaintenance(UUID id, ResourceMaintenance updates) {
+        ResourceMaintenance maintenance = maintenanceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Maintenance log not found with id: " + id));
+        if (updates.getAssetName() != null) maintenance.setAssetName(updates.getAssetName());
+        if (updates.getResourceId() != null) maintenance.setResourceId(updates.getResourceId());
+        if (updates.getCategory() != null) maintenance.setCategory(updates.getCategory());
+        if (updates.getStartDate() != null) maintenance.setStartDate(updates.getStartDate());
+        if (updates.getEndDate() != null) maintenance.setEndDate(updates.getEndDate());
+        if (updates.getDowntimeType() != null) maintenance.setDowntimeType(updates.getDowntimeType());
+        if (updates.getTechnician() != null) maintenance.setTechnician(updates.getTechnician());
+        if (updates.getNotes() != null) maintenance.setNotes(updates.getNotes());
+        String oldStatus = maintenance.getStatus();
+        if (updates.getStatus() != null) maintenance.setStatus(updates.getStatus());
+        validateNoMaintenanceConflict(maintenance, id);
+        ResourceMaintenance saved = maintenanceRepository.save(maintenance);
+        if (saved.getResourceId() != null) {
+            if ("In Progress".equalsIgnoreCase(saved.getStatus())) {
+                resourceRepository.findById(saved.getResourceId()).ifPresent(res -> {
+                    res.setStatus(ResourceStatus.MAINTENANCE);
+                    resourceRepository.save(res);
+                });
+            } else if ("Completed".equalsIgnoreCase(saved.getStatus()) || "Scheduled".equalsIgnoreCase(saved.getStatus())) {
+                if ("In Progress".equalsIgnoreCase(oldStatus)) {
+                    boolean hasOtherInProgress = maintenanceRepository.findAll().stream()
+                            .anyMatch(m -> !m.getId().equals(saved.getId()) && saved.getResourceId().equals(m.getResourceId()) && "In Progress".equalsIgnoreCase(m.getStatus()));
+                    if (!hasOtherInProgress) {
+                        resourceRepository.findById(saved.getResourceId()).ifPresent(res -> {
+                            if (res.getStatus() == ResourceStatus.MAINTENANCE) {
+                                res.setStatus(ResourceStatus.AVAILABLE);
+                                resourceRepository.save(res);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        cancelConflictingBookingsForMaintenance(saved);
+        if (oldStatus != null && !oldStatus.equalsIgnoreCase(saved.getStatus())) {
+            if ("Completed".equalsIgnoreCase(saved.getStatus())) {
+                notifyManagers("Maintenance Completed", "The maintenance for '" + saved.getAssetName() + "' has been successfully completed.");
+            } else if ("In Progress".equalsIgnoreCase(saved.getStatus())) {
+                notifyManagers("Maintenance Started", "The maintenance window for '" + saved.getAssetName() + "' is now in progress.");
+            }
+        }
+        return saved;
+    }
+
+    public ResourceMaintenance updateMaintenance(UUID id, String endDate, String status) {
+        ResourceMaintenance updates = new ResourceMaintenance();
+        updates.setEndDate(endDate);
+        updates.setStatus(status);
+        return updateMaintenance(id, updates);
+    }
+
+    public void deleteMaintenance(UUID id) {
+        ResourceMaintenance maintenance = maintenanceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Maintenance log not found with id: " + id));
+        UUID resourceId = maintenance.getResourceId();
+        String status = maintenance.getStatus();
+        maintenanceRepository.delete(maintenance);
+        if (resourceId != null && "In Progress".equalsIgnoreCase(status)) {
+            boolean hasOtherInProgress = maintenanceRepository.findAll().stream()
+                    .anyMatch(m -> resourceId.equals(m.getResourceId()) && "In Progress".equalsIgnoreCase(m.getStatus()));
+            if (!hasOtherInProgress) {
+                resourceRepository.findById(resourceId).ifPresent(res -> {
+                    if (res.getStatus() == ResourceStatus.MAINTENANCE) {
+                        res.setStatus(ResourceStatus.AVAILABLE);
+                        resourceRepository.save(res);
+                    }
+                });
+            }
+        }
     }
 
     public ResourceResponse createResource(CreateResourceRequest request, UUID ownerId) {
@@ -65,7 +150,6 @@ public class ResourceService {
                 .status(ResourceStatus.AVAILABLE)
                 .metadata(request.getMetadata())
                 .build();
-                
         resource = resourceRepository.save(resource);
         return mapToResourceResponse(resource);
     }
@@ -80,7 +164,6 @@ public class ResourceService {
         } else {
             resources = resourceRepository.findAll();
         }
-        
         return resources.stream().map(this::mapToResourceResponse).collect(Collectors.toList());
     }
 
@@ -99,34 +182,89 @@ public class ResourceService {
         return mapToResourceResponse(resource);
     }
 
-    public BookingResponse createBooking(UUID resourceId, CreateBookingRequest request, UUID userId) {
+    /**
+     * Creates a booking with role-based initial status.
+     * LEAD / ADMIN / OWNER / RESOURCE_MANAGER  -> APPROVED immediately.
+     * MEMBER / GUEST / RESEARCHER / ROLE_RESEARCHER -> PENDING (requires Lead approval).
+     */
+    public BookingResponse createBooking(UUID resourceId, CreateBookingRequest request, User currentUser) {
+        // ── Guard 1: End must be after Start ──────────────────────────────────────
         if (request.getEndTime().isBefore(request.getStartTime()) || request.getEndTime().isEqual(request.getStartTime())) {
             throw new IllegalArgumentException("End time must be after start time.");
         }
 
+        // ── Guard 2: No booking in the past ───────────────────────────────────────
+        java.time.OffsetDateTime nowUtc = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        if (request.getEndTime().isBefore(nowUtc)) {
+            throw new IllegalArgumentException("Cannot create a booking that has already ended. Please choose a future time slot.");
+        }
+        if (request.getStartTime().isBefore(nowUtc.minusMinutes(5))) {
+            // Allow 5-minute grace for clock skew, but reject clearly past start times
+            throw new IllegalArgumentException("Booking start time cannot be in the past. Please choose a current or future start time.");
+        }
+
+        UUID userId = currentUser.getId();
+        com.example.core_api.auth.UserRole userRole = currentUser.getRole();
+
         Resource resource = resourceRepository.findById(resourceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + resourceId));
 
-        // ── Layer 1: Advisory lock (transaction-scoped) ───────────────────────
-        // pg_advisory_xact_lock acquires a database-level exclusive lock keyed on
-        // this resource's UUID. It blocks ANY concurrent transaction that calls this
-        // for the same resource until the first one commits or rolls back.
-        //
-        // Unlike SELECT FOR UPDATE, this works even when the booking table has ZERO
-        // rows for this resource — which is the exact gap that caused the race condition.
-        // The lock is automatically released when the @Transactional method ends.
-        bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+        // ── Guard 3: No booking on a resource under MAINTENANCE ───────────────────
+        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
+            throw new ResourceBookingConflictException(
+                    "\"" + resource.getName() + "\" is currently under maintenance and cannot be booked. " +
+                    "Please check back once maintenance is complete.");
+        }
 
-        // ── Layer 2: Application-level conflict check ─────────────────────────
-        // After acquiring the lock we can safely read — the advisory lock guarantees
-        // no concurrent insert can slip in between this check and our own insert.
+        // ── Guard 4: Enforce maxDurationHours from resource metadata ──────────────
+        String meta = resource.getMetadata();
+        if (meta != null) {
+            java.util.regex.Matcher hoursMatcher = java.util.regex.Pattern
+                    .compile("\"maxDurationHours\"\\s*:\\s*(\\d+)").matcher(meta);
+            if (hoursMatcher.find()) {
+                try {
+                    int maxHours = Integer.parseInt(hoursMatcher.group(1));
+                    long requestedHours = java.time.Duration.between(request.getStartTime(), request.getEndTime()).toHours();
+                    if (requestedHours > maxHours) {
+                        throw new IllegalArgumentException(
+                                "Booking duration of " + requestedHours + " hour(s) exceeds the maximum allowed " +
+                                maxHours + " hour(s) for \"" + resource.getName() + "\". Please shorten your booking.");
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        // ── LOCKING STRATEGY (two-phase) ──────────────────────────────────────────
+        //
+        // We acquire TWO transaction-level advisory locks, always in a FIXED ORDER
+        // (lower hash first) to prevent deadlocks between concurrent transactions:
+        //
+        //  Lock A (user-level):     prevents the same user from concurrently booking
+        //                           two different resources in overlapping slots.
+        //  Lock B (resource-level): prevents two different users from double-booking
+        //                           the same resource in the same slot.
+        //
+        // Both locks are automatically released when the transaction commits/rolls back.
+        // ──────────────────────────────────────────────────────────────────────────
+        long userLockKey     = Math.abs((long) userId.toString().hashCode());
+        long resourceLockKey = Math.abs((long) resourceId.toString().hashCode());
+
+        // Always acquire in ascending key order to avoid deadlocks
+        if (userLockKey <= resourceLockKey) {
+            bookingRepository.acquireUserAdvisoryLock(userId.toString());
+            bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+        } else {
+            bookingRepository.acquireResourceAdvisoryLock(resourceId.toString());
+            bookingRepository.acquireUserAdvisoryLock(userId.toString());
+        }
+
+        // Layer 2a: Resource-level overlap check (prevents double-booking same resource)
         List<ResourceBooking> conflicts = bookingRepository.findOverlappingBookings(
                 resourceId, request.getStartTime(), request.getEndTime());
 
         if (!conflicts.isEmpty()) {
             ResourceBooking first = conflicts.get(0);
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a")
-                    .withZone(ZoneId.of("UTC"));
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a").withZone(ZoneId.of("UTC"));
             String bookedFrom  = fmt.format(first.getStartTime());
             String bookedUntil = fmt.format(first.getEndTime());
             throw new ResourceBookingConflictException(
@@ -134,35 +272,93 @@ public class ResourceService {
                     " to " + bookedUntil + " (UTC). Please choose a different time slot.");
         }
 
+        // Layer 2b: User-concurrency check (a user can only use ONE resource at any given time)
+        // A user CAN book the same resource for multiple future slots (e.g., Monday & Wednesday).
+        // But they CANNOT have two DIFFERENT resources booked at the same time.
+        // SAFE: the user-level advisory lock above guarantees this read-check-write is atomic.
+        List<ResourceBooking> userConflicts = bookingRepository.findUserConcurrentBookingsOnOtherResources(
+                userId, resourceId, request.getStartTime(), request.getEndTime());
+
+        if (!userConflicts.isEmpty()) {
+            ResourceBooking conflicting = userConflicts.get(0);
+            Resource conflictingResource = resourceRepository.findById(conflicting.getResourceId())
+                    .orElse(null);
+            String conflictingName = conflictingResource != null ? conflictingResource.getName() : "another resource";
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("h:mm a, MMM d").withZone(ZoneId.of("UTC"));
+            String slotFrom  = fmt.format(conflicting.getStartTime());
+            String slotUntil = fmt.format(conflicting.getEndTime());
+            throw new ResourceBookingConflictException(
+                    "You already have \"" + conflictingName + "\" booked from " + slotFrom +
+                    " to " + slotUntil + " (UTC). A researcher can only use one resource at a time. " +
+                    "Please choose a non-overlapping time slot or cancel your other booking first.");
+        }
+
+        // DEBUG: log the actual role so we can see what value the DB returned
+        log.warn("[BOOKING-ROLE-DEBUG] user={} role={} roleClass={}", currentUser.getEmail(), userRole, userRole == null ? "null" : userRole.getClass().getName());
+
+        // EXPLICIT allow-list: only these roles get auto-approved.
+        // Every other role (MEMBER, RESEARCHER, ROLE_RESEARCHER, GUEST, null, unknown) -> PENDING.
+        boolean isPrivileged = userRole == com.example.core_api.auth.UserRole.LEAD
+                || userRole == com.example.core_api.auth.UserRole.ADMIN
+                || userRole == com.example.core_api.auth.UserRole.OWNER
+                || userRole == com.example.core_api.auth.UserRole.RESOURCE_MANAGER;
+
+        BookingStatus initialStatus = isPrivileged ? BookingStatus.APPROVED : BookingStatus.PENDING;
+
         ResourceBooking booking = ResourceBooking.builder()
                 .resourceId(resourceId)
                 .userId(userId)
                 .projectId(request.getProjectId())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
-                .status(BookingStatus.PENDING_APPROVAL)
+                .status(initialStatus)
                 .purpose(request.getPurpose())
                 .build();
 
         try {
             booking = bookingRepository.save(booking);
         } catch (DataIntegrityViolationException ex) {
-            // ── Layer 3: Database EXCLUDE constraint ─────────────────────────
-            // The btree_gist EXCLUDE constraint fired — a concurrent transaction
-            // beat us to it between our check and our insert.
+            // Layer 3: DB EXCLUDE constraint
             throw new ResourceBookingConflictException(
                     "\"" + resource.getName() + "\" was just booked by another user for that time slot. " +
                     "Please refresh and choose a different time.");
         }
+
+        if (isPrivileged) {
+            log.info("[BOOKING] Privileged booking auto-approved: resource={}, user={}", resource.getName(), currentUser.getEmail());
+        } else {
+            String title = "New Booking Request - Pending Approval";
+            String message = "A booking request for \"" + resource.getName() + "\" was submitted by "
+                    + currentUser.getEmail() + " and is awaiting your approval.";
+            List<User> leads = userRepository.findByRoleIn(java.util.List.of(
+                com.example.core_api.auth.UserRole.LEAD,
+                com.example.core_api.auth.UserRole.ROLE_LEAD
+            ));
+            log.info("[NOTIFY] Notifying {} leads about pending booking for resource={}", leads.size(), resource.getName());
+            for (User lead : leads) {
+                notificationService.notify(lead.getId(), "BOOKING", title, message);
+            }
+        }
+
         return mapToBookingResponse(booking);
     }
 
-    public BookingResponse updateBookingStatus(UUID bookingId, BookingStatus newStatus) {
+    public BookingResponse updateBookingStatus(UUID bookingId, BookingStatus newStatus, String reason) {
         ResourceBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
-                
+        BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(newStatus);
         booking = bookingRepository.save(booking);
+        if (oldStatus != newStatus) {
+            Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+            String resName = resource != null ? resource.getName() : "Resource";
+            String title = "Booking " + newStatus;
+            String message = "Your booking for " + resName + " has been " + newStatus.toString().toLowerCase() + ".";
+            if (reason != null && !reason.trim().isEmpty()) {
+                message += " Reason: " + reason.trim();
+            }
+            notificationService.notify(booking.getUserId(), "BOOKING_UPDATE", title, message);
+        }
         return mapToBookingResponse(booking);
     }
 
@@ -186,17 +382,12 @@ public class ResourceService {
         String meta = resource.getMetadata();
         if (meta != null) {
             java.util.regex.Matcher locMatcher = java.util.regex.Pattern.compile("\"location\"\\s*:\\s*\"([^\"]+)\"").matcher(meta);
-            if (locMatcher.find()) {
-                loc = locMatcher.group(1);
-            }
+            if (locMatcher.find()) loc = locMatcher.group(1);
             java.util.regex.Matcher hoursMatcher = java.util.regex.Pattern.compile("\"maxDurationHours\"\\s*:\\s*(\\d+)").matcher(meta);
             if (hoursMatcher.find()) {
-                try {
-                    maxHours = Integer.parseInt(hoursMatcher.group(1));
-                } catch (Exception ignored) {}
+                try { maxHours = Integer.parseInt(hoursMatcher.group(1)); } catch (Exception ignored) {}
             }
         }
-
         return ResourceResponse.builder()
                 .id(resource.getId())
                 .name(resource.getName())
@@ -210,7 +401,7 @@ public class ResourceService {
                 .createdAt(resource.getCreatedAt())
                 .build();
     }
-    
+
     private BookingResponse mapToBookingResponse(ResourceBooking booking) {
         String resName = resourceRepository.findById(booking.getResourceId()).map(Resource::getName).orElse("Lab Asset");
         String email = userRepository.findById(booking.getUserId()).map(User::getEmail).orElse(booking.getUserId().toString());
@@ -218,7 +409,6 @@ public class ResourceService {
         if (booking.getProjectId() != null) {
             projName = projectRepository.findById(booking.getProjectId()).map(Project::getName).orElse("Unknown Project");
         }
-
         return BookingResponse.builder()
                 .id(booking.getId())
                 .resourceId(booking.getResourceId())
@@ -233,5 +423,82 @@ public class ResourceService {
                 .purpose(booking.getPurpose())
                 .createdAt(booking.getCreatedAt())
                 .build();
+    }
+
+    private void validateNoMaintenanceConflict(ResourceMaintenance target, UUID excludeId) {
+        if (target.getResourceId() == null && target.getAssetName() == null) return;
+        List<ResourceMaintenance> existing = maintenanceRepository.findAll();
+        for (ResourceMaintenance em : existing) {
+            if (excludeId != null && em.getId() != null && em.getId().equals(excludeId)) continue;
+            if ("Completed".equalsIgnoreCase(em.getStatus())) continue;
+            boolean sameAsset = (target.getResourceId() != null && target.getResourceId().equals(em.getResourceId()))
+                    || (target.getAssetName() != null && target.getAssetName().trim().equalsIgnoreCase(em.getAssetName().trim()));
+            if (sameAsset) {
+                if ("In Progress".equalsIgnoreCase(em.getStatus()) && "In Progress".equalsIgnoreCase(target.getStatus())) {
+                    throw new IllegalArgumentException("Asset '" + em.getAssetName() + "' already has an active maintenance window in progress.");
+                }
+                if (target.getStartDate() != null && target.getEndDate() != null && em.getStartDate() != null && em.getEndDate() != null) {
+                    if (datesOverlap(target.getStartDate(), target.getEndDate(), em.getStartDate(), em.getEndDate())) {
+                        throw new IllegalArgumentException("Asset '" + em.getAssetName() + "' already has a conflicting maintenance schedule during that timeframe (" + em.getStartDate() + " to " + em.getEndDate() + ").");
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean datesOverlap(String start1, String end1, String start2, String end2) {
+        if (start1 == null || end1 == null || start2 == null || end2 == null) return false;
+        try {
+            java.time.Instant s1 = parseToInstant(start1);
+            java.time.Instant e1 = parseToInstant(end1);
+            java.time.Instant s2 = parseToInstant(start2);
+            java.time.Instant e2 = parseToInstant(end2);
+            if (s1 != null && e1 != null && s2 != null && e2 != null) return s1.isBefore(e2) && e1.isAfter(s2);
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private java.time.Instant parseToInstant(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) return null;
+        try {
+            String clean = dateStr.trim();
+            if (clean.length() == 16) return java.time.LocalDateTime.parse(clean).toInstant(java.time.ZoneOffset.UTC);
+            if (clean.length() == 10) return java.time.LocalDate.parse(clean).atStartOfDay().toInstant(java.time.ZoneOffset.UTC);
+            return java.time.OffsetDateTime.parse(clean).toInstant();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private void cancelConflictingBookingsForMaintenance(ResourceMaintenance maintenance) {
+        if (!"Scheduled".equalsIgnoreCase(maintenance.getStatus()) && !"In Progress".equalsIgnoreCase(maintenance.getStatus())) return;
+        try {
+            java.time.Instant startInstant = parseToInstant(maintenance.getStartDate());
+            java.time.Instant endInstant = parseToInstant(maintenance.getEndDate());
+            if (startInstant == null || endInstant == null) return;
+            java.time.OffsetDateTime startTime = java.time.OffsetDateTime.ofInstant(startInstant, java.time.ZoneOffset.UTC);
+            java.time.OffsetDateTime endTime = java.time.OffsetDateTime.ofInstant(endInstant, java.time.ZoneOffset.UTC);
+            List<ResourceBooking> conflicting = bookingRepository.findOverlappingBookings(maintenance.getResourceId(), startTime, endTime);
+            for (ResourceBooking booking : conflicting) {
+                booking.setStatus(BookingStatus.CANCELLED);
+                bookingRepository.save(booking);
+                String title = "Booking Cancelled - Priority Maintenance";
+                String message = "Your booking for asset '" + maintenance.getAssetName() + "' from " + booking.getStartTime() + " to " + booking.getEndTime() + " has been cancelled due to priority lab maintenance.";
+                notificationService.notify(booking.getUserId(), "BOOKING_UPDATE", title, message);
+                log.info("[NOTIFY] Cancelled overlapping booking id={} and notified user id={}", booking.getId(), booking.getUserId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to process maintenance overlaps for maintenance id={}", maintenance.getId(), e);
+        }
+    }
+
+    private void notifyManagers(String title, String message) {
+        List<com.example.core_api.auth.User> managers = userRepository.findByRoleIn(java.util.List.of(
+            com.example.core_api.auth.UserRole.ADMIN,
+            com.example.core_api.auth.UserRole.OWNER,
+            com.example.core_api.auth.UserRole.ROLE_ADMIN
+        ));
+        for (com.example.core_api.auth.User manager : managers) {
+            notificationService.notify(manager.getId(), "Maintenance", title, message);
+        }
     }
 }

@@ -17,5 +17,6 @@ package com.example.core_api.auth;
 public record AuthResponse(
         String token,
         String email,
-        String role
+        String role,
+        String userId
 ) {}

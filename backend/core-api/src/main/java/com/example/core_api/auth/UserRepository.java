@@ -43,4 +43,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Used in AuthService.register() to quickly check if an email is taken
     // without loading the full User object from DB.
     boolean existsByEmail(String email);
+
+    // Find all users with a specific role in the current tenant
+    java.util.List<User> findByRole(UserRole role);
+
+    // Find all users whose role is in the given list
+    java.util.List<User> findByRoleIn(java.util.Collection<UserRole> roles);
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Client, IMessage } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
-import { getTenantSlug, getEmail, getToken } from "./auth";
+import { getTenantSlug, getEmail, getToken, getUserId } from "./auth";
 import { fetchProjectMessages, type ChatMessageItem } from "./services/chat";
 
 export type { ChatMessageItem } from "./services/chat";
@@ -135,12 +135,14 @@ export function useWebSocketChat(projectId: string, pageSize = 15) {
 
       const tenant = getTenantSlug() || "myorg";
       const userEmail = getEmail() || "Researcher";
+      const userId = getUserId();
       const senderName = senderDisplayName || userEmail;
 
       const payload = {
         projectId,
         content: content.trim(),
         senderName,
+        senderId: userId || undefined,
         tenantId: tenant,
         replyToId: replyTo?.id || null,
         replyToSender: replyTo?.senderName || null,

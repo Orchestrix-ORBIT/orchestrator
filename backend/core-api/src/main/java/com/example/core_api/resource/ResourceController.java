@@ -20,48 +20,29 @@ public class ResourceController {
         this.resourceService = resourceService;
     }
 
+    // TenantFilter (Order=1) sets TenantContext for the full request lifecycle.
+    // No manual TenantContext management needed in any controller method.
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResourceResponse createResource(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @Valid @RequestBody CreateResourceRequest request) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         ResourceAccess.requireManager(authentication != null && authentication.getPrincipal() instanceof User user ? user : null);
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            UUID ownerId = getAuthenticatedUserId();
-            return resourceService.createResource(request, ownerId);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        UUID ownerId = getAuthenticatedUserId();
+        return resourceService.createResource(request, ownerId);
     }
 
     @GetMapping
     public List<ResourceResponse> getAllResources(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @RequestParam(required = false) ResourceType type,
             @RequestParam(required = false) ResourceStatus status) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return resourceService.getAllResources(type, status);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        return resourceService.getAllResources(type, status);
     }
 
     @GetMapping("/{id}")
-    public ResourceResponse getResourceById(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
-            @PathVariable UUID id) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return resourceService.getResourceById(id);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+    public ResourceResponse getResourceById(@PathVariable UUID id) {
+        return resourceService.getResourceById(id);
     }
 
     @PatchMapping("/{id}/status")
@@ -85,6 +66,53 @@ public class ResourceController {
             @Valid @RequestBody ResourceMaintenance maintenance) {
         ResourceAccess.requireManager(currentUser);
         return resourceService.createMaintenance(maintenance);
+    }
+
+    @PatchMapping("/maintenance/{id}")
+    public ResourceMaintenance updateMaintenance(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id,
+            @RequestBody java.util.Map<String, Object> request) {
+        ResourceAccess.requireManager(currentUser);
+        ResourceMaintenance updates = new ResourceMaintenance();
+        if (request.containsKey("assetName") && request.get("assetName") != null) {
+            updates.setAssetName(request.get("assetName").toString());
+        }
+        if (request.containsKey("resourceId") && request.get("resourceId") != null) {
+            updates.setResourceId(UUID.fromString(request.get("resourceId").toString()));
+        }
+        if (request.containsKey("category") && request.get("category") != null) {
+            updates.setCategory(request.get("category").toString());
+        }
+        if (request.containsKey("startDate") && request.get("startDate") != null) {
+            updates.setStartDate(request.get("startDate").toString());
+        }
+        if (request.containsKey("endDate") && request.get("endDate") != null) {
+            updates.setEndDate(request.get("endDate").toString());
+        }
+        if (request.containsKey("downtimeType") && request.get("downtimeType") != null) {
+            updates.setDowntimeType(request.get("downtimeType").toString());
+        }
+        if (request.containsKey("technician") && request.get("technician") != null) {
+            updates.setTechnician(request.get("technician").toString());
+        }
+        if (request.containsKey("status") && request.get("status") != null) {
+            updates.setStatus(request.get("status").toString());
+        }
+        if (request.containsKey("notes") && request.get("notes") != null) {
+            updates.setNotes(request.get("notes").toString());
+        }
+
+        return resourceService.updateMaintenance(id, updates);
+    }
+
+    @DeleteMapping("/maintenance/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMaintenance(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id) {
+        ResourceAccess.requireManager(currentUser);
+        resourceService.deleteMaintenance(id);
     }
 
     private UUID getAuthenticatedUserId() {

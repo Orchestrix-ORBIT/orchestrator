@@ -2,8 +2,11 @@ package com.example.core_api.resource;
 
 import com.example.core_api.auth.User;
 import com.example.core_api.auth.UserRepository;
+import com.example.core_api.auth.UserRole;
 import com.example.core_api.exception.ResourceBookingConflictException;
 import com.example.core_api.exception.ResourceNotFoundException;
+import com.example.core_api.notification.NotificationService;
+import com.example.core_api.project.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +36,8 @@ class ResourceServiceTest {
     @Mock private ResourceBookingRepository bookingRepository;
     @Mock private UserRepository userRepository;
     @Mock private ResourceMaintenanceRepository maintenanceRepository;
+    @Mock private ProjectRepository projectRepository;
+    @Mock private NotificationService notificationService;
     @InjectMocks private ResourceService resourceService;
 
     private UUID resourceId, userId, bookingId;
@@ -50,6 +55,7 @@ class ResourceServiceTest {
         sampleUser = new User();
         sampleUser.setId(userId);
         sampleUser.setEmail("researcher@lab.com");
+        sampleUser.setRole(UserRole.RESEARCHER);  // non-privileged → PENDING
     }
 
     // ── createResource ────────────────────────────────────────────────────────
@@ -139,16 +145,18 @@ class ResourceServiceTest {
 
         ResourceBooking saved = ResourceBooking.builder().id(bookingId).resourceId(resourceId)
                 .userId(userId).startTime(start).endTime(end)
-                .status(BookingStatus.PENDING_APPROVAL).purpose("Imaging session").build();
+                .status(BookingStatus.PENDING).purpose("Imaging session").build();
 
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(sampleResource));
+        doNothing().when(bookingRepository).acquireResourceAdvisoryLock(any());
         when(bookingRepository.findOverlappingBookings(resourceId, start, end)).thenReturn(List.of());
         when(bookingRepository.save(any())).thenReturn(saved);
         when(userRepository.findById(userId)).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByRoleIn(any())).thenReturn(List.of());
 
-        BookingResponse response = resourceService.createBooking(resourceId, req, userId);
+        BookingResponse response = resourceService.createBooking(resourceId, req, sampleUser);
         assertThat(response.getId()).isEqualTo(bookingId);
-        assertThat(response.getStatus()).isEqualTo(BookingStatus.PENDING_APPROVAL);
+        assertThat(response.getStatus()).isEqualTo(BookingStatus.PENDING);
     }
 
     @Test
@@ -160,12 +168,13 @@ class ResourceServiceTest {
 
         ResourceBooking conflict = ResourceBooking.builder().id(UUID.randomUUID()).resourceId(resourceId)
                 .userId(UUID.randomUUID()).startTime(start.minusMinutes(30)).endTime(end.plusMinutes(30))
-                .status(BookingStatus.PENDING_APPROVAL).build();
+                .status(BookingStatus.PENDING).build();
 
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(sampleResource));
+        doNothing().when(bookingRepository).acquireResourceAdvisoryLock(any());
         when(bookingRepository.findOverlappingBookings(resourceId, start, end)).thenReturn(List.of(conflict));
 
-        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, userId))
+        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, sampleUser))
                 .isInstanceOf(ResourceBookingConflictException.class).hasMessageContaining("Electron Microscope A");
         verify(bookingRepository, never()).save(any());
     }
@@ -176,7 +185,7 @@ class ResourceServiceTest {
         req.setStartTime(OffsetDateTime.now().plusHours(2));
         req.setEndTime(OffsetDateTime.now().plusHours(1));  // end before start
         req.setPurpose("Invalid");
-        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, userId))
+        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, sampleUser))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("End time must be after start time");
         verify(resourceRepository, never()).findById(any());
     }
@@ -187,7 +196,7 @@ class ResourceServiceTest {
         req.setStartTime(OffsetDateTime.now().plusHours(1));
         req.setEndTime(OffsetDateTime.now().plusHours(2));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, userId))
+        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, sampleUser))
                 .isInstanceOf(ResourceNotFoundException.class).hasMessageContaining(resourceId.toString());
     }
 
@@ -199,9 +208,10 @@ class ResourceServiceTest {
         CreateBookingRequest req = new CreateBookingRequest();
         req.setStartTime(start); req.setEndTime(end); req.setPurpose("Race test");
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(sampleResource));
+        doNothing().when(bookingRepository).acquireResourceAdvisoryLock(any());
         when(bookingRepository.findOverlappingBookings(resourceId, start, end)).thenReturn(List.of());
         when(bookingRepository.save(any())).thenThrow(new DataIntegrityViolationException("EXCLUDE constraint"));
-        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, userId))
+        assertThatThrownBy(() -> resourceService.createBooking(resourceId, req, sampleUser))
                 .isInstanceOf(ResourceBookingConflictException.class).hasMessageContaining("Electron Microscope A");
     }
 
@@ -218,14 +228,14 @@ class ResourceServiceTest {
         when(bookingRepository.save(any())).thenReturn(approved);
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(sampleResource));
         when(userRepository.findById(userId)).thenReturn(Optional.of(sampleUser));
-        assertThat(resourceService.updateBookingStatus(bookingId, BookingStatus.APPROVED).getStatus())
+        assertThat(resourceService.updateBookingStatus(bookingId, BookingStatus.APPROVED, null).getStatus())
                 .isEqualTo(BookingStatus.APPROVED);
     }
 
     @Test
     void updateBookingStatus_whenNotFound_throwsResourceNotFoundException() {
         when(bookingRepository.findById(bookingId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> resourceService.updateBookingStatus(bookingId, BookingStatus.APPROVED))
+        assertThatThrownBy(() -> resourceService.updateBookingStatus(bookingId, BookingStatus.APPROVED, null))
                 .isInstanceOf(ResourceNotFoundException.class).hasMessageContaining(bookingId.toString());
         verify(bookingRepository, never()).save(any());
     }

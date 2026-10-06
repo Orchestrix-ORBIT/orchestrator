@@ -84,7 +84,7 @@ class ChatControllerTest {
     @Test
     void sendMessage_validPayload_savesMessageBroadcastsToStompTopicAndClearsTenantContext() {
         SendChatMessageRequest request = new SendChatMessageRequest(
-                projectId, null, "Live chat broadcast", "Bob", "myorg", null, null, null
+                projectId, null, "Live chat broadcast", "Bob", null, "myorg", null, null, null
         );
 
         ChatMessageResponse responsePayload = new ChatMessageResponse(

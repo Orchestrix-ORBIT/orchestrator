@@ -78,6 +78,7 @@ public class DocumentService {
                 .category(category)
                 .contentEncrypted(request.getContentEncrypted())
                 .fileStorageKey(request.getFileStorageKey())
+                .allowedEditors(request.getAllowedEditors())
                 .build();
 
         document = documentRepository.save(document);
@@ -160,6 +161,9 @@ public class DocumentService {
         if (request.getFileStorageKey() != null) {
             document.setFileStorageKey(request.getFileStorageKey());
             document.setVersion(document.getVersion() + 1);   // bump version on file replacement
+        }
+        if (request.getAllowedEditors() != null) {
+            document.setAllowedEditors(request.getAllowedEditors());
         }
 
         document = documentRepository.save(document);

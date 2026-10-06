@@ -33,15 +33,25 @@ Analyze the following chat messages and provide:
 1. A concise summary of what was discussed.
 2. The key points or decisions made.
 3. Any action items or tasks mentioned.
+4. Extracted tasks assigned to specific people. ONLY extract genuine, explicitly stated tasks. If no tasks are clearly assigned to a person, return an empty array `[]` for extracted_tasks.
 
 Chat Messages:
 {text}
 
 Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {{
+  "topic": "A short, descriptive title for the overall discussion (3-6 words).",
   "summary": "A 2-4 sentence summary of what was discussed.",
   "key_points": ["key point 1", "key point 2", "key point 3"],
-  "action_items": ["action item 1", "action item 2"]
+  "action_items": ["action item 1", "action item 2"],
+  "extracted_tasks": [
+    {{
+      "assignee_id": "ID of the person from the transcript", 
+      "assignee_name": "Name of the person", 
+      "title": "Short, actionable task title (e.g. 'Deploy API update')",
+      "description": "More detailed description of the task based on the chat context."
+    }}
+  ]
 }}"""
 )
 
@@ -63,15 +73,25 @@ COMBINE_PROMPT = PromptTemplate(
     template="""You are an intelligent research assistant for the Orchestrix platform.
 The following are summaries of different portions of a research team chat.
 Combine them into a single cohesive analysis.
+Pay special attention to preserving explicit task assignments for specific people. ONLY extract genuine tasks.
 
 Summaries:
 {text}
 
 Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {{
+  "topic": "A short, descriptive title for the overall discussion (3-6 words).",
   "summary": "A 2-4 sentence summary of what was discussed.",
   "key_points": ["key point 1", "key point 2", "key point 3"],
-  "action_items": ["action item 1", "action item 2"]
+  "action_items": ["action item 1", "action item 2"],
+  "extracted_tasks": [
+    {{
+      "assignee_id": "ID of the person from the transcript", 
+      "assignee_name": "Name of the person", 
+      "title": "Short, actionable task title (e.g. 'Deploy API update')",
+      "description": "More detailed description of the task based on the chat context."
+    }}
+  ]
 }}"""
 )
 
@@ -83,6 +103,7 @@ def _format_messages(messages: list[dict]) -> str:
     lines = []
     for msg in messages:
         sender = msg.get("senderName", "Unknown")
+        sender_id = msg.get("senderId", "")
         content = msg.get("content", "")
         timestamp = msg.get("createdAt", "")
         time_label = ""
@@ -93,7 +114,8 @@ def _format_messages(messages: list[dict]) -> str:
                 time_label = f" [{dt.strftime('%H:%M')}]"
             except Exception:
                 pass
-        lines.append(f"{sender}{time_label}: {content}")
+        id_str = f" [ID: {sender_id}]" if sender_id else ""
+        lines.append(f"{sender}{id_str}{time_label}: {content}")
     return "\n".join(lines)
 
 
@@ -181,15 +203,19 @@ def summarize_messages(messages: list[dict]) -> dict:
         parsed = json.loads(clean.strip())
     except json.JSONDecodeError:
         parsed = {
+            "topic": "Discussion Summary",
             "summary": result_text.strip(),
             "key_points": [],
             "action_items": [],
+            "extracted_tasks": [],
         }
 
     return {
+        "topic": parsed.get("topic", "Discussion Summary"),
         "summary": parsed.get("summary", ""),
         "key_points": parsed.get("key_points", []),
         "action_items": parsed.get("action_items", []),
+        "extracted_tasks": parsed.get("extracted_tasks", []),
         "message_count": message_count,
         "strategy": strategy,
     }

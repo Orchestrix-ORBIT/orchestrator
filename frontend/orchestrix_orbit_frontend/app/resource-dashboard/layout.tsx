@@ -1,8 +1,10 @@
 "use client";
 
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, getEmail } from "@/lib/auth";
+import { NotificationsService } from "@/lib/services/notifications";
 
 const NAV = [
   {
@@ -67,20 +69,77 @@ export default function ResourceDashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  function handleLogout() {
+  // Fetch unread count + poll
+  useEffect(() => {
+    const fetchUnread = () => {
+      NotificationsService.getAll()
+        .then((list) => {
+          const unreadList = list.filter((n) => {
+            if (n.read) return false;
+            const typeStr = String(n.type || "").toUpperCase();
+            const titleStr = String(n.title || "").toUpperCase();
+            if (typeStr.includes("BOOKING") || titleStr.includes("BOOKING")) return false;
+            return true;
+          });
+          setUnreadCount(unreadList.length);
+        })
+        .catch(() => {});
+    };
+    fetchUnread();
+    const id = setInterval(fetchUnread, 5000);
+    window.addEventListener("notifications_updated", fetchUnread);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("notifications_updated", fetchUnread);
+    };
+  }, [pathname]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
+  const confirmLogout = () => {
     logout();
     router.push("/");
-  }
+  };
 
   return (
     <div style={s.root}>
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
-      <aside style={s.sidebar}>
+      <aside style={{ ...s.sidebar, width: isSidebarCollapsed ? 80 : 220, minWidth: isSidebarCollapsed ? 80 : 220, transition: "width 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
         {/* Brand */}
-        <div style={s.brand}>
-          <span style={s.brandName}>Orchestrix</span>
-          <span style={s.brandSub}>Resource Manager</span>
+        <div style={{ ...s.brand, padding: isSidebarCollapsed ? "0 0 20px" : "0 18px 20px", alignItems: isSidebarCollapsed ? "center" : "flex-start" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "space-between", width: "100%" }}>
+            {!isSidebarCollapsed && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={s.brandName}>Orchestrix</span>
+                <span style={s.brandSub}>Resource Manager</span>
+              </div>
+            )}
+            {isSidebarCollapsed && <span style={{ ...s.brandName, fontSize: 18 }}>O</span>}
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, borderRadius: 4, marginTop: isSidebarCollapsed ? 12 : 0 }}
+              className="btn-secondary-hover"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isSidebarCollapsed ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -96,64 +155,135 @@ export default function ResourceDashboardLayout({
                 key={item.href}
                 id={`nav-rm-${item.label.toLowerCase().replace(/\s/g, "-")}`}
                 href={item.href}
-                style={active ? s.navItemActive : s.navItem}
+                style={{ ...(active ? s.navItemActive : s.navItem), justifyContent: isSidebarCollapsed ? "center" : "flex-start", padding: isSidebarCollapsed ? "12px" : "9px 12px" }}
+                className={!active ? "nav-item-hover" : ""}
+                title={isSidebarCollapsed ? item.label : undefined}
               >
                 <span style={active ? s.navIconActive : s.navIcon}>
                   {item.icon}
                 </span>
-                <span>{item.label}</span>
+                {!isSidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+                {!isSidebarCollapsed && item.label === "Notifications" && unreadCount > 0 && (
+                  <span style={{ background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 10 }}>
+                    {unreadCount}
+                  </span>
+                )}
+                {isSidebarCollapsed && item.label === "Notifications" && unreadCount > 0 && (
+                  <span style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, background: "#ef4444", borderRadius: "50%" }} />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Footer / Clean Sign Out */}
-        <div style={s.footer}>
+        {/* Footer: Sign Out */}
+        <div style={{ padding: "12px 8px 0", marginTop: "auto", borderTop: "1px solid #f3f4f6", display: "flex", flexDirection: "column", gap: 6 }}>
           <button
             id="btn-rm-logout"
             type="button"
-            onClick={handleLogout}
-            style={s.logoutBtn}
+            onClick={() => setShowSignOutConfirm(true)}
+            className="nav-item-hover"
+            title={isSidebarCollapsed ? "Sign Out" : undefined}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: isSidebarCollapsed ? "center" : "flex-start",
+              gap: 8,
+              padding: isSidebarCollapsed ? "12px" : "9px 12px",
+              background: "transparent",
+              border: "none",
+              borderRadius: 8,
+              color: "#6b7280",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "background 0.1s ease, color 0.1s ease",
+            }}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
               <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
               <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M12.5 7H4.5" strokeLinecap="round" />
             </svg>
-            Sign Out
+            {!isSidebarCollapsed && "Sign Out"}
           </button>
         </div>
       </aside>
 
       {/* ── Main Layout ──────────────────────────────────────────────────────── */}
-      <div style={s.mainWrapper}>
+      <div style={{ ...s.mainWrapper, marginLeft: isSidebarCollapsed ? 104 : 244 }}>
         {/* Topbar */}
         <header style={s.topbar}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={s.topbarTenant}>FACILITIES & COMPUTE OPERATIONS</span>
-            <span style={s.topbarDivider}>/</span>
-            <span style={s.topbarStatus}>All Systems Monitored</span>
-          </div>
-
           <div style={s.topbarRight}>
-            <div style={s.topbarAvatar}>CK</div>
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#161616" }}>
-              Operations
-            </span>
-            <button
-              id="btn-topbar-rm-logout"
-              type="button"
-              onClick={handleLogout}
-              style={s.topbarLogoutBtn}
-            >
-              Sign Out
-            </button>
+            <div style={s.profileContainer} ref={dropdownRef}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                style={s.avatarBtn}
+              >
+                {getEmail()?.charAt(0).toUpperCase() || "R"}
+              </button>
+
+              {menuOpen && (
+                <div style={s.dropdownMenu}>
+                  <div style={s.dropdownHeader}>
+                    <span style={s.dropdownEmail}>{getEmail() || "user@example.com"}</span>
+                  </div>
+
+                  <button
+                    style={s.dropdownLogout}
+                    className="btn-secondary-hover"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setShowSignOutConfirm(true);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+                      <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v9A1.5 1.5 0 0 0 2.5 13H5" strokeLinecap="round" />
+                      <path d="M9.5 10L12.5 7L9.5 4" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M12.5 7H4.5" strokeLinecap="round" />
+                    </svg>
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main style={s.content}>{children}</main>
+        <div style={s.content}>
+          <main style={s.contentInner}>{children}</main>
+        </div>
       </div>
+
+      {/* ── Sign Out Confirmation Modal ───────────────────────────────────────── */}
+      {showSignOutConfirm && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}
+          onClick={() => setShowSignOutConfirm(false)}
+        >
+          <div
+            style={{ background: "#ffffff", borderRadius: 16, padding: 32, width: "100%", maxWidth: 400, textAlign: "center", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)", border: "1px solid #e2e8f0", position: "relative" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button onClick={() => setShowSignOutConfirm(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 20, lineHeight: 1, transition: "color 0.2s" }} onMouseOver={(e) => (e.currentTarget.style.color = "#475569")} onMouseOut={(e) => (e.currentTarget.style.color = "#94a3b8")}>×</button>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px auto" }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>Sign Out</h2>
+            <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.6, margin: "0 0 28px 0" }}>Are you sure you want to sign out of <strong>Orchestrix</strong>? Your session will be ended.</p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowSignOutConfirm(false)} style={{ flex: 1, padding: "12px", borderRadius: 8, background: "#f1f5f9", color: "#475569", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={(e) => (e.currentTarget.style.background = "#e2e8f0")} onMouseOut={(e) => (e.currentTarget.style.background = "#f1f5f9")}>Cancel</button>
+              <button onClick={confirmLogout} style={{ flex: 1, padding: "12px", borderRadius: 8, background: "#0f172a", color: "#ffffff", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={(e) => (e.currentTarget.style.background = "#1e293b")} onMouseOut={(e) => (e.currentTarget.style.background = "#0f172a")}>Yes, Sign Out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -161,42 +291,47 @@ export default function ResourceDashboardLayout({
 const s: Record<string, React.CSSProperties> = {
   root: {
     display: "flex",
-    minHeight: "100vh",
-    background: "#f5f5f5",
+    height: "100vh",
+    maxHeight: "100vh",
+    overflow: "hidden",
+    background: "#f2f2f2",
     fontFamily: "var(--font)",
   },
   sidebar: {
-    width: 210,
-    minWidth: 210,
-    background: "#161616",
+    width: 220,
+    minWidth: 220,
+    background: "#ffffff",
     display: "flex",
     flexDirection: "column",
     padding: "20px 0",
-    position: "fixed" as const,
-    top: 0,
-    left: 0,
-    bottom: 0,
+    position: "fixed",
+    top: 12,
+    left: 12,
+    bottom: 12,
+    height: "calc(100vh - 24px)",
     zIndex: 20,
     userSelect: "none",
+    borderRight: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "1px 0 10px rgba(0,0,0,0.03)",
   },
   brand: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
     padding: "0 18px 20px",
-    borderBottom: "1px solid #2a2a2a",
+    borderBottom: "1px solid #f3f4f6",
     marginBottom: 10,
   },
   brandName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 600,
-    color: "#ffffff",
+    color: "#111827",
     letterSpacing: "-0.2px",
   },
   brandSub: {
     fontSize: 11,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#6b7280",
+    fontWeight: 500,
   },
   nav: {
     display: "flex",
@@ -206,130 +341,140 @@ const s: Record<string, React.CSSProperties> = {
     flex: 1,
   },
   navItem: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     padding: "9px 12px",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 13,
-    color: "#888888",
-    fontWeight: 400,
+    color: "#6b7280",
+    fontWeight: 500,
     transition: "background 0.1s, color 0.1s",
     cursor: "pointer",
     textDecoration: "none",
   },
   navItemActive: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     padding: "9px 12px",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 13,
-    color: "#ffffff",
-    fontWeight: 500,
-    background: "#2d2d2d",
+    color: "#111827",
+    fontWeight: 600,
+    background: "#f3f4f6",
     cursor: "pointer",
     textDecoration: "none",
   },
   navIcon: {
-    color: "#888888",
+    color: "#6b7280",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
   },
   navIconActive: {
-    color: "#ffffff",
+    color: "#111827",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
   },
-  footer: {
-    padding: "12px",
-    borderTop: "1px solid #2a2a2a",
-  },
   mainWrapper: {
-    marginLeft: 210,
+    marginLeft: 244,
+    transition: "margin-left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    minHeight: "100vh",
+    height: "100vh",
+    maxHeight: "100vh",
+    overflow: "hidden",
+    background: "#f2f2f2",
+    position: "relative",
   },
   topbar: {
-    height: 48,
-    background: "#ffffff",
-    borderBottom: "1px solid #e0e0e0",
+    height: 72,
+    background: "rgba(242,242,242,0.85)",
+    backdropFilter: "blur(8px)",
+    borderBottom: "1px solid rgba(0,0,0,0.07)",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     padding: "0 32px",
-    position: "sticky" as const,
-    top: 0,
+    flexShrink: 0,
     zIndex: 10,
-  },
-  topbarTenant: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#161616",
-    letterSpacing: "0.5px",
-  },
-  topbarDivider: {
-    color: "#d0d0d0",
-    fontSize: 12,
-  },
-  topbarStatus: {
-    fontSize: 12,
-    color: "#2e7d32",
-    fontWeight: 500,
   },
   topbarRight: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
-  topbarAvatar: {
-    width: 26,
-    height: 26,
+  profileContainer: {
+    position: "relative",
+  },
+  avatarBtn: {
+    width: 36,
+    height: 36,
     borderRadius: "50%",
-    background: "#161616",
-    color: "#ffffff",
+    background: "#111827",
+    color: "#fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 11,
-    fontWeight: 600,
+    fontSize: 14,
+    fontWeight: "700",
+    cursor: "pointer",
+    border: "2px solid transparent",
+    outline: "none",
+    transition: "opacity 0.15s",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+  },
+  dropdownMenu: {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    right: 0,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 10,
+    boxShadow: "0 8px 16px rgba(0,0,0,0.08)",
+    minWidth: 200,
+    zIndex: 50,
+    overflow: "hidden",
+  },
+  dropdownHeader: {
+    padding: "12px 16px",
+    borderBottom: "1px solid #f1f5f9",
+  },
+  dropdownEmail: {
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: 500,
+  },
+  dropdownLogout: {
+    display: "flex",
+    width: "100%",
+    alignItems: "center",
+    gap: 8,
+    padding: "12px 16px",
+    border: "none",
+    background: "transparent",
+    color: "#d32f2f",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "background 0.15s",
   },
   content: {
     flex: 1,
-    padding: "32px 32px 48px",
+    padding: "20px 28px",
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+  },
+  contentInner: {
     maxWidth: 1400,
     width: "100%",
-    boxSizing: "border-box",
-  },
-  logoutBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: "9px 12px",
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#f87171",
-    background: "#241414",
-    border: "1px solid #3d1c1c",
-    cursor: "pointer",
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  topbarLogoutBtn: {
-    padding: "5px 10px",
-    borderRadius: 5,
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#c62828",
-    background: "#fff0f0",
-    border: "1px solid #f5c6cb",
-    cursor: "pointer",
-    marginLeft: 6,
+    margin: "0 auto",
   },
 };

@@ -52,6 +52,9 @@ public class ChatController {
             String destination = "/topic/tenant/" + tenant.toLowerCase().replace('-', '_')
                     + "/project/" + request.projectId();
             messagingTemplate.convertAndSend(destination, response);
+        } catch (Exception e) {
+            System.err.println("FAILED TO SAVE CHAT MESSAGE: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             TenantContext.clear();
         }

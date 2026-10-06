@@ -27,7 +27,7 @@ test("admin creates a project in the browser and a member cannot open it", async
   await page.goto("/");
   await page.getByLabel("Organization").fill(tenant);
   await page.getByLabel("Email address").fill(adminEmail);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.locator("#btn-signin").click();
   await expect(page).toHaveURL(/\/admin-dashboard$/);
 
@@ -53,7 +53,7 @@ test("admin creates a project in the browser and a member cannot open it", async
   await page.reload();
   await page.getByLabel("Organization").fill(tenant);
   await page.getByLabel("Email address").fill(memberEmail);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.locator("#btn-signin").click();
   await expect(page).toHaveURL(/\/dashboard\/researcher$/);
   await page.goto("/admin-dashboard");
