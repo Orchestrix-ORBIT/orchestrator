@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { getRole, getEmail, logout } from "@/lib/auth";
+import { getRole, getEmail, logout, isLoggedIn } from "@/lib/auth";
 
 export default function LeadDashboardLayout({
   children,
@@ -18,8 +18,12 @@ export default function LeadDashboardLayout({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!isLoggedIn()) {
+      router.replace("/");
+    } else {
+      setMounted(true);
+    }
+  }, [router]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

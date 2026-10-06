@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, use, useCallback, useRef } from "react";
+import React, { useState, useEffect, use, useCallback, useRef } from "react";
 import Link from "next/link";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "ACCEPTED";
@@ -11,6 +11,7 @@ interface TaskItem {
   description: string;
   status: TaskStatus;
   assignee: string;
+  assigneeId?: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
   dueDate: string;
   isAiGenerated?: boolean;
@@ -23,11 +24,11 @@ type ProjectMeta = {
 };
 
 
-import { useEffect } from "react";
 import { ProjectsService } from "@/lib/services/projects";
 import { TasksService } from "@/lib/services/tasks";
 import { TeamsService } from "@/lib/services/teams";
 import { useTasksRealtime } from "@/lib/useTasksRealtime";
+import { getUserId } from "@/lib/auth";
 import LoadingState from "@/components/ui/LoadingState";
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
@@ -123,6 +124,7 @@ export default function ProjectWorkspacePage({
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyMyTasks, setShowOnlyMyTasks] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [titleInput, setTitleInput] = useState("");
@@ -190,6 +192,7 @@ export default function ProjectWorkspacePage({
                   ? (members as any[]).find((m: any) => (m.userId || m.id) === t.assigneeId).displayName || t.assigneeId
                   : t.assigneeId)
               : "Unassigned",
+            assigneeId: t.assigneeId,
             priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
             dueDate: t.dueDate || (t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "Active"),
           };
@@ -221,7 +224,7 @@ export default function ProjectWorkspacePage({
         else if (remote.status === "IN_PROGRESS") uiStatus = "IN_PROGRESS";
         const match = availableMembersRef.current.find((m: any) => (m.userId || m.id) === remote.assigneeId);
         const assigneeName = match ? (match.displayName || match.email || remote.assigneeId) : (remote.assigneeId || "Unassigned");
-        return { ...local, status: uiStatus, assignee: assigneeName };
+        return { ...local, status: uiStatus, assignee: assigneeName, assigneeId: remote.assigneeId };
       });
       const existingIds = new Set(prev.map(t => t.id));
       const newItems: TaskItem[] = remoteTasks
@@ -236,6 +239,7 @@ export default function ProjectWorkspacePage({
             id: t.id, title: t.title, description: t.description || "",
             status: uiStatus,
             assignee: match ? (match.displayName || match.email) : t.assigneeId || "Unassigned",
+            assigneeId: t.assigneeId,
             priority: (t.priority === "URGENT" || t.priority === "CRITICAL") ? "HIGH" : (t.priority || "MEDIUM"),
             dueDate: t.dueDate || "Active",
           };
@@ -356,10 +360,15 @@ export default function ProjectWorkspacePage({
     setIsPriorityDropdownOpen(false);
   };
 
+  const myUserId = getUserId();
   const filteredTasks = tasks.filter(
-    (t) =>
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description.toLowerCase().includes(searchQuery.toLowerCase())
+    (t) => {
+      const matchSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          t.description.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchSearch) return false;
+      if (showOnlyMyTasks && t.assigneeId !== myUserId) return false;
+      return true;
+    }
   );
 
   const visibleColumns = isCompletedProject
@@ -407,7 +416,7 @@ export default function ProjectWorkspacePage({
         </div>
 
         {/* Progress & Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flexShrink: 0 }}>
           <div style={s.progressBox}>
             <span style={s.progressLabel}>PROGRESS</span>
             <div style={s.progressBarBg}>
@@ -422,6 +431,33 @@ export default function ProjectWorkspacePage({
             <span style={s.progressVal}>{progressPercent}%</span>
             <span style={s.progressSub}>({completedCount}/{totalCount})</span>
           </div>
+
+          <button
+            onClick={() => setShowOnlyMyTasks(!showOnlyMyTasks)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: showOnlyMyTasks ? "#111827" : "#ffffff",
+              color: showOnlyMyTasks ? "#ffffff" : "#374151",
+              border: `1px solid ${showOnlyMyTasks ? "#111827" : "#d1d5db"}`,
+              padding: "8px 14px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.2s",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              whiteSpace: "nowrap",
+              flexShrink: 0
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            My Tasks
+          </button>
 
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <svg style={{ position: "absolute", left: 10, color: "#9ca3af" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1095,8 +1131,10 @@ const s: Record<string, React.CSSProperties> = {
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "center",
     marginBottom: 32,
+    flexWrap: "wrap",
+    gap: 16,
   },
   pageTitle: {
     fontSize: 32,
@@ -1104,6 +1142,7 @@ const s: Record<string, React.CSSProperties> = {
     color: "#111827",
     letterSpacing: "-0.8px",
     margin: 0,
+    whiteSpace: "nowrap",
   },
   pageSub: {
     fontSize: 14,

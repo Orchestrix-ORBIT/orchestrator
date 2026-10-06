@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getEmail, logout } from "@/lib/auth";
+import { getEmail, logout, isLoggedIn } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 const BASE = "/dashboard/researcher";
@@ -18,8 +18,12 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!isLoggedIn()) {
+      router.replace("/");
+    } else {
+      setMounted(true);
+    }
+  }, [router]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

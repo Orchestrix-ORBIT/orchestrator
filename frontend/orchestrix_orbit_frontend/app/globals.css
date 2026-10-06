@@ -156,6 +156,15 @@ input, textarea { font-family: var(--font); }
   color: #111827 !important;
 }
 
+/* Sidebar Dark Nav Item Hover */
+.nav-item-dark-hover:hover {
+  background: rgba(255,255,255,0.05) !important;
+  color: #ffffff !important;
+}
+.nav-item-dark-hover:hover > span {
+  color: #ffffff !important;
+}
+
 /* Table Row Hover */
 .table-row-hover { transition: background 0.15s ease; }
 .table-row-hover:hover { background: #f8f9fa; cursor: pointer; }
