@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export type SkeletonVariant = "dashboard" | "table" | "grid" | "chat" | "roster" | "resources" | "documents" | "ai-summaries" | "notifications" | "kanban" | "researcher-home" | "researcher-projects" | "researcher-tasks" | "researcher-resources" | "researcher-chat" | "researcher-ai-summaries" | "researcher-notifications" | "manager-overview" | "manager-assets" | "manager-bookings" | "manager-maintenance" | "manager-notifications";
+export type SkeletonVariant = "dashboard" | "table" | "grid" | "chat" | "roster" | "resources" | "documents" | "ai-summaries" | "notifications" | "kanban" | "researcher-home" | "researcher-projects" | "researcher-tasks" | "researcher-resources" | "researcher-chat" | "researcher-ai-summaries" | "researcher-notifications" | "manager-overview" | "manager-assets" | "manager-bookings" | "manager-maintenance" | "manager-notifications" | "admin";
 
 interface LoadingStateProps {
   title?: string;
@@ -94,6 +94,79 @@ export default function LoadingState({
                   </div>
                   <div className="skeleton-line" style={{ width: 60, height: 20, borderRadius: 12 }} />
                   <div className="skeleton-line" style={{ width: 80, height: 14 }} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* VARIANT: ADMIN */}
+        {variant === "admin" && (
+          <>
+            {/* Top Stat Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "clamp(16px, 2vw, 32px)", marginBottom: 24 }}>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="card-depth" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12, border: "none", background: "#ffffff", borderRadius: 16 }}>
+                  <div className="skeleton-line" style={{ width: "60%", height: 14 }} />
+                  <div className="skeleton-line" style={{ width: 40, height: 36, marginTop: 8 }} />
+                  <div className="skeleton-line" style={{ width: "80%", height: 12 }} />
+                </div>
+              ))}
+            </div>
+
+            {/* Middle Split Grid (Form & Registry) */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+              {/* Left Form Card */}
+              <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "none" }}>
+                <div className="skeleton-line" style={{ width: "50%", height: 20, marginBottom: 8 }} />
+                <div className="skeleton-line" style={{ width: "80%", height: 14, marginBottom: 24 }} />
+                
+                <div className="skeleton-line" style={{ width: "30%", height: 12, marginBottom: 8 }} />
+                <div className="skeleton-line" style={{ width: "100%", height: 38, borderRadius: 6, marginBottom: 16 }} />
+                
+                <div className="skeleton-line" style={{ width: "40%", height: 12, marginBottom: 8 }} />
+                <div className="skeleton-line" style={{ width: "100%", height: 38, borderRadius: 6, marginBottom: 16 }} />
+                
+                <div className="skeleton-line" style={{ width: "100%", height: 38, borderRadius: 6, marginTop: 8 }} />
+              </div>
+
+              {/* Right List Card */}
+              <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "none" }}>
+                <div className="skeleton-line" style={{ width: "40%", height: 20, marginBottom: 8 }} />
+                <div className="skeleton-line" style={{ width: "60%", height: 14, marginBottom: 24 }} />
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} style={{ padding: "16px 20px", border: "1px solid #f3f4f6", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div className="skeleton-line" style={{ width: 120, height: 14, marginBottom: 6 }} />
+                        <div className="skeleton-line" style={{ width: 200, height: 12 }} />
+                      </div>
+                      <div className="skeleton-line" style={{ width: 80, height: 20, borderRadius: 12 }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Table Card */}
+            <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "none" }}>
+              <div className="skeleton-line" style={{ width: "40%", height: 20, marginBottom: 8 }} />
+              <div className="skeleton-line" style={{ width: "60%", height: 14, marginBottom: 24 }} />
+
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 2fr", gap: 16, paddingBottom: 16, borderBottom: "1px solid #f3f4f6", marginBottom: 16 }}>
+                <div className="skeleton-line" style={{ width: "40%", height: 12 }} />
+                <div className="skeleton-line" style={{ width: "50%", height: 12 }} />
+                <div className="skeleton-line" style={{ width: "30%", height: 12 }} />
+                <div className="skeleton-line" style={{ width: "60%", height: 12 }} />
+              </div>
+              
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 2fr", gap: 16, padding: "12px 0", borderBottom: i !== 4 ? "1px solid #f9fafb" : "none", alignItems: "center" }}>
+                  <div className="skeleton-line" style={{ width: "70%", height: 14 }} />
+                  <div className="skeleton-line" style={{ width: "80%", height: 14 }} />
+                  <div className="skeleton-line" style={{ width: 60, height: 20, borderRadius: 12 }} />
+                  <div className="skeleton-line" style={{ width: "80%", height: 32, borderRadius: 6 }} />
                 </div>
               ))}
             </div>

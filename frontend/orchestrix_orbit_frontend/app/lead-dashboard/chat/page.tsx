@@ -359,7 +359,7 @@ export default function ChatPage() {
         const tasks: SuggestedTask[] = result.extracted_tasks.map((taskData) => ({
           senderName: taskData.assignee_name,
           senderId: taskData.assignee_id || undefined,
-          title: taskData.title,
+          title: taskData.title || "",
           description: taskData.description || `Extracted from chat summary in #${selectedChannel?.project || "project"}.`,
           priority: "MEDIUM",
           rejected: false,
@@ -370,7 +370,7 @@ export default function ChatPage() {
         const tasks: SuggestedTask[] = uniqueSenders.map((sender, idx) => ({
           senderName: sender,
           senderId: senderMap.get(sender) || undefined,
-          title: result.action_items[idx % result.action_items.length],
+          title: result.action_items[idx % result.action_items.length] || "",
           description: `Extracted from chat summary in #${selectedChannel?.project || "project"}.`,
           priority: "MEDIUM",
           rejected: false,
@@ -434,19 +434,23 @@ export default function ChatPage() {
   };
 
   const handleApproveTask = async (task: SuggestedTask) => {
-    if (!summaryProject || approvingTask) return;
+    if (!summaryProject || approvingTask || !task.title || !task.title.trim()) return;
     setApprovingTask(task.senderName);
     try {
       const { TasksService } = await import("@/lib/services/tasks");
       
-      let finalAssigneeId = task.senderId;
-      if (!finalAssigneeId) {
-        // Fallback: Find assignee by name in teamMembers
-        const member = teamMembers.find((m: any) =>
-          (m.displayName || m.userDisplayName || m.name || "").toLowerCase() === task.senderName.toLowerCase()
-        );
-        finalAssigneeId = member?.id || member?.userId;
-      }
+      let finalAssigneeId: string | undefined = undefined;
+      const searchId = task.senderId;
+      const searchName = task.senderName;
+      
+      const resolvedMem = teamMembers.find((m: any) => {
+        const matchId = searchId && (m.userId === searchId || m.id === searchId);
+        const matchName = searchName && ((m.displayName || m.userDisplayName || m.name || "").toLowerCase() === searchName.toLowerCase());
+        const matchNameWithId = searchId && ((m.displayName || m.userDisplayName || m.name || "").toLowerCase() === searchId.toLowerCase());
+        return matchId || matchName || matchNameWithId;
+      });
+      
+      finalAssigneeId = resolvedMem ? (resolvedMem.userId || resolvedMem.id) : undefined;
 
       await TasksService.create(summaryProject.id, {
         title: task.title,
@@ -1328,7 +1332,7 @@ export default function ChatPage() {
                                 type="button"
                                 onClick={() => handleApproveTask(task)}
                                 className="task-action-btn approve"
-                                disabled={approvingTask === task.senderName}
+                                disabled={approvingTask === task.senderName || !task.title || !task.title.trim()}
                               >
                                 {approvingTask === task.senderName ? "Approving..." : "Approve Task"}
                               </button>
@@ -1344,7 +1348,7 @@ export default function ChatPage() {
                             <div>
                               <input
                                 type="text"
-                                value={task.title}
+                                value={task.title || ""}
                                 onChange={(e) => handleUpdateSuggestedTask(task.senderName, "title", e.target.value)}
                                 className="task-input"
                                 placeholder="Task title"

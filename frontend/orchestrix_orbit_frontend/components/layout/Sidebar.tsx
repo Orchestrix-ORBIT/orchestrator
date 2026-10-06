@@ -276,7 +276,7 @@ export function Sidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boole
                 borderRadius: 4,
                 marginTop: isCollapsed ? 12 : 0
               }}
-              className="btn-secondary-hover"
+              className="nav-item-dark-hover"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCollapsed ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
                 <polyline points="15 18 9 12 15 6"></polyline>
@@ -300,7 +300,7 @@ export function Sidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boole
               id={`nav-lead-${item.label.toLowerCase().replace(/\s/g, "-")}`}
               href={item.href}
               style={{ ...(active ? s.navItemActive : s.navItem), justifyContent: isCollapsed ? "center" : "flex-start", padding: isCollapsed ? "12px" : "9px 12px" }}
-              className={!active ? "nav-item-hover" : ""}
+              className={!active ? "nav-item-dark-hover" : ""}
               title={isCollapsed ? item.label : undefined}
             >
               <span style={active ? s.navIconActive : s.navIcon}>
@@ -321,10 +321,10 @@ export function Sidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boole
       </nav>
 
       {/* Footer: Sign Out */}
-      <div style={{ padding: "12px 8px 0", marginTop: "auto", borderTop: "1px solid #f3f4f6", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ padding: "12px 8px 0", marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", gap: 6 }}>
         <button
           onClick={handleLogout}
-          className="nav-item-hover"
+          className="nav-item-dark-hover"
           title={isCollapsed ? "Sign Out" : undefined}
           style={{
             width: "100%",
@@ -336,7 +336,7 @@ export function Sidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boole
             background: "transparent",
             border: "none",
             borderRadius: 8,
-            color: "#6b7280",
+            color: "#94a3b8",
             fontSize: 13,
             fontWeight: 500,
             cursor: "pointer",
@@ -424,7 +424,7 @@ const s: Record<string, React.CSSProperties> = {
   sidebar: {
     width: 220,
     minWidth: 220,
-    background: "#ffffff",
+    background: "#0f172a",
     display: "flex",
     flexDirection: "column",
     padding: "20px 0",
@@ -436,26 +436,27 @@ const s: Record<string, React.CSSProperties> = {
     zIndex: 20,
     fontFamily: "var(--font)",
     userSelect: "none",
-    borderRight: "1px solid rgba(0,0,0,0.06)",
-    boxShadow: "1px 0 10px rgba(0,0,0,0.03)",
+    borderRight: "1px solid rgba(255,255,255,0.05)",
+    boxShadow: "1px 0 10px rgba(0,0,0,0.1)",
+    borderRadius: 16,
   },
   brand: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
     padding: "0 18px 20px",
-    borderBottom: "1px solid #f3f4f6",
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
     marginBottom: 10,
   },
   brandName: {
     fontSize: 15,
     fontWeight: 600,
-    color: "#111827",
+    color: "#ffffff",
     letterSpacing: "-0.2px",
   },
   brandSub: {
     fontSize: 11,
-    color: "#6b7280",
+    color: "#94a3b8",
     fontWeight: 500,
   },
   nav: {
@@ -473,7 +474,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "9px 12px",
     borderRadius: 8,
     fontSize: 13,
-    color: "#6b7280",
+    color: "#94a3b8",
     fontWeight: 500,
     transition: "background 0.1s, color 0.1s",
     cursor: "pointer",
@@ -487,20 +488,20 @@ const s: Record<string, React.CSSProperties> = {
     padding: "9px 12px",
     borderRadius: 8,
     fontSize: 13,
-    color: "#111827",
+    color: "#ffffff",
     fontWeight: 600,
-    background: "#f3f4f6",
+    background: "rgba(255,255,255,0.1)",
     cursor: "pointer",
     textDecoration: "none",
   },
   navIcon: {
-    color: "#6b7280",
+    color: "#94a3b8",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
   },
   navIconActive: {
-    color: "#111827",
+    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout, getEmail } from "@/lib/auth";
+import { logout, getEmail, isLoggedIn } from "@/lib/auth";
 import { NotificationsService } from "@/lib/services/notifications";
 
 const NAV = [
@@ -74,6 +74,15 @@ export default function ResourceDashboardLayout({
   const [unreadCount, setUnreadCount] = useState(0);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace("/");
+    } else {
+      setMounted(true);
+    }
+  }, [router]);
 
   // Fetch unread count + poll
   useEffect(() => {
@@ -116,6 +125,10 @@ export default function ResourceDashboardLayout({
     router.push("/");
   };
 
+  if (!mounted) {
+    return <div style={{ minHeight: "100vh", background: "#f9fafb" }} suppressHydrationWarning />;
+  }
+
   return (
     <div style={s.root}>
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
@@ -133,7 +146,7 @@ export default function ResourceDashboardLayout({
             <button
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               style={{ background: "transparent", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, borderRadius: 4, marginTop: isSidebarCollapsed ? 12 : 0 }}
-              className="btn-secondary-hover"
+              className="nav-item-dark-hover"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isSidebarCollapsed ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
                 <polyline points="15 18 9 12 15 6"></polyline>
@@ -156,7 +169,7 @@ export default function ResourceDashboardLayout({
                 id={`nav-rm-${item.label.toLowerCase().replace(/\s/g, "-")}`}
                 href={item.href}
                 style={{ ...(active ? s.navItemActive : s.navItem), justifyContent: isSidebarCollapsed ? "center" : "flex-start", padding: isSidebarCollapsed ? "12px" : "9px 12px" }}
-                className={!active ? "nav-item-hover" : ""}
+                className={!active ? "nav-item-dark-hover" : ""}
                 title={isSidebarCollapsed ? item.label : undefined}
               >
                 <span style={active ? s.navIconActive : s.navIcon}>
@@ -182,7 +195,7 @@ export default function ResourceDashboardLayout({
             id="btn-rm-logout"
             type="button"
             onClick={() => setShowSignOutConfirm(true)}
-            className="nav-item-hover"
+            className="nav-item-dark-hover"
             title={isSidebarCollapsed ? "Sign Out" : undefined}
             style={{
               width: "100%",
@@ -194,7 +207,7 @@ export default function ResourceDashboardLayout({
               background: "transparent",
               border: "none",
               borderRadius: 8,
-              color: "#6b7280",
+              color: "#94a3b8",
               fontSize: 13,
               fontWeight: 500,
               cursor: "pointer",
@@ -300,7 +313,7 @@ const s: Record<string, React.CSSProperties> = {
   sidebar: {
     width: 220,
     minWidth: 220,
-    background: "#ffffff",
+    background: "#0f172a",
     display: "flex",
     flexDirection: "column",
     padding: "20px 0",
@@ -311,26 +324,27 @@ const s: Record<string, React.CSSProperties> = {
     height: "calc(100vh - 24px)",
     zIndex: 20,
     userSelect: "none",
-    borderRight: "1px solid rgba(0,0,0,0.06)",
-    boxShadow: "1px 0 10px rgba(0,0,0,0.03)",
+    borderRight: "1px solid rgba(255,255,255,0.05)",
+    boxShadow: "1px 0 10px rgba(0,0,0,0.1)",
+    borderRadius: 16,
   },
   brand: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
     padding: "0 18px 20px",
-    borderBottom: "1px solid #f3f4f6",
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
     marginBottom: 10,
   },
   brandName: {
     fontSize: 15,
     fontWeight: 600,
-    color: "#111827",
+    color: "#ffffff",
     letterSpacing: "-0.2px",
   },
   brandSub: {
     fontSize: 11,
-    color: "#6b7280",
+    color: "#94a3b8",
     fontWeight: 500,
   },
   nav: {
@@ -348,7 +362,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "9px 12px",
     borderRadius: 8,
     fontSize: 13,
-    color: "#6b7280",
+    color: "#94a3b8",
     fontWeight: 500,
     transition: "background 0.1s, color 0.1s",
     cursor: "pointer",
@@ -362,20 +376,20 @@ const s: Record<string, React.CSSProperties> = {
     padding: "9px 12px",
     borderRadius: 8,
     fontSize: 13,
-    color: "#111827",
+    color: "#ffffff",
     fontWeight: 600,
-    background: "#f3f4f6",
+    background: "rgba(255, 255, 255, 0.1)",
     cursor: "pointer",
     textDecoration: "none",
   },
   navIcon: {
-    color: "#6b7280",
+    color: "#64748b",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
   },
   navIconActive: {
-    color: "#111827",
+    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
