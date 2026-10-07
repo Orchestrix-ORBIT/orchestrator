@@ -24,10 +24,23 @@ export async function fetchProjectMessages(
   page = 0,
   size = 15
 ): Promise<ChatMessageItem[]> {
-  const res = await fetch(
-    `${API_BASE}/api/chat/projects/${encodeURIComponent(projectId)}/messages?page=${page}&size=${size}`,
-    { headers: { "X-Tenant-ID": tenant, Authorization: `Bearer ${getToken() ?? ""}` } }
-  );
-  if (!res.ok) throw new Error(`Chat history request failed (${res.status})`);
-  return res.json() as Promise<ChatMessageItem[]>;
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/chat/projects/${encodeURIComponent(projectId)}/messages?page=${page}&size=${size}`,
+      { headers: { "X-Tenant-ID": tenant, Authorization: `Bearer ${getToken() ?? ""}` } }
+    );
+    if (!res.ok) {
+      if (res.status >= 500) {
+        throw new Error("The chat service is temporarily unavailable. Please try again later.");
+      }
+      throw new Error(`Chat history request failed (${res.status})`);
+    }
+    return await res.json() as ChatMessageItem[];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+      throw new Error("Cannot connect to the chat service. Please check your internet connection or try again later.");
+    }
+    throw err;
+  }
 }

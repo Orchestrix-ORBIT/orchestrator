@@ -17,17 +17,12 @@ public class TeamController {
         this.teamService = teamService;
     }
 
+    // TenantFilter (Order=1) sets TenantContext for the full request lifecycle.
+    // No manual TenantContext management needed in any controller method.
+
     @GetMapping
-    public List<TeamMemberResponse> getAllMembers(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId
-    ) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return teamService.getAllMembers();
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+    public List<TeamMemberResponse> getAllMembers() {
+        return teamService.getAllMembers();
     }
 
     @GetMapping("/{id}")
@@ -37,29 +32,14 @@ public class TeamController {
 
     @PatchMapping("/{id}/role")
     public TeamMemberResponse updateMemberRole(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateMemberRoleRequest request) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return teamService.updateMemberRole(id, request.getRole());
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        return teamService.updateMemberRole(id, request.getRole());
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeMember(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
-            @PathVariable UUID id) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            teamService.removeMember(id);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+    public void removeMember(@PathVariable UUID id) {
+        teamService.removeMember(id);
     }
 }

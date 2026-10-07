@@ -33,4 +33,12 @@ export const NotificationsService = {
 
   /** PATCH /api/notifications/{id}/read — toggle read status for one notification */
   toggleRead: (id: string) => api.patch<void>(`/api/notifications/${id}/read`, {}),
+
+  /**
+   * POST /api/notifications — create a notification for a specific user.
+   * Used by the Lead to notify researchers of booking approval/rejection.
+   */
+  create: (payload: { userId?: string; type: string; title: string; message: string }) =>
+    api.post<Notification>("/api/notifications", payload),
 };
+

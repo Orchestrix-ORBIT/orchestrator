@@ -38,6 +38,7 @@ app.add_middleware(
 
 class ChatMessageItem(BaseModel):
     senderName: str
+    senderId: Optional[str] = None
     content: str
     createdAt: Optional[str] = None
 
@@ -52,6 +53,7 @@ class SummarizeResponse(BaseModel):
     summary: str
     key_points: list[str]
     action_items: list[str]
+    extracted_tasks: list[dict] = []
     message_count: int
     strategy: str
 
@@ -98,6 +100,7 @@ def summarize(request: SummarizeRequest):
         messages_as_dicts = [
             {
                 "senderName": m.senderName,
+                "senderId": m.senderId or "",
                 "content": m.content,
                 "createdAt": m.createdAt or "",
             }

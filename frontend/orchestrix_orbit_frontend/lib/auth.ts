@@ -12,13 +12,15 @@ const TOKEN_KEY   = "authToken";
 const ROLE_KEY    = "userRole";
 const EMAIL_KEY   = "userEmail";
 const TENANT_KEY  = "tenantSlug";
+const USER_ID_KEY = "userId";
 
 /** Save everything returned from the login/register API response */
-export function saveAuthData(token: string, role: string, email: string, tenantSlug: string) {
+export function saveAuthData(token: string, role: string, email: string, tenantSlug: string, userId?: string) {
   localStorage.setItem(TOKEN_KEY,  token);
   localStorage.setItem(ROLE_KEY,   role);
   localStorage.setItem(EMAIL_KEY,  email);
   localStorage.setItem(TENANT_KEY, tenantSlug);
+  if (userId) localStorage.setItem(USER_ID_KEY, userId);
 }
 
 /** Get the stored JWT token (or null if not logged in) */
@@ -45,6 +47,12 @@ export function getTenantSlug(): string | null {
   return localStorage.getItem(TENANT_KEY);
 }
 
+/** Get the logged-in user's UUID */
+export function getUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(USER_ID_KEY);
+}
+
 /** True if a token exists in storage */
 export function isLoggedIn(): boolean {
   return !!getToken();
@@ -64,37 +72,35 @@ export function getDashboardPath(role: string, email?: string): string {
   const normRole = (role || "").toUpperCase();
   const normEmail = (email || "").toLowerCase();
 
-  // 1. Researcher check (highest priority if email explicitly contains researcher)
-  if (
-    normEmail.includes("researcher") ||
-    normRole === "ROLE_MEMBER" ||
-    normRole === "MEMBER" ||
-    normRole === "RESEARCHER"
-  ) {
-    return "/dashboard/researcher";
-  }
-
-  // 2. Resource Manager check
-  if (
-    normEmail.includes("resource.manager") ||
-    normEmail.includes("resource_manager") ||
-    normRole === "ROLE_RESOURCE_MANAGER" ||
-    normRole === "RESOURCE_MANAGER"
-  ) {
+  // ── Email always wins (most specific signal) ──────────────────────────────
+  if (normEmail.includes("resource.manager") || normEmail.includes("resource_manager")) {
     return "/resource-dashboard";
   }
-
-  // 3. Research Lead check
-  if (normEmail.includes("lead") || normRole === "ROLE_LEAD" || normRole === "LEAD") {
+  if (normEmail.includes("researcher")) {
+    return "/dashboard/researcher";
+  }
+  if (normEmail.includes("lead")) {
     return "/lead-dashboard";
   }
-
-  // 4. Admin / Owner check
-  if (normEmail.includes("admin") || normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
+  if (normEmail.includes("admin")) {
     return "/admin-dashboard";
   }
 
-  // 5. Default fallback for GUEST or any other role
+  // ── Role-based fallback ───────────────────────────────────────────────────
+  if (normRole === "ROLE_RESOURCE_MANAGER" || normRole === "RESOURCE_MANAGER") {
+    return "/resource-dashboard";
+  }
+  if (normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
+    return "/admin-dashboard";
+  }
+  if (normRole === "ROLE_LEAD" || normRole === "LEAD") {
+    return "/lead-dashboard";
+  }
+  if (normRole === "ROLE_MEMBER" || normRole === "MEMBER" || normRole === "RESEARCHER") {
+    return "/dashboard/researcher";
+  }
+
+  // ── Default ───────────────────────────────────────────────────────────────
   return "/dashboard/researcher";
 }
 
@@ -104,4 +110,5 @@ export function logout() {
   localStorage.removeItem(ROLE_KEY);
   localStorage.removeItem(EMAIL_KEY);
   localStorage.removeItem(TENANT_KEY);
+  localStorage.removeItem(USER_ID_KEY);
 }

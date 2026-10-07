@@ -51,12 +51,13 @@ export default function ResearcherHomePage() {
           projectList.map((p) => TasksService.getByProject(p.id).catch(() => [] as Task[]))
         );
         const flatTasks = taskResults.flat();
+        // Read the userId persisted to localStorage during login (see app/page.tsx)
         let currentUserId = "";
         try {
-          const userStr = localStorage.getItem("user") || "{}";
-          currentUserId = JSON.parse(userStr).id || "";
+          currentUserId = localStorage.getItem("userId") || "";
         } catch (e) {}
 
+        // Only show tasks assigned to this researcher, or tasks with no assignee yet
         const myTasksOnly = flatTasks.filter(
           (t) => !t.assigneeId || t.assigneeId === currentUserId
         );
@@ -94,12 +95,11 @@ export default function ResearcherHomePage() {
     .filter(b => b.status === "APPROVED" || b.status === "PENDING")
     .slice(0, 3);
 
-  if (loading) return <LoadingState title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
+  if (loading) return <LoadingState variant="researcher-home" title="Loading Researcher Workspace…" subtitle="Fetching assigned tasks, active bookings, and workspace projects" />;
   if (error)   return <ErrorState message={error} />;
 
   const STAT_ITEMS = [
     { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(stats.openTasks),    sub: `across ${projects.length} project${projects.length !== 1 ? "s" : ""}`, href: "/dashboard/researcher/tasks" },
-    { id: "stat-due-today",       label: "DUE TODAY",       value: String(stats.dueToday),     sub: "tasks need attention", href: "/dashboard/researcher/tasks" },
     { id: "stat-active-bookings", label: "ACTIVE BOOKINGS", value: String(stats.activeBookings), sub: "approved this week", href: "/dashboard/researcher/resources" },
     { id: "stat-notifications",   label: "PROJECTS",        value: String(projects.length),    sub: "active workspaces", href: "/dashboard/researcher/projects" },
   ];
@@ -109,9 +109,13 @@ export default function ResearcherHomePage() {
       {/* ── Stats row ────────────────────────────────────────────────────── */}
       <div style={s.statsRow}>
         {STAT_ITEMS.map((stat) => (
-          <Link key={stat.id} id={stat.id} href={stat.href} style={{ ...s.statCard, textDecoration: "none", cursor: "pointer" }}>
-            <span style={s.statValue}>{stat.value}</span>
-            <span style={s.statLabel}>{stat.label}</span>
+          <Link key={stat.id} id={stat.id} href={stat.href} style={{ ...s.statCard, textDecoration: "none" }} className="stat-card-hover">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <span style={s.statLabel}>{stat.label}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+              <span style={s.statValue}>{stat.value}</span>
+            </div>
             <span style={s.statSub}>{stat.sub}</span>
           </Link>
         ))}
@@ -123,37 +127,43 @@ export default function ResearcherHomePage() {
         {/* Tasks table */}
         <div style={s.card}>
           <div style={s.cardHead}>
-            <span style={s.cardTitle}>My Tasks</span>
-            <Link id="link-all-tasks" href="/dashboard/researcher/tasks" style={s.cardLink}>
-              View all tasks in Kanban board →
+            <div>
+              <h2 style={s.cardTitle}>My Tasks</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#6b7280", marginTop: 4 }}>Recent tasks requiring your attention.</p>
+            </div>
+            <Link id="link-all-tasks" href="/dashboard/researcher/tasks" style={s.cardLink} className="btn-shiny">
+              View in Kanban →
             </Link>
           </div>
           <table style={s.table}>
             <thead>
               <tr>
-                {["Task", "Project", "Status", "Priority", "Due"].map((h) => (
+                {["Task", "Project", "Status", "Priority"].map((h) => (
                   <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {pendingTasks.length === 0 ? (
-                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#888" }}>No open tasks 🎉</td></tr>
+                <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#6b7280" }}>No open tasks 🎉</td></tr>
               ) : pendingTasks.map((task) => (
-                <tr key={task.id} style={{ cursor: "pointer" }}>
+                <tr key={task.id} className="table-row-hover">
                   <td style={s.td}>
-                    <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none", color: "#161616", fontWeight: 600 }}>
+                    <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none", color: "#111827", fontWeight: 600 }}>
                       {task.title}
                     </Link>
                   </td>
-                  <td style={s.td}>{task.projectId}</td>
+                  <td style={s.td}>
+                    <span style={{ color: "#4b5563" }}>
+                      {projects.find((p) => p.id === task.projectId)?.name || "Unknown Project"}
+                    </span>
+                  </td>
                   <td style={s.td}>
                     <Link href="/dashboard/researcher/tasks" style={{ textDecoration: "none" }}>
                       <span style={{ ...s.badge, ...statusStyle(task.status) }}>{task.status.replace("_", " ")}</span>
                     </Link>
                   </td>
                   <td style={s.td}>{task.priority}</td>
-                  <td style={s.td}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -163,14 +173,17 @@ export default function ResearcherHomePage() {
         {/* Upcoming bookings */}
         <div style={s.card}>
           <div style={s.cardHead}>
-            <span style={s.cardTitle}>Upcoming Bookings</span>
-            <Link id="link-all-resources" href="/dashboard/researcher/resources" style={s.cardLink}>
+            <div>
+              <h2 style={s.cardTitle}>Upcoming Bookings</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#6b7280", marginTop: 4 }}>Your scheduled resources.</p>
+            </div>
+            <Link id="link-all-resources" href="/dashboard/researcher/resources" style={s.cardLink} className="btn-shiny">
               Manage →
             </Link>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {upcomingBookings.length === 0 ? (
-              <p style={{ color: "#888", fontSize: 13 }}>No upcoming bookings</p>
+              <p style={{ color: "#6b7280", fontSize: 13 }}>No upcoming bookings</p>
             ) : upcomingBookings.map((b) => (
               <div key={b.id} style={s.bookingRow}>
                 <div>
@@ -192,7 +205,7 @@ export default function ResearcherHomePage() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div style={{ padding: 24, background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 8, color: "#c62828", fontSize: 14 }}>
+    <div style={{ padding: 24, background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 12, color: "#c62828", fontSize: 14 }}>
       <strong>Error:</strong> {message}
     </div>
   );
@@ -201,7 +214,7 @@ function ErrorState({ message }: { message: string }) {
 function statusStyle(status: string): React.CSSProperties {
   switch (status) {
     case "IN_PROGRESS": return { background: "#161616", color: "#ffffff", border: "none" };
-    default:            return { background: "transparent", color: "#424242", border: "1px solid #d0d0d0" };
+    default:            return { background: "transparent", color: "#374151", border: "1px solid #d0d0d0" };
   }
 }
 
@@ -217,106 +230,78 @@ function bookingStyle(status: string): React.CSSProperties {
 const s: Record<string, React.CSSProperties> = {
   statsRow: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 16,
-    marginBottom: 24,
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 24,
+    marginBottom: 32,
   },
-  statCard: {
-    background: "#ffffff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
-    padding: "20px 24px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
+  statCard: { 
+    padding: 24, 
+    display: "flex", 
+    flexDirection: "column", 
+    background: "#ffffff", 
+    borderRadius: 16, 
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+    transition: "transform 0.2s, box-shadow 0.2s",
   },
-  statValue: {
-    fontSize: 32,
-    fontWeight: 700,
-    color: "#161616",
-    lineHeight: 1,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#888888",
-    letterSpacing: "0.8px",
-    marginTop: 6,
-  },
-  statSub: {
-    fontSize: 12,
-    color: "#aaaaaa",
-  },
+  statValue: { fontSize: 36, fontWeight: 700, color: "#111827", lineHeight: 1, letterSpacing: "-0.04em", marginBottom: 8 },
+  statLabel: { fontSize: 13, fontWeight: 600, color: "#4b5563" },
+  statSub: { fontSize: 12, color: "#9ca3af", fontWeight: 500 },
   cols: {
     display: "grid",
     gridTemplateColumns: "1fr 340px",
-    gap: 16,
+    gap: 24,
   },
-  card: {
-    background: "#ffffff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
-    padding: 24,
+  card: { 
+    background: "#ffffff", 
+    borderRadius: 16, 
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+    overflow: "hidden",
   },
-  cardHead: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#161616",
-  },
+  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "24px 24px 20px" },
+  cardTitle: { fontSize: 18, fontWeight: 600, color: "#111827", margin: 0, letterSpacing: "-0.01em" },
   cardLink: {
-    fontSize: 12,
-    color: "#888888",
-    textDecoration: "none",
-    fontWeight: 500,
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  th: {
-    textAlign: "left" as const,
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#888888",
-    letterSpacing: "0.6px",
-    textTransform: "uppercase" as const,
-    paddingBottom: 10,
-    borderBottom: "1px solid #f0f0f0",
-  },
-  td: {
     fontSize: 13,
-    color: "#424242",
-    padding: "10px 0",
-    borderBottom: "1px solid #f8f8f8",
+    color: "#111827",
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    padding: "8px 16px",
+    borderRadius: 8,
+    textDecoration: "none",
+    fontWeight: 600,
+    display: "inline-flex",
+    alignItems: "center",
+    transition: "background 0.2s, border-color 0.2s"
   },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: { textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.05em", textTransform: "uppercase", padding: "12px 24px", borderBottom: "1px solid #e5e7eb", borderTop: "1px solid #f3f4f6", background: "#fafafa" },
+  td: { fontSize: 14, color: "#374151", padding: "16px 24px", borderBottom: "1px solid #f3f4f6", verticalAlign: "middle" },
   badge: {
     display: "inline-block",
-    padding: "3px 8px",
-    borderRadius: 4,
+    padding: "4px 10px",
+    borderRadius: 12,
     fontSize: 11,
     fontWeight: 600,
+    letterSpacing: "0.02em"
   },
   bookingRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "12px 0",
-    borderBottom: "1px solid #f8f8f8",
+    padding: "16px 24px",
+    borderBottom: "1px solid #f3f4f6",
+    transition: "background 0.2s",
   },
   bookingName: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#161616",
-    marginBottom: 2,
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#111827",
+    marginBottom: 4,
   },
   bookingTime: {
     fontSize: 12,
-    color: "#888888",
+    color: "#6b7280",
+    fontWeight: 500,
   },
 };

@@ -6,6 +6,7 @@ const CONTEXT_ENGINE_URL =
 
 export interface ChatMessageForSummary {
   senderName: string;
+  senderId?: string;
   content: string;
   createdAt?: string;
 }
@@ -14,6 +15,7 @@ export interface SummaryResult {
   summary: string;
   key_points: string[];
   action_items: string[];
+  extracted_tasks?: { assignee_id: string; assignee_name: string; title: string; description: string }[];
   message_count: number;
   strategy: "stuff" | "map_reduce" | "none";
 }
@@ -50,21 +52,36 @@ export async function summarizeMessages(
   }
 
   // Resilient direct fallback to Context Engine
-  const directRes = await fetch(`${CONTEXT_ENGINE_URL}/summarize`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, projectId, tenantId: tenant }),
-  });
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const directRes = await fetch(`${CONTEXT_ENGINE_URL}/summarize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, projectId, tenantId: tenant }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-  if (!directRes.ok) {
-    const err = await directRes.json().catch(() => ({}));
-    const detail = err?.detail;
-    throw new Error(
-      (typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : null)
-        ?? err?.message
-        ?? `Summarization request failed: ${directRes.status} ${directRes.statusText}`
-    );
+    if (!directRes.ok) {
+      const err = await directRes.json().catch(() => ({}));
+      const detail = err?.detail;
+      throw new Error(
+        (typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : null)
+          ?? err?.message
+          ?? `Summarization request failed: ${directRes.status} ${directRes.statusText}`
+      );
+    }
+
+    return directRes.json() as Promise<SummaryResult>;
+  } catch (err: any) {
+    // Network error (service not running, CORS, timeout, etc.)
+    if (err?.name === "AbortError") {
+      throw new Error("Summarization timed out. The AI service may be unavailable — please try again later.");
+    }
+    if (err?.message === "Failed to fetch" || err?.name === "TypeError") {
+      throw new Error("Could not reach the AI summarization service. Make sure the Context Engine is running on port 8083, or contact your administrator.");
+    }
+    throw err;
   }
-
-  return directRes.json() as Promise<SummaryResult>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import LoadingState from "@/components/ui/LoadingState";
 import { NotificationsService, type Notification as BackendNotif } from "@/lib/services/notifications";
@@ -60,17 +60,26 @@ export default function NotificationsPage() {
   const [filter, setFilter]               = useState<"ALL" | "UNREAD" | DisplayCategory>("ALL");
   const [markingAll, setMarkingAll]       = useState(false);
 
+  const isMutating = useRef(false);
+
   useEffect(() => {
-    NotificationsService.getAll()
-      .then(list => setNotifications(list.map(mapBackend)))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    const fetchNotifs = () => {
+      if (isMutating.current) return; // skip poll while a write is in-flight
+      NotificationsService.getAll()
+        .then(list => setNotifications(list.map(mapBackend)))
+        .catch(err => setError(err.message))
+        .finally(() => setLoading(false));
+    };
+
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
     return (
-      <LoadingState
-        title="Loading Notifications & Activity…"
+      <LoadingState variant="notifications" title="Loading Notifications & Activity…"
         subtitle="Fetching real-time workspace alerts, task updates, and system mentions"
       />
     );
@@ -80,29 +89,37 @@ export default function NotificationsPage() {
 
   const handleMarkAllAsRead = async () => {
     setMarkingAll(true);
+    isMutating.current = true;
     try {
       await NotificationsService.markAllRead();
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      window.dispatchEvent(new Event("notifications_updated"));
     } catch {
-      // optimistic fallback — still update locally
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      window.dispatchEvent(new Event("notifications_updated"));
     } finally {
       setMarkingAll(false);
+      isMutating.current = false;
     }
   };
 
   const handleToggleRead = async (id: string) => {
+    isMutating.current = true;
     // Optimistic update
     setNotifications(prev =>
       prev.map(n => (n.id === id ? { ...n, read: !n.read } : n))
     );
     try {
       await NotificationsService.toggleRead(id);
+      window.dispatchEvent(new Event("notifications_updated"));
     } catch {
       // Revert on failure
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, read: !n.read } : n))
       );
+      window.dispatchEvent(new Event("notifications_updated"));
+    } finally {
+      isMutating.current = false;
     }
   };
 
@@ -124,9 +141,9 @@ export default function NotificationsPage() {
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {error && <span style={{ fontSize: 12, color: "#c62828" }}>⚠ {error}</span>}
+          {error && <span style={{ fontSize: 13, fontWeight: 600, color: "#ef4444", background: "#fef2f2", padding: "6px 12px", borderRadius: 8 }}>⚠ {error}</span>}
           {unreadCount > 0 && (
-            <button onClick={handleMarkAllAsRead} disabled={markingAll} style={s.btnSecondary}>
+            <button onClick={handleMarkAllAsRead} disabled={markingAll} style={s.btnSecondary} className="btn-secondary-hover btn-hover-flat">
               {markingAll ? "Marking…" : "✓ Mark all as read"}
             </button>
           )}
@@ -135,26 +152,26 @@ export default function NotificationsPage() {
 
       {/* ── Metric Stat Cards ─────────────────────────────────────────────────── */}
       <div style={s.statGrid}>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="stat-card-hover">
           <span style={s.statLabel}>UNREAD ALERTS</span>
           <span style={s.statValue}>{unreadCount}</span>
           <span style={s.statSub}>Requires attention</span>
         </div>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="stat-card-hover">
           <span style={s.statLabel}>TASK UPDATES</span>
           <span style={s.statValue}>
             {notifications.filter(n => n.category === "Task").length}
           </span>
           <span style={s.statSub}>Kanban activity</span>
         </div>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="stat-card-hover">
           <span style={s.statLabel}>BOOKING ALERTS</span>
           <span style={s.statValue}>
             {notifications.filter(n => n.category === "Booking").length}
           </span>
           <span style={s.statSub}>Lab schedule events</span>
         </div>
-        <div style={s.statCard}>
+        <div style={s.statCard} className="stat-card-hover">
           <span style={s.statLabel}>AI SYNTHESIS ALERTS</span>
           <span style={s.statValue}>
             {notifications.filter(n => n.category === "AI Alert").length}
@@ -172,6 +189,7 @@ export default function NotificationsPage() {
               key={cat}
               onClick={() => setFilter(cat as any)}
               style={filter === cat ? s.filterBtnActive : s.filterBtn}
+              className="btn-hover-flat"
             >
               {cat === "ALL" ? "All Alerts" : cat === "UNREAD" ? `Unread (${unreadCount})` : cat}
             </button>
@@ -185,60 +203,70 @@ export default function NotificationsPage() {
         <div style={s.notifList}>
           {filteredNotifs.length === 0 ? (
             <div style={s.emptyState}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#161616" }}>Inbox is clear</p>
-              <p style={{ fontSize: 12, color: "#9e9e9e", marginTop: 4 }}>
+              <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>📭</span>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>Inbox is clear</p>
+              <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
                 {filter === "ALL"
-                  ? "No notifications yet."
+                  ? "You're all caught up! No new notifications."
                   : "No notifications matching this filter."}
               </p>
             </div>
           ) : (
-            filteredNotifs.map(item => (
-              <div
-                key={item.id}
-                style={{
-                  ...s.notifItem,
-                  background: item.read ? "#ffffff" : "#fafafa",
-                  borderLeft: item.read ? "3px solid transparent" : "3px solid #161616",
-                }}
-              >
-                <div style={s.notifTop}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span
-                      style={{
-                        ...s.categoryBadge,
-                        ...(item.category === "AI Alert"
-                          ? s.badgeAi
-                          : item.category === "Booking"
-                          ? s.badgeBooking
-                          : item.category === "Mention"
-                          ? s.badgeMention
-                          : s.badgeTask),
-                      }}
-                    >
-                      {item.category}
-                    </span>
-                    <strong style={s.notifTitle}>{item.title}</strong>
-                    {!item.read && <span style={s.newDot}>●</span>}
+            filteredNotifs.map((item, index) => {
+              const isLast = index === filteredNotifs.length - 1;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    ...s.notifItem,
+                    borderBottom: isLast ? "none" : "1px solid #f1f5f9",
+                    background: item.read ? "#ffffff" : "#f8fafc",
+                    borderLeft: item.read ? "3px solid transparent" : "3px solid #3b82f6",
+                    cursor: "pointer",
+                    transition: "background 0.2s ease, transform 0.1s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = item.read ? "#f9fafb" : "#eff6ff")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = item.read ? "#ffffff" : "#f8fafc")}
+                >
+                  <div style={s.notifTop}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span
+                        style={{
+                          ...s.categoryBadge,
+                          ...(item.category === "AI Alert"
+                            ? s.badgeAi
+                            : item.category === "Booking"
+                            ? s.badgeBooking
+                            : item.category === "Mention"
+                            ? s.badgeMention
+                            : s.badgeTask),
+                        }}
+                      >
+                        {item.category}
+                      </span>
+                      <strong style={{ ...s.notifTitle, color: item.read ? "#475569" : "#111827" }}>{item.title}</strong>
+                      {!item.read && <span style={s.newDot}>●</span>}
+                    </div>
+                    <span style={s.notifTime}>{item.time}</span>
                   </div>
-                  <span style={s.notifTime}>{item.time}</span>
-                </div>
 
-                <p style={s.notifDesc}>{item.details}</p>
+                  <p style={{ ...s.notifDesc, color: item.read ? "#94a3b8" : "#475569" }}>{item.details}</p>
 
-                <div style={s.notifBottom}>
-                  <div />
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button
-                      onClick={() => handleToggleRead(item.id)}
-                      style={s.btnToggleRead}
-                    >
-                      {item.read ? "Mark as unread" : "Mark read"}
-                    </button>
+                  <div style={s.notifBottom}>
+                    <div />
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleRead(item.id); }}
+                        style={{ ...s.btnToggleRead, color: item.read ? "#94a3b8" : "#3b82f6" }}
+                        className="btn-hover-flat"
+                      >
+                        {item.read ? "Mark as unread" : "✓ Mark read"}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -247,37 +275,35 @@ export default function NotificationsPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  headerRow:       { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 },
-  pageTitle:       { fontSize: 28, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", marginBottom: 4 },
-  pageSub:         { fontSize: 13, color: "#9e9e9e" },
-  btnSecondary:    { background: "#ffffff", color: "#424242", border: "1px solid #d0d0d0", borderRadius: 4, padding: "8px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" },
-  statGrid:        { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 },
-  statCard:        { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 6 },
-  statLabel:       { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", textTransform: "uppercase" as const },
-  statValue:       { fontSize: 32, fontWeight: 700, color: "#161616", letterSpacing: "-1px", lineHeight: 1.1 },
-  statSub:         { fontSize: 12, color: "#9e9e9e" },
-  filterBar:       { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
-  filterGroup:     { display: "flex", alignItems: "center", gap: 8 },
-  filterLabel:     { fontSize: 11, fontWeight: 600, color: "#9e9e9e", letterSpacing: "0.5px", marginRight: 4 },
-  filterBtn:       { background: "transparent", border: "1px solid #d0d0d0", borderRadius: 4, padding: "5px 12px", fontSize: 12, fontWeight: 500, color: "#616161", cursor: "pointer" },
-  filterBtnActive: { background: "#161616", border: "1px solid #161616", borderRadius: 4, padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "#ffffff", cursor: "pointer" },
-  countLabel:      { fontSize: 12, color: "#9e9e9e", fontWeight: 500 },
-  tableCard:       { background: "#ffffff", border: "1px solid #e0e0e0", borderRadius: 6, overflow: "hidden" },
+  headerRow:       { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 32 },
+  pageTitle:       { fontSize: 32, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 6 },
+  pageSub:         { fontSize: 14, color: "#64748b", fontWeight: 500 },
+  btnSecondary:    { background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", borderRadius: 8, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.2s ease" },
+  statGrid:        { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 },
+  statCard:        { background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 6, boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -2px rgba(0, 0, 0, 0.02)", transition: "transform 0.2s, box-shadow 0.2s" },
+  statLabel:       { fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const },
+  statValue:       { fontSize: 36, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.04em", lineHeight: 1 },
+  statSub:         { fontSize: 13, color: "#94a3b8", fontWeight: 500 },
+  filterBar:       { background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, boxShadow: "0 2px 4px rgba(0,0,0,0.02)" },
+  filterGroup:     { display: "flex", alignItems: "center", gap: 10 },
+  filterLabel:     { fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.05em", marginRight: 8, textTransform: "uppercase" },
+  filterBtn:       { background: "transparent", border: "1px solid #cbd5e1", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#475569", cursor: "pointer", transition: "all 0.2s ease" },
+  filterBtnActive: { background: "#0f172a", border: "1px solid #0f172a", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#ffffff", cursor: "pointer", boxShadow: "0 1px 2px rgba(15, 23, 42, 0.1)" },
+  countLabel:      { fontSize: 13, color: "#64748b", fontWeight: 600 },
+  tableCard:       { background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -2px rgba(0, 0, 0, 0.02)" },
   notifList:       { display: "flex", flexDirection: "column" as const },
-  notifItem:       { padding: "16px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", flexDirection: "column" as const, gap: 6 },
+  notifItem:       { padding: "20px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", flexDirection: "column" as const, gap: 8 },
   notifTop:        { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  notifTitle:      { fontSize: 13, color: "#161616", fontWeight: 600 },
-  newDot:          { color: "#161616", fontSize: 8 },
-  notifTime:       { fontSize: 11, color: "#9e9e9e" },
-  notifDesc:       { fontSize: 12, color: "#616161", lineHeight: 1.4 },
-  notifBottom:     { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid #f9f9f9" },
-  notifSender:     { fontSize: 11, color: "#9e9e9e" },
-  notifActionLink: { fontSize: 12, fontWeight: 600, color: "#161616", textDecoration: "none" },
-  btnToggleRead:   { background: "none", border: "none", color: "#9e9e9e", fontSize: 11, cursor: "pointer" },
-  categoryBadge:   { fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase" as const },
-  badgeAi:         { background: "#161616", color: "#ffffff" },
-  badgeBooking:    { background: "#e8f5e9", color: "#2e7d32", border: "1px solid #c8e6c9" },
-  badgeTask:       { background: "#f5f5f5", color: "#424242", border: "1px solid #e0e0e0" },
-  badgeMention:    { background: "#fff8e1", color: "#f57f17", border: "1px solid #ffe082" },
-  emptyState:      { padding: "48px 24px", textAlign: "center" as const },
+  notifTitle:      { fontSize: 14, color: "#0f172a", fontWeight: 700 },
+  newDot:          { color: "#3b82f6", fontSize: 10, marginLeft: 4 },
+  notifTime:       { fontSize: 12, color: "#94a3b8", fontWeight: 500 },
+  notifDesc:       { fontSize: 13, color: "#475569", lineHeight: 1.5, marginTop: 2 },
+  notifBottom:     { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, marginTop: 4 },
+  btnToggleRead:   { background: "none", border: "none", color: "#64748b", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "color 0.2s ease" },
+  categoryBadge:   { fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, textTransform: "uppercase" as const, letterSpacing: "0.02em" },
+  badgeAi:         { background: "#0f172a", color: "#f8fafc", boxShadow: "0 1px 2px rgba(0,0,0,0.1)" },
+  badgeBooking:    { background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" },
+  badgeTask:       { background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" },
+  badgeMention:    { background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a" },
+  emptyState:      { padding: "64px 24px", textAlign: "center" as const },
 };

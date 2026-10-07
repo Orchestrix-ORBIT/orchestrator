@@ -44,23 +44,18 @@ export default function LeadDashboardPage() {
         ]);
         setProjects(projectList);
         setResources(resourceList);
-        let assignmentsMap: Record<string, string[]> = {};
-        try {
-          assignmentsMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        } catch (e) {}
-
-        const activeProjectIds = new Set(projectList.map(p => p.id));
+        // Fetch actual assigned members from TeamsService for each project's teamId
         const assignedUserIds = new Set<string>();
-
-        Object.entries(assignmentsMap).forEach(([projId, memberIds]) => {
-          if (activeProjectIds.has(projId) && Array.isArray(memberIds)) {
-            memberIds.forEach((id: string) => assignedUserIds.add(id));
-          }
+        const teamsData = await Promise.all(
+          projectList.filter(p => p.teamId).map(p => TeamsService.getTeamMembers(p.teamId as string).catch(() => [] as any[]))
+        );
+        teamsData.flat().forEach(m => {
+          if (m.userId) assignedUserIds.add(m.userId);
+          else if (m.id) assignedUserIds.add(m.id);
         });
-
-        const assignedMembers = memberList.filter(m => assignedUserIds.has((m as any).id || (m as any).userId));
-        const finalAssigned = assignedMembers.length > 0 ? assignedMembers : memberList;
-        setMembers(projectList.length === 0 ? [] : finalAssigned);
+        
+        const finalAssigned = memberList.filter(m => assignedUserIds.has((m as any).id || (m as any).userId));
+        setMembers(finalAssigned);
 
         // Load tasks for all projects
         const taskResults = await Promise.all(
@@ -84,10 +79,10 @@ export default function LeadDashboardPage() {
   const availableRes   = resources.filter(r => r.status === "AVAILABLE");
 
   const STATS = [
-    { id: "stat-active-projects", label: "ACTIVE PROJECTS", value: String(activeProjects.length), sub: `${projects.length} total` },
-    { id: "stat-team-members",    label: "TEAM MEMBERS",    value: String(members.length),         sub: "across active projects" },
-    { id: "stat-open-tasks",      label: "OPEN TASKS",      value: String(openTasks.length),       sub: "pending completion" },
-    { id: "stat-resources",       label: "AVAILABLE RESOURCES", value: String(availableRes.length), sub: `${resources.length} total` },
+    { id: "stat-active-projects", label: "Active Projects", value: String(activeProjects.length), sub: `${projects.length} total across org` },
+    { id: "stat-team-members",    label: "Team Members",    value: String(members.length),         sub: "assigned to active work" },
+    { id: "stat-open-tasks",      label: "Open Tasks",      value: String(openTasks.length),       sub: "pending completion" },
+    { id: "stat-resources",       label: "Available Resources", value: String(availableRes.length), sub: `${resources.length} total hardware/software` },
   ];
 
   return (
@@ -95,7 +90,7 @@ export default function LeadDashboardPage() {
       {/* ── Organization Header Banner ───────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#161616", letterSpacing: "-0.5px", margin: 0, marginBottom: 4 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#111827", letterSpacing: "-0.025em", margin: 0, marginBottom: 4 }}>
             Research Lead Overview
           </h1>
         </div>
@@ -103,12 +98,16 @@ export default function LeadDashboardPage() {
 
 
 
-      {/* Stats */}
+      {/* Stats - Bento Grid Style */}
       <div style={s.statsRow}>
         {STATS.map(stat => (
-          <div key={stat.id} id={stat.id} style={s.statCard}>
-            <span style={s.statValue}>{stat.value}</span>
-            <span style={s.statLabel}>{stat.label}</span>
+          <div key={stat.id} id={stat.id} style={s.statCard} className="stat-card-hover">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <span style={s.statLabel}>{stat.label}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+              <span style={s.statValue}>{stat.value}</span>
+            </div>
             <span style={s.statSub}>{stat.sub}</span>
           </div>
         ))}
@@ -117,39 +116,57 @@ export default function LeadDashboardPage() {
       {/* Projects table */}
       <div style={s.card}>
         <div style={s.cardHead}>
-          <span style={s.cardTitle}>Projects Overview</span>
-          <Link id="link-all-projects" href="/lead-dashboard/projects" style={s.cardLink}>Manage projects →</Link>
+          <div>
+            <h2 style={s.cardTitle}>Active Projects</h2>
+            <p style={{ margin: 0, fontSize: 13, color: "#6b7280", marginTop: 4 }}>Recent projects that require your attention.</p>
+          </div>
+          <Link id="link-all-projects" href="/lead-dashboard/projects" style={s.cardLink} className="btn-shiny">View all projects →</Link>
         </div>
         {activeProjects.length === 0 ? (
-          <p style={{ color: "#888", fontSize: 13 }}>No active projects yet.</p>
+          <p style={{ color: "#6b7280", fontSize: 13, padding: "0 24px 24px" }}>No active projects yet.</p>
         ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                {["Project", "Tasks", "Status", "Created"].map(h => (
-                  <th key={h} style={s.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {activeProjects.map(p => {
-                const pTasks  = allTasks.filter(t => t.projectId === p.id);
-                const done    = pTasks.filter(t => t.status === "ACCEPTED").length;
-                return (
-                  <tr key={p.id}>
-                    <td style={s.td}>
-                      <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link">
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td style={s.td}>{done}/{pTasks.length} accepted</td>
-                    <td style={s.td}><span style={s.activeBadge}>{p.status}</span></td>
-                    <td style={s.td}>{new Date(p.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div style={s.tableWrapper}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  {["Project Name", "Task Progress", "Current Status", "Created Date"].map(h => (
+                    <th key={h} style={s.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activeProjects.map(p => {
+                  const pTasks  = allTasks.filter(t => t.projectId === p.id);
+                  const done    = pTasks.filter(t => t.status === "ACCEPTED").length;
+                  const progress = pTasks.length > 0 ? Math.round((done / pTasks.length) * 100) : 0;
+                  return (
+                    <tr key={p.id} className="table-row-hover">
+                      <td style={s.td}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4f46e5" }} />
+                          <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link" style={{ fontWeight: 600, color: "#111827", textDecoration: "none" }}>
+                            {p.name}
+                          </Link>
+                        </div>
+                      </td>
+                      <td style={s.td}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ flex: 1, height: 6, background: "#f3f4f6", borderRadius: 3, overflow: "hidden", maxWidth: 120 }}>
+                            <div style={{ width: `${progress}%`, height: "100%", background: "#4f46e5", borderRadius: 3 }} />
+                          </div>
+                          <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{progress}%</span>
+                        </div>
+                      </td>
+                      <td style={s.td}><span style={s.activeBadge}>{p.status}</span></td>
+                      <td style={s.td}>
+                        <span style={{ color: "#4b5563" }}>{new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -157,30 +174,45 @@ export default function LeadDashboardPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 },
-  statCard: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 4 },
-  statValue: { fontSize: 32, fontWeight: 700, color: "#161616", lineHeight: 1 },
-  statLabel: { fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.8px", marginTop: 6 },
-  statSub: { fontSize: 12, color: "#aaa" },
-  card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: 24, marginBottom: 16 },
-  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  cardTitle: { fontSize: 14, fontWeight: 600, color: "#161616" },
+  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, marginBottom: 32 },
+  statCard: { 
+    padding: 24, 
+    display: "flex", 
+    flexDirection: "column", 
+    background: "#ffffff", 
+    borderRadius: 16, 
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+    transition: "transform 0.2s, box-shadow 0.2s",
+  },
+  statValue: { fontSize: 36, fontWeight: 700, color: "#111827", lineHeight: 1, letterSpacing: "-0.04em", marginBottom: 8 },
+  statLabel: { fontSize: 13, fontWeight: 600, color: "#4b5563" },
+  statSub: { fontSize: 12, color: "#9ca3af", fontWeight: 500 },
+  card: { 
+    background: "#ffffff", 
+    borderRadius: 16, 
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+    overflow: "hidden",
+  },
+  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "24px 24px 20px" },
+  cardTitle: { fontSize: 18, fontWeight: 600, color: "#111827", margin: 0, letterSpacing: "-0.01em" },
   cardLink: {
-    fontSize: 12,
-    color: "#161616",
-    background: "#f4f4f5",
-    border: "1px solid #e4e4e7",
-    padding: "5px 12px",
-    borderRadius: 6,
+    fontSize: 13,
+    color: "#111827",
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    padding: "8px 16px",
+    borderRadius: 8,
     textDecoration: "none",
     fontWeight: 600,
     display: "inline-flex",
     alignItems: "center",
-    gap: 4,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+    transition: "background 0.2s, border-color 0.2s"
   },
+  tableWrapper: { width: "100%", overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left" as const, fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.6px", textTransform: "uppercase" as const, paddingBottom: 10, borderBottom: "1px solid #f0f0f0" },
-  td: { fontSize: 13, color: "#424242", padding: "10px 0", borderBottom: "1px solid #f8f8f8" },
-  activeBadge: { fontSize: 10, fontWeight: 700, background: "#e8f5e9", color: "#2e7d32", padding: "3px 8px", borderRadius: 4, letterSpacing: "0.4px" },
+  th: { textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.05em", textTransform: "uppercase", padding: "12px 24px", borderBottom: "1px solid #e5e7eb", borderTop: "1px solid #f3f4f6", background: "#fafafa" },
+  td: { fontSize: 14, color: "#374151", padding: "16px 24px", borderBottom: "1px solid #f3f4f6", verticalAlign: "middle" },
+  activeBadge: { fontSize: 11, fontWeight: 600, background: "#f3f4f6", color: "#374151", padding: "4px 10px", borderRadius: 12, letterSpacing: "0.02em" },
 };

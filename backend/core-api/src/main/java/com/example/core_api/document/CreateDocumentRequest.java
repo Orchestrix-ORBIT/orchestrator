@@ -29,5 +29,7 @@ public class CreateDocumentRequest {
      */
     @Size(max = 512, message = "File storage key must not exceed 512 characters")
     private String fileStorageKey;
+
+    private java.util.List<String> allowedEditors;
 }
 

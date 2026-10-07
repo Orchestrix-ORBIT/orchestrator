@@ -24,6 +24,9 @@ public class AiSummary {
     @Column(name = "project_id", nullable = false)
     private UUID projectId;
 
+    @Column(name = "created_by")
+    private UUID createdBy;
+
     @Column(name = "transcript_hash", nullable = false)
     @Builder.Default
     private String transcriptHash = "";

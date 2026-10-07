@@ -20,48 +20,29 @@ public class ResourceController {
         this.resourceService = resourceService;
     }
 
+    // TenantFilter (Order=1) sets TenantContext for the full request lifecycle.
+    // No manual TenantContext management needed in any controller method.
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResourceResponse createResource(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @Valid @RequestBody CreateResourceRequest request) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         ResourceAccess.requireManager(authentication != null && authentication.getPrincipal() instanceof User user ? user : null);
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            UUID ownerId = getAuthenticatedUserId();
-            return resourceService.createResource(request, ownerId);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        UUID ownerId = getAuthenticatedUserId();
+        return resourceService.createResource(request, ownerId);
     }
 
     @GetMapping
     public List<ResourceResponse> getAllResources(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
             @RequestParam(required = false) ResourceType type,
             @RequestParam(required = false) ResourceStatus status) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return resourceService.getAllResources(type, status);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        return resourceService.getAllResources(type, status);
     }
 
     @GetMapping("/{id}")
-    public ResourceResponse getResourceById(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
-            @PathVariable UUID id) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return resourceService.getResourceById(id);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+    public ResourceResponse getResourceById(@PathVariable UUID id) {
+        return resourceService.getResourceById(id);
     }
 
     @PatchMapping("/{id}/status")

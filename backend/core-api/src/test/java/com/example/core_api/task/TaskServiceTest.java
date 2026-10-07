@@ -49,6 +49,9 @@ class TaskServiceTest {
     @Mock
     private TeamMemberRepository teamMemberRepository;
 
+    @Mock
+    private com.example.core_api.notification.NotificationService notificationService;
+
     // ─────────────────────────────────────────────────────────────────────────
     // @InjectMocks → Creates a REAL instance of TaskService and automatically
     //               injects the @Mock fields above into its constructor.

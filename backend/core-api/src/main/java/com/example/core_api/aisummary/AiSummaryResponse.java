@@ -12,6 +12,7 @@ import java.util.UUID;
 public class AiSummaryResponse {
     private UUID id;
     private UUID projectId;
+    private UUID createdBy;
     private String topic;
     private String summaryText;
     private List<String> actionItems;

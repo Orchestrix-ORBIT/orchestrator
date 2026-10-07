@@ -23,14 +23,9 @@ public class ChatController {
             @PathVariable UUID projectId,
             @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId
     ) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            List<ChatMessageResponse> messages = chatMessageService.getProjectMessages(projectId, tenantId);
-            return ResponseEntity.ok(messages);
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
-        }
+        // TenantFilter already set the schema — pass tenantId for service-level use only
+        List<ChatMessageResponse> messages = chatMessageService.getProjectMessages(projectId, tenantId);
+        return ResponseEntity.ok(messages);
     }
 
     // STOMP Message Handler: Clients publish to /app/chat.sendMessage

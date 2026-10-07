@@ -36,19 +36,25 @@ public class ProjectController {
     }
 
     @GetMapping
-    public List<ProjectResponse> getAllProjects(
-            @RequestHeader(value = "X-Tenant-ID", required = false, defaultValue = "myorg") String tenantId,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        String schemaName = "org_" + (tenantId != null ? tenantId : "myorg").toLowerCase().replace("-", "_");
-        com.example.core_api.multitenancy.TenantContext.setCurrentTenant(schemaName);
-        try {
-            return projectService.getAllProjects().stream()
-                    .filter(project -> projectAccess.canAccess(currentUser, project.getId()))
-                    .toList();
-        } finally {
-            com.example.core_api.multitenancy.TenantContext.clear();
+    public List<ProjectResponse> getAllProjects(@AuthenticationPrincipal User currentUser) {
+        return projectService.getAllProjects().stream()
+                .filter(project -> projectAccess.canAccess(currentUser, project.getId()))
+                .toList();
+    }
+
+    @PutMapping("/{id}")
+    public ProjectResponse updateProject(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateProjectRequest request) {
+        // Only Leads, Admins, and Owners may update projects
+        if (currentUser == null ||
+                currentUser.getRole() == UserRole.MEMBER ||
+                currentUser.getRole() == UserRole.GUEST ||
+                currentUser.getRole() == UserRole.RESEARCHER) {
+            throw new AccessDeniedException("Only Research Leads or Admins may update projects.");
         }
+        return projectService.updateProject(id, request);
     }
 
     @GetMapping("/{id}")

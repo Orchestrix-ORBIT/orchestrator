@@ -23,9 +23,27 @@ function buildHeaders(): HeadersInit {
   return headers;
 }
 
+// Helper: wrap fetch to catch and translate generic network errors
+async function safeFetch(url: string, options: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, options);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+      throw new Error("Cannot connect to the server. Please check your internet connection or try again later.");
+    }
+    throw err;
+  }
+}
+
 // Helper: unwrap response — throw on non-2xx with user-friendly message
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
+    if (res.status >= 500) {
+      const err = new Error("The service is temporarily unavailable. Please try again later.") as Error & { status: number };
+      err.status = res.status;
+      throw err;
+    }
     const raw = await res.text();
     // Try to extract the 'message' field from Spring Boot error JSON bodies
     try {
@@ -52,35 +70,35 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const api = {
   get: <T>(path: string) =>
-    fetch(`${BASE_URL}${path}`, { method: "GET", headers: buildHeaders() })
+    safeFetch(`${BASE_URL}${path}`, { method: "GET", headers: buildHeaders() })
       .then((r) => handleResponse<T>(r)),
 
   post: <T>(path: string, body: unknown) =>
-    fetch(`${BASE_URL}${path}`, {
+    safeFetch(`${BASE_URL}${path}`, {
       method: "POST",
       headers: buildHeaders(),
       body: JSON.stringify(body),
     }).then((r) => handleResponse<T>(r)),
 
   put: <T>(path: string, body: unknown) =>
-    fetch(`${BASE_URL}${path}`, {
+    safeFetch(`${BASE_URL}${path}`, {
       method: "PUT",
       headers: buildHeaders(),
       body: JSON.stringify(body),
     }).then((r) => handleResponse<T>(r)),
 
-  delete: (path: string) =>
-    fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
-      .then((r) => handleResponse<void>(r)),
+  delete: <T>(path: string) =>
+    safeFetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
+      .then((r) => handleResponse<T>(r as unknown as Response)), // Note: delete normally returns 204
 
   patch: <T>(path: string, body: unknown) =>
-    fetch(`${BASE_URL}${path}`, {
+    safeFetch(`${BASE_URL}${path}`, {
       method: "PATCH",
       headers: buildHeaders(),
       body: JSON.stringify(body),
     }).then((r) => handleResponse<T>(r)),
 
   del: (path: string) =>
-    fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
+    safeFetch(`${BASE_URL}${path}`, { method: "DELETE", headers: buildHeaders() })
       .then((r) => handleResponse<void>(r)),
 };

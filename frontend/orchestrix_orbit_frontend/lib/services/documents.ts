@@ -22,6 +22,7 @@ export interface Document {
   version: number;
   createdAt: string;
   updatedAt: string;
+  allowedEditors?: string[];
 }
 
 export interface CreateDocumentBody {
@@ -29,6 +30,7 @@ export interface CreateDocumentBody {
   category?: string;
   contentEncrypted?: string;
   fileStorageKey?: string;
+  allowedEditors?: string[];
 }
 
 export interface UpdateDocumentBody {
@@ -36,6 +38,7 @@ export interface UpdateDocumentBody {
   category?: string;
   contentEncrypted?: string;
   fileStorageKey?: string;
+  allowedEditors?: string[];
 }
 
 // ── Service object ───────────────────────────────────────────────────────────

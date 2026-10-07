@@ -7,6 +7,7 @@ public record SendChatMessageRequest(
         UUID taskId,
         String content,
         String senderName,
+        UUID senderId,
         String tenantId,
         UUID replyToId,
         String replyToSender,

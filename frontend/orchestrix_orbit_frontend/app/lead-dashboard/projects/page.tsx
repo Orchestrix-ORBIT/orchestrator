@@ -27,6 +27,7 @@ export default function LeadProjectsPage() {
 
   const [projectToDelete, setProjectToDelete]     = useState<Project | null>(null);
   const [deleting, setDeleting]                   = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const [projectToEdit, setProjectToEdit]         = useState<Project | null>(null);
   const [editName, setEditName]                   = useState("");
@@ -38,6 +39,11 @@ export default function LeadProjectsPage() {
 
   const [selectedProjectForMembersModal, setSelectedProjectForMembersModal] = useState<Project | null>(null);
   const [memberModalSearchQuery, setMemberModalSearchQuery]                 = useState("");
+  const [memberModalMembers, setMemberModalMembers]                         = useState<any[]>([]);
+  const [memberModalLoading, setMemberModalLoading]                         = useState(false);
+
+  // Per-project member counts fetched from /api/projects/{id}/summary
+  const [projectMemberCounts, setProjectMemberCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     async function loadData() {
@@ -50,10 +56,7 @@ export default function LeadProjectsPage() {
 
         const researchers = (members as any[]).filter((m: any) => {
           const role = String(m.role || "").toUpperCase();
-          const name = String(m.displayName || m.userDisplayName || "").toLowerCase();
-          const email = String(m.email || m.userEmail || "").toLowerCase();
-          return ["MEMBER", "ROLE_MEMBER", "RESEARCHER", "ROLE_RESEARCHER"].includes(role)
-            || name.includes("researcher") || email.includes("researcher");
+          return ["MEMBER", "ROLE_MEMBER", "RESEARCHER", "ROLE_RESEARCHER", "LEAD", "ROLE_LEAD"].includes(role);
         });
         setAvailableMembers(researchers);
 
@@ -62,6 +65,18 @@ export default function LeadProjectsPage() {
           projectList.map(p => TasksService.getByProject(p.id).catch(() => [] as Task[]))
         );
         setAllTasks(taskResults.flat());
+
+        // Fetch member counts for all projects that have a teamId
+        const memberCountEntries = await Promise.all(
+          projectList
+            .filter(p => p.teamId)
+            .map(p =>
+              ProjectsService.getSummary(p.id)
+                .then(s => [p.id, s.teamMemberCount] as [string, number])
+                .catch(() => [p.id, 0] as [string, number])
+            )
+        );
+        setProjectMemberCounts(Object.fromEntries(memberCountEntries));
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -96,19 +111,10 @@ export default function LeadProjectsPage() {
       };
       const created = await ProjectsService.create(body);
 
-      // Save assigned member IDs to localStorage mapping
-      try {
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        storedMap[created.id] = selectedMemberIds;
-        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
-      } catch (err) {
-        console.error("Failed to save project member assignments:", err);
+      setProjects(prev => [created, ...prev]);
+      if (selectedMemberIds.length > 0) {
+        setProjectMemberCounts(prev => ({ ...prev, [created.id]: selectedMemberIds.length }));
       }
-
-      const assigned = availableMembers.filter(m => selectedMemberIds.includes(m.id || m.userId));
-      const createdWithMembers = { ...created, assignedMembers: assigned };
-
-      setProjects(prev => [createdWithMembers, ...prev]);
       setShowModal(false);
       setNewName(""); setNewDesc(""); setSelectedMemberIds([]);
     } catch (err: unknown) {
@@ -125,11 +131,15 @@ export default function LeadProjectsPage() {
     setEditMemberSearchQuery("");
     setUpdateError(null);
 
-    try {
-      const assignmentsMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-      const assignedIds: string[] = assignmentsMap[p.id] || [];
-      setEditMemberIds(assignedIds);
-    } catch (e) {
+    if (p.teamId) {
+      // Fetch current team members from the real API
+      TeamsService.getTeamMembers(p.teamId)
+        .then(members => {
+          const ids = members.map((m: any) => (m.userId || m.id) as string).filter(Boolean);
+          setEditMemberIds(ids);
+        })
+        .catch(() => setEditMemberIds([]));
+    } else {
       setEditMemberIds([]);
     }
   }
@@ -147,29 +157,45 @@ export default function LeadProjectsPage() {
     setUpdateError(null);
 
     try {
-      const body: CreateProjectBody = {
-        name: editName.trim(),
-        description: editDesc.trim() || undefined,
-      };
+      let teamId = projectToEdit.teamId;
 
-      await ProjectsService.update(projectToEdit.id, body);
-
-      // Save updated member assignments to localStorage mapping
-      try {
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        storedMap[projectToEdit.id] = editMemberIds;
-        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
-      } catch (err) {
-        console.error("Failed to save project member assignments:", err);
+      if (editMemberIds.length > 0 && !teamId) {
+        // Project has no team yet — create one and link it
+        const team = await TeamsService.createTeam({ name: `${editName.trim()} Team` });
+        teamId = team.id;
       }
 
-      setProjects(prev =>
-        prev.map(p =>
-          p.id === projectToEdit.id
-            ? { ...p, name: editName.trim(), description: editDesc.trim() || "" }
-            : p
-        )
-      );
+      if (teamId) {
+        // Sync member list with the team
+        const currentMembers = await TeamsService.getTeamMembers(teamId).catch(() => []);
+        const currentIds = new Set(currentMembers.map((m: any) => (m.userId || m.id) as string).filter(Boolean));
+        const targetIds  = new Set(editMemberIds);
+
+        const toAdd    = editMemberIds.filter(id => !currentIds.has(id));
+        const toRemove = [...currentIds].filter(id => !targetIds.has(id));
+
+        await Promise.all([
+          ...toAdd.map(userId => TeamsService.addMember(teamId!, { userId, roleInTeam: "MEMBER" })),
+          ...toRemove.map(userId => TeamsService.removeMember(teamId!, userId)),
+        ]);
+      }
+
+      // Persist project fields (name, description) AND teamId to the backend
+      const updated = await ProjectsService.update(projectToEdit.id, {
+        name:        editName.trim(),
+        description: editDesc.trim() || undefined,
+        ...(teamId ? { teamId } : {}),
+      });
+
+      // Update local state with fresh server data
+      setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+
+      // Refresh member count for this project
+      if (teamId) {
+        ProjectsService.getSummary(updated.id)
+          .then(s => setProjectMemberCounts(prev => ({ ...prev, [updated.id]: s.teamMemberCount })))
+          .catch(() => {});
+      }
 
       setProjectToEdit(null);
     } catch (err: unknown) {
@@ -181,19 +207,14 @@ export default function LeadProjectsPage() {
 
   async function confirmDeleteProject() {
     if (!projectToDelete) return;
+    if (deleteConfirmText !== projectToDelete.name) return;
     setDeleting(true);
     try {
       await ProjectsService.delete(projectToDelete.id);
       setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
-
-      // Clean up project assignment mapping from localStorage
-      try {
-        const storedMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-        delete storedMap[projectToDelete.id];
-        localStorage.setItem("project_assigned_members", JSON.stringify(storedMap));
-      } catch (e) {}
-
+      setProjectMemberCounts(prev => { const copy = { ...prev }; delete copy[projectToDelete.id]; return copy; });
       setProjectToDelete(null);
+      setDeleteConfirmText("");
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -202,12 +223,25 @@ export default function LeadProjectsPage() {
   }
 
   function getProjectMembers(projectId: string) {
-    try {
-      const assignmentsMap = JSON.parse(localStorage.getItem("project_assigned_members") || "{}");
-      const assignedIds: string[] = assignmentsMap[projectId] || [];
-      return availableMembers.filter(m => assignedIds.includes(m.id || m.userId));
-    } catch (e) {
-      return [];
+    // Members are now fetched live in the modal via memberModalMembers state
+    // This function returns the cached modal members when called from the members modal
+    return memberModalMembers;
+  }
+
+  async function openMembersModal(project: Project) {
+    setSelectedProjectForMembersModal(project);
+    setMemberModalSearchQuery("");
+    setMemberModalMembers([]);
+    if (project.teamId) {
+      setMemberModalLoading(true);
+      try {
+        const members = await TeamsService.getTeamMembers(project.teamId);
+        setMemberModalMembers(members);
+      } catch {
+        setMemberModalMembers([]);
+      } finally {
+        setMemberModalLoading(false);
+      }
     }
   }
 
@@ -217,7 +251,7 @@ export default function LeadProjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  if (loading) return <LoadingState title="Loading Projects & Workspaces…" subtitle="Fetching research projects, member assignments, and workspace details" />;
+  if (loading) return <LoadingState variant="grid" title="Loading Projects & Workspaces…" subtitle="Fetching research projects, member assignments, and workspace details" />;
   if (error)   return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
 
   return (
@@ -225,18 +259,23 @@ export default function LeadProjectsPage() {
       {/* ── Top Header Row ─────────────────────────────────────────────────── */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Projects</h1>
-          <p style={s.sub}>{projects.length} workspace projects · {projects.filter(p => p.status === "ACTIVE").length} active</p>
+          <h1 style={s.title}>Workspace Projects</h1>
+          <p style={s.sub}>Manage active research initiatives and team assignments.</p>
         </div>
         
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <svg style={{ position: "absolute", left: 10, color: "#9ca3af" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               style={s.searchInput}
+              className="search-input-premium"
             />
             {searchQuery && (
               <button
@@ -245,19 +284,23 @@ export default function LeadProjectsPage() {
                 style={{
                   position: "absolute",
                   right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
+                  background: "#f3f4f6",
                   border: "none",
-                  fontSize: 14,
-                  color: "#9ca3af",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#6b7280",
                   cursor: "pointer",
-                  padding: "2px 4px",
+                  padding: "4px 6px",
+                  borderRadius: 4,
                   lineHeight: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
                 title="Clear search"
+                className="btn-secondary-hover"
               >
-                ✕
+                ESC
               </button>
             )}
           </div>
@@ -279,7 +322,7 @@ export default function LeadProjectsPage() {
             }}
           >
             {st === "ALL" ? "All Projects" : st === "ACTIVE" ? "Active" : "Archived"}
-            <span style={s.filterCount}>
+            <span style={{...s.filterCount, background: filterStatus === st ? "#f3f4f6" : "rgba(0,0,0,0.06)"}}>
               {st === "ALL" ? projects.length : projects.filter(p => p.status === st).length}
             </span>
           </button>
@@ -289,100 +332,80 @@ export default function LeadProjectsPage() {
       {/* ── Projects Grid ────────────────────────────────────────────────────── */}
       <div style={s.grid}>
         {filteredProjects.map(p => {
-          const projectMembers = getProjectMembers(p.id);
           const pTasks = allTasks.filter(t => t.projectId === p.id);
-          const doneCount = pTasks.filter(t => t.status === "ACCEPTED").length;
+          const doneCount = pTasks.filter(t => t.status === "DONE").length;
+          const memberCount = projectMemberCounts[p.id] ?? 0;
 
           return (
-            <div key={p.id} id={`project-card-${p.id}`} style={s.card}>
-              <div style={s.cardTop}>
-                <span style={{ ...s.badge, ...(p.status === "ACTIVE" ? s.activeStyle : s.archivedStyle), display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ fontSize: 8 }}>●</span> {p.status}
-                </span>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <Link id={`btn-view-project-${p.id}`}
-                    href={`/lead-dashboard/projects/${p.id}`}
-                    style={s.viewBtn}>
-                    Open Workspace →
-                  </Link>
-                  <button id={`btn-edit-project-${p.id}`}
-                    style={s.editBtn}
-                    title="Edit project details"
-                    onClick={() => handleOpenEditModal(p)}>Edit</button>
-                  <button id={`btn-delete-project-${p.id}`}
-                    style={s.deleteBtn}
-                    title="Delete project"
-                    onClick={() => setProjectToDelete(p)}>Delete</button>
-                </div>
-              </div>
-
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                <h3 style={s.cardName}>
-                  <Link href={`/lead-dashboard/projects/${p.id}`} className="clickable-project-link" style={{ fontSize: 16, fontWeight: 700 }}>
+          <div key={p.id} id={`project-card-${p.id}`} style={s.card} className="stat-card-hover">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, marginBottom: 6 }}>
+                  <Link href={`/lead-dashboard/projects/${p.id}`} style={{ fontSize: 18, fontWeight: 700, color: "#111827", textDecoration: "none", letterSpacing: "-0.01em" }}>
                     {p.name}
                   </Link>
                 </h3>
-                <p style={s.cardDesc}>{p.description || "No description provided."}</p>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#374151", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
-                    📋 {doneCount}/{pTasks.length} tasks accepted
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#1e40af", background: "#eff6ff", padding: "2px 8px", borderRadius: 4 }}>
-                    👥 {projectMembers.length} member{projectMembers.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.5 }}>
+                  {p.description || "No description provided."}
+                </p>
               </div>
+              <span style={{ ...s.badge, ...(p.status === "ACTIVE" ? s.activeStyle : s.archivedStyle), flexShrink: 0 }}>
+                {p.status}
+              </span>
+            </div>
 
-              {/* ── Card Footer: Team Avatars & Date ───────────────────────────── */}
-              <div style={s.cardFooter}>
-                <div
-                  style={{ ...s.avatarStack, cursor: "pointer" }}
-                  onClick={() => {
-                    setSelectedProjectForMembersModal(p);
-                    setMemberModalSearchQuery("");
-                  }}
-                  title="Click to view all project members"
-                >
-                  {projectMembers.length > 0 ? (
-                    projectMembers.slice(0, 3).map((m, idx) => {
-                      const name = m.displayName || m.userDisplayName || m.email || "Researcher";
-                      const initial = name.charAt(0).toUpperCase();
-                      return (
-                        <div
-                          key={m.id || m.userId || idx}
-                          title={`Assigned: ${name}`}
-                          style={{
-                            ...s.avatarCircle,
-                            marginLeft: idx > 0 ? -8 : 0,
-                          }}
-                        >
-                          {initial}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <span style={s.unassignedText}>Unassigned</span>
-                  )}
-                  {projectMembers.length > 3 && (
-                    <span style={s.moreMembersTag}>
-                      +{projectMembers.length - 3}
-                    </span>
-                  )}
-                </div>
-
-                <span style={s.cardDate}>
-                  {new Date(p.createdAt).toLocaleDateString()}
-                </span>
+            {/* Premium Progress Bar */}
+            <div style={{ margin: "16px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "#4b5563", marginBottom: 8 }}>
+                <span>Task Progress</span>
+                <span>{doneCount} / {pTasks.length}</span>
+              </div>
+              <div style={{ width: "100%", height: 6, background: "#f3f4f6", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${pTasks.length > 0 ? (doneCount / pTasks.length) * 100 : 0}%`, height: "100%", background: "#4f46e5", borderRadius: 3, transition: "width 0.5s ease" }} />
               </div>
             </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              <div style={s.metaBadge} onClick={() => p.teamId && openMembersModal(p)} className="btn-secondary-hover">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="8" cy="6" r="3" />
+                  <path d="M3 14c0-2.5 2-4 5-4s5 1.5 5 4" strokeLinecap="round" />
+                </svg>
+                {p.teamId ? `${memberCount} members` : "Unassigned"}
+              </div>
+            </div>
+
+            <div style={{ marginTop: "auto", borderTop: "1px solid #f3f4f6", paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => handleOpenEditModal(p)} style={s.actionTextBtn} className="btn-secondary-hover" title="Edit Project">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button onClick={() => { setProjectToDelete(p); setDeleteConfirmText(""); }} style={{ ...s.actionTextBtn, color: "#dc2626" }} className="btn-secondary-hover" title="Delete Project">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+              <Link href={`/lead-dashboard/projects/${p.id}`} style={s.viewBtnMinimal} className="btn-shiny">
+                Open Workspace →
+              </Link>
+            </div>
+          </div>
           );
         })}
 
         {filteredProjects.length === 0 && (
           <div style={s.empty}>
-            <p>No projects match your search or filter criteria.</p>
-            <button style={s.btnPrimary} onClick={() => setShowModal(true)}>Create a project</button>
+            <div style={{ width: 48, height: 48, borderRadius: 24, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 4px 0" }}>No projects found</h3>
+              <p style={{ margin: 0 }}>We couldn't find any projects matching your search or filter criteria.</p>
+            </div>
+            <button style={{ ...s.btnPrimary, marginTop: 8 }} onClick={() => setShowModal(true)}>
+              + Create a new project
+            </button>
           </div>
         )}
       </div>
@@ -399,12 +422,12 @@ export default function LeadProjectsPage() {
               {createError && <div style={s.errorBanner}>{createError}</div>}
               <div style={s.field}>
                 <label style={s.label}>Project name *</label>
-                <input id="input-project-name" style={s.input} value={newName}
+                <input id="input-project-name" style={s.input} className="search-input-premium" value={newName}
                   onChange={e => setNewName(e.target.value)} placeholder="e.g. Neural Interface Study" required />
               </div>
               <div style={s.field}>
                 <label style={s.label}>Description</label>
-                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }}
+                <textarea id="input-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }} className="search-input-premium"
                   value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Project goals and scope" />
               </div>
               <div style={s.field}>
@@ -417,7 +440,7 @@ export default function LeadProjectsPage() {
                     if (!member) return null;
                     const name = member.displayName || member.userDisplayName || member.email;
                     return (
-                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
+                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
                         {name}
                         <button
                           type="button"
@@ -436,12 +459,14 @@ export default function LeadProjectsPage() {
                   <input
                     type="text"
                     style={s.input}
+                    className="search-input-premium"
                     placeholder="Search researcher by name or email..."
                     value={memberSearchQuery}
                     onChange={e => setMemberSearchQuery(e.target.value)}
+                    onBlur={() => setTimeout(() => setMemberSearchQuery(""), 150)}
                   />
                   {memberSearchQuery.trim() !== "" && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
                       {availableMembers
                         .filter(m => {
                           const id = m.id || m.userId;
@@ -457,16 +482,17 @@ export default function LeadProjectsPage() {
                           return (
                             <div
                               key={id}
-                              onClick={() => {
+                              onMouseDown={(e) => {
+                                e.preventDefault();
                                 toggleMember(id);
                                 setMemberSearchQuery("");
                               }}
-                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f8f8f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f9fafb", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                               onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
                               onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
                             >
                               <span>{name}</span>
-                              <span style={{ fontSize: 11, color: "#888" }}>{m.email}</span>
+                              <span style={{ fontSize: 11, color: "#6b7280" }}>{m.email}</span>
                             </div>
                           );
                         })}
@@ -478,7 +504,7 @@ export default function LeadProjectsPage() {
                         const email = (m.email || m.userEmail || "").toLowerCase();
                         return name.includes(q) || email.includes(q);
                       }).length === 0 && (
-                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#888", textAlign: "center" }}>
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#6b7280", textAlign: "center" }}>
                           No matching researchers found
                         </div>
                       )}
@@ -509,12 +535,12 @@ export default function LeadProjectsPage() {
               {updateError && <div style={s.errorBanner}>{updateError}</div>}
               <div style={s.field}>
                 <label style={s.label}>Project name *</label>
-                <input id="input-edit-project-name" style={s.input} value={editName}
+                <input id="input-edit-project-name" style={s.input} className="search-input-premium" value={editName}
                   onChange={e => setEditName(e.target.value)} placeholder="e.g. Neural Interface Study" required />
               </div>
               <div style={s.field}>
                 <label style={s.label}>Description</label>
-                <textarea id="input-edit-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }}
+                <textarea id="input-edit-project-desc" style={{ ...s.input, minHeight: 70, resize: "vertical" as const }} className="search-input-premium"
                   value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Project goals and scope" />
               </div>
               <div style={s.field}>
@@ -527,7 +553,7 @@ export default function LeadProjectsPage() {
                     if (!member) return null;
                     const name = member.displayName || member.userDisplayName || member.email;
                     return (
-                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
+                      <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 16, fontSize: 12, fontWeight: 500, color: "#1e40af" }}>
                         {name}
                         <button
                           type="button"
@@ -546,12 +572,14 @@ export default function LeadProjectsPage() {
                   <input
                     type="text"
                     style={s.input}
+                    className="search-input-premium"
                     placeholder="Search researcher to add..."
                     value={editMemberSearchQuery}
                     onChange={e => setEditMemberSearchQuery(e.target.value)}
+                    onBlur={() => setTimeout(() => setEditMemberSearchQuery(""), 150)}
                   />
                   {editMemberSearchQuery.trim() !== "" && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#ffffff", border: "1px solid #f3f4f6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto", zIndex: 10, marginTop: 4 }}>
                       {availableMembers
                         .filter(m => {
                           const id = m.id || m.userId;
@@ -567,16 +595,17 @@ export default function LeadProjectsPage() {
                           return (
                             <div
                               key={id}
-                              onClick={() => {
+                              onMouseDown={(e) => {
+                                e.preventDefault();
                                 toggleEditMember(id);
                                 setEditMemberSearchQuery("");
                               }}
-                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f8f8f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f9fafb", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                               onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
                               onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
                             >
                               <span>{name}</span>
-                              <span style={{ fontSize: 11, color: "#888" }}>{m.email}</span>
+                              <span style={{ fontSize: 11, color: "#6b7280" }}>{m.email}</span>
                             </div>
                           );
                         })}
@@ -588,7 +617,7 @@ export default function LeadProjectsPage() {
                         const email = (m.email || m.userEmail || "").toLowerCase();
                         return name.includes(q) || email.includes(q);
                       }).length === 0 && (
-                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#888", textAlign: "center" }}>
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#6b7280", textAlign: "center" }}>
                           No matching researchers found
                         </div>
                       )}
@@ -618,7 +647,7 @@ export default function LeadProjectsPage() {
                   {selectedProjectForMembersModal.name} Members
                 </h3>
                 <p style={{ fontSize: 12, color: "#6b7280", margin: 0, marginTop: 2 }}>
-                  {getProjectMembers(selectedProjectForMembersModal.id).length} assigned researcher(s)
+                  {memberModalLoading ? "Loading…" : `${memberModalMembers.length} assigned researcher(s)`}
                 </p>
               </div>
               <button style={s.closeBtn} onClick={() => setSelectedProjectForMembersModal(null)}>✕</button>
@@ -643,70 +672,76 @@ export default function LeadProjectsPage() {
             </div>
 
             <div style={{ padding: "12px 24px 20px", maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-              {getProjectMembers(selectedProjectForMembersModal.id)
-                .filter((m) => {
-                  const q = memberModalSearchQuery.toLowerCase();
-                  const name = (m.displayName || m.userDisplayName || "").toLowerCase();
-                  const email = (m.email || m.userEmail || "").toLowerCase();
-                  return name.includes(q) || email.includes(q);
-                })
-                .map((m, idx) => {
-                  const name = m.displayName || m.userDisplayName || m.email || "Researcher";
-                  const email = m.email || m.userEmail || "user@myorg.com";
-                  const initial = name.charAt(0).toUpperCase();
+              {memberModalLoading ? (
+                <p style={{ textAlign: "center", fontSize: 13, color: "#6b7280", padding: "20px 0" }}>Loading members…</p>
+              ) : (
+                <>
+                  {memberModalMembers
+                    .filter((m) => {
+                      const q = memberModalSearchQuery.toLowerCase();
+                      const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                      const email = (m.email || m.userEmail || "").toLowerCase();
+                      return name.includes(q) || email.includes(q);
+                    })
+                    .map((m, idx) => {
+                      const name = m.displayName || m.userDisplayName || m.email || "Researcher";
+                      const email = m.email || m.userEmail || "user@myorg.com";
+                      const initial = name.charAt(0).toUpperCase();
 
-                  return (
-                    <div
-                      key={m.id || m.userId || idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 14px",
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 8,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      return (
                         <div
+                          key={m.userId || m.id || idx}
                           style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            background: "#161616",
-                            color: "#ffffff",
-                            fontSize: 12,
-                            fontWeight: 700,
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 14px",
+                            background: "#ffffff",
+                            border: "1px solid #f3f4f6",
+                            borderRadius: 12,
                           }}
                         >
-                          {initial}
-                        </div>
-                        <div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block" }}>{name}</span>
-                          <span style={{ fontSize: 11, color: "#6b7280" }}>{email}</span>
-                        </div>
-                      </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                background: "#161616",
+                                color: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              {initial}
+                            </div>
+                            <div>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block" }}>{name}</span>
+                              <span style={{ fontSize: 11, color: "#6b7280" }}>{email}</span>
+                            </div>
+                          </div>
 
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: 4 }}>
-                        Researcher
-                      </span>
-                    </div>
-                  );
-                })}
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#4f46e5", background: "#e0e7ff", border: "1px solid #c7d2fe", padding: "2px 8px", borderRadius: 4 }}>
+                            {m.roleInTeam || "Researcher"}
+                          </span>
+                        </div>
+                      );
+                    })}
 
-              {getProjectMembers(selectedProjectForMembersModal.id).filter((m) => {
-                const q = memberModalSearchQuery.toLowerCase();
-                const name = (m.displayName || m.userDisplayName || "").toLowerCase();
-                const email = (m.email || m.userEmail || "").toLowerCase();
-                return name.includes(q) || email.includes(q);
-              }).length === 0 && (
-                <p style={{ textAlign: "center", fontSize: 13, color: "#888", padding: "20px 0" }}>
-                  No matching members found.
-                </p>
+                  {memberModalMembers.filter((m) => {
+                    const q = memberModalSearchQuery.toLowerCase();
+                    const name = (m.displayName || m.userDisplayName || "").toLowerCase();
+                    const email = (m.email || m.userEmail || "").toLowerCase();
+                    return name.includes(q) || email.includes(q);
+                  }).length === 0 && (
+                    <p style={{ textAlign: "center", fontSize: 13, color: "#6b7280", padding: "20px 0" }}>
+                      {selectedProjectForMembersModal.teamId ? "No matching members found." : "No team assigned to this project yet."}
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -718,7 +753,7 @@ export default function LeadProjectsPage() {
                   setSelectedProjectForMembersModal(null);
                   handleOpenEditModal(p);
                 }}
-                style={{ fontSize: 12, fontWeight: 600, color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", background: "none", border: "none", cursor: "pointer" }}
               >
                 + Manage / Edit Members
               </button>
@@ -734,64 +769,59 @@ export default function LeadProjectsPage() {
         </div>
       )}
 
-      {/* ── Delete Confirmation Modal ────────────────────────────────────────── */}
+      {/* ── Premium SaaS Delete Confirmation Modal ──────────────────────────── */}
+
       {projectToDelete && (
-        <div style={s.overlay} onClick={() => setProjectToDelete(null)}>
-          <div style={{ ...s.modal, maxWidth: 460, borderRadius: 12, padding: 0, overflow: "hidden", boxShadow: "0 20px 40px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: "20px 24px", background: "#fef2f2", borderBottom: "1px solid #fee2e2", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 18, background: "#ffe4e6", color: "#e11d48", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
-                  !
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#9f1239", margin: 0 }}>Delete Project</h3>
-                  <p style={{ fontSize: 12, color: "#be123c", margin: 0, marginTop: 3, fontWeight: 500 }}>
-                    This action is permanent and cannot be undone.
-                  </p>
-                </div>
+        <div style={s.overlay} onClick={() => { setProjectToDelete(null); setDeleteConfirmText(""); }}>
+          <div style={{ ...s.modal, maxWidth: 420, padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 20, background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
               </div>
-              <button style={{ ...s.closeBtn, color: "#9f1239" }} onClick={() => setProjectToDelete(null)}>✕</button>
-            </div>
-
-            <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-              <p style={{ fontSize: 14, color: "#1f2937", lineHeight: 1.5, margin: 0 }}>
-                Are you sure you want to delete <strong style={{ color: "#111827", fontWeight: 700 }}>"{projectToDelete.name}"</strong>?
-              </p>
-              <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, margin: 0 }}>
-                All associated Kanban task cards, attached documents, meeting notes, and member assignments for this workspace will be permanently removed.
-              </p>
-              
-              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.5px" }}>PROJECT ID</span>
-                <code style={{ fontSize: 11, color: "#374151", background: "#ffffff", padding: "2px 8px", border: "1px solid #e5e7eb", borderRadius: 4, fontFamily: "monospace", fontWeight: 600 }}>
-                  {projectToDelete.id}
-                </code>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 4px 0" }}>Delete Project</h3>
+                <p style={{ fontSize: 13, color: "#4b5563", margin: 0, lineHeight: 1.5 }}>
+                  This action is permanent. All tasks, files, and team assignments for <strong style={{color: "#111827"}}>{projectToDelete.name}</strong> will be permanently removed.
+                </p>
               </div>
             </div>
 
-            <div style={{ padding: "16px 24px", background: "#fafafa", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 8, marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                To verify, type <strong style={{ color: "#111827", userSelect: "all" }}>{projectToDelete.name}</strong> below:
+              </label>
+              <input 
+                type="text" 
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                style={{ ...s.input, borderColor: deleteConfirmText === projectToDelete.name ? "#10b981" : "#d1d5db" }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
               <button
                 type="button"
-                style={{ ...s.btnSecondary, padding: "9px 18px", borderRadius: 6 }}
-                onClick={() => setProjectToDelete(null)}
+                style={{ ...s.btnSecondary, padding: "8px 16px" }}
+                onClick={() => { setProjectToDelete(null); setDeleteConfirmText(""); }}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteProject}
-                disabled={deleting}
+                disabled={deleting || deleteConfirmText !== projectToDelete.name}
                 style={{
-                  padding: "9px 20px",
-                  background: "#e11d48",
+                  padding: "8px 16px",
+                  background: "#dc2626",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: 6,
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: "pointer",
-                  opacity: deleting ? 0.6 : 1,
-                  boxShadow: "0 1px 2px rgba(225, 29, 72, 0.2)",
+                  cursor: (deleting || deleteConfirmText !== projectToDelete.name) ? "not-allowed" : "pointer",
+                  opacity: (deleting || deleteConfirmText !== projectToDelete.name) ? 0.5 : 1,
+                  transition: "all 0.2s"
                 }}
               >
                 {deleting ? "Deleting…" : "Delete Project"}
@@ -805,126 +835,55 @@ export default function LeadProjectsPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  title: { fontSize: 22, fontWeight: 700, color: "#161616", marginBottom: 4 },
-  sub: { fontSize: 13, color: "#888888" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(16px, 1.5vw, 24px)" },
+  title: { fontSize: "clamp(20px, 1.8vw, 28px)", fontWeight: 700, color: "#111827", marginBottom: 4 },
+  sub: { fontSize: "clamp(12px, 1vw, 15px)", color: "#6b7280" },
   searchInput: {
-    padding: "8px 28px 8px 14px",
+    padding: "8px 36px 8px 34px",
     fontSize: 13,
-    border: "1px solid #d0d0d0",
-    borderRadius: 6,
-    width: 220,
-    outline: "none",
-    background: "#ffffff",
-  },
-  btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnSecondary: { padding: "9px 16px", background: "#ffffff", color: "#161616", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  
-  filterRow: { display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #eeeeee", paddingBottom: 12 },
-  filterTab: { padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#616161", background: "none", border: "none", borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 },
-  filterTabActive: { background: "#161616", color: "#ffffff" },
-  filterCount: { fontSize: 11, background: "rgba(0,0,0,0.06)", padding: "1px 6px", borderRadius: 10 },
-
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 18 },
-  card: {
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
+    border: "1px solid rgba(0,0,0,0.08)",
     borderRadius: 8,
-    padding: "20px",
+    width: 240,
+    outline: "none",
+    background: "#f9fafb",
+    color: "#111827",
+    transition: "all 0.2s ease",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
+  },
+  btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
+  btnSecondary: { padding: "9px 16px", background: "#ffffff", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  filterRow: { display: "inline-flex", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 8, marginBottom: 32 },
+  filterTab: { padding: "6px 14px", fontSize: 13, fontWeight: 600, color: "#6b7280", background: "none", border: "none", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" },
+  filterTabActive: { background: "#ffffff", color: "#111827", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
+  filterCount: { fontSize: 11, padding: "1px 6px", borderRadius: 10, transition: "background 0.2s" },
+
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(clamp(280px, 25vw, 400px), 1fr))", gap: 24 },
+  card: {
+    padding: 24,
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-    boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+    background: "#ffffff",
+    borderRadius: 16,
+    border: "1px solid rgba(0,0,0,0.06)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
   },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  badge: { fontSize: 10, fontWeight: 700, letterSpacing: "0.5px", padding: "3px 8px", borderRadius: 4 },
-  activeStyle: { background: "#e8f5e9", color: "#2e7d32" },
-  archivedStyle: { background: "#f5f5f5", color: "#757575" },
-  viewBtn: {
-    fontSize: 12,
-    color: "#ffffff",
-    background: "#161616",
-    fontWeight: 600,
-    textDecoration: "none",
-    padding: "5px 12px",
-    borderRadius: 4,
-    display: "inline-block",
-  },
-  editBtn: {
-    background: "#f3f4f6",
-    border: "1px solid #e5e7eb",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#374151",
-    cursor: "pointer",
-    padding: "5px 10px",
-    borderRadius: 4,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  deleteBtn: {
-    background: "#fff1f2",
-    border: "1px solid #fecdd3",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#e11d48",
-    cursor: "pointer",
-    padding: "5px 10px",
-    borderRadius: 6,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  cardName: { fontSize: 16, fontWeight: 700, color: "#111827", margin: 0, lineHeight: 1.3 },
-  cardDesc: {
-    fontSize: 13,
-    color: "#4b5563",
-    lineHeight: 1.5,
-    margin: 0,
-    marginTop: 4,
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical" as const,
-    overflow: "hidden",
-  },
-  cardFooter: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTop: "1px solid #f3f4f6",
-    marginTop: "auto",
-  },
-  avatarStack: { display: "flex", alignItems: "center" },
-  avatarCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    background: "#161616",
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "2px solid #ffffff",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-  },
-  unassignedText: { fontSize: 11, color: "#9ca3af", fontStyle: "italic" },
-  moreMembersTag: { fontSize: 11, fontWeight: 700, color: "#4b5563", marginLeft: 6 },
-  cardDate: { fontSize: 11, color: "#9ca3af", fontWeight: 500 },
-  empty: { gridColumn: "1/-1", textAlign: "center" as const, padding: "60px 0", color: "#888", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 },
-  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
-  modal: { background: "#ffffff", borderRadius: 10, padding: 28, width: "100%", maxWidth: 480 },
-  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#161616" },
-  closeBtn: { background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" },
-  modalForm: { display: "flex", flexDirection: "column", gap: 16 },
-  modalActions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 },
+  badge: { fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", padding: "4px 10px", borderRadius: 12 },
+  activeStyle: { background: "#dcfce7", color: "#166534" },
+  archivedStyle: { background: "#f3f4f6", color: "#4b5563" },
+  metaBadge: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "#4b5563", background: "#f9fafb", border: "1px solid #e5e7eb", padding: "4px 10px", borderRadius: 8, cursor: "pointer" },
+  actionTextBtn: { background: "transparent", border: "none", color: "#6b7280", cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" },
+  viewBtnMinimal: { fontSize: 13, fontWeight: 600, color: "#111827", background: "#ffffff", border: "1px solid #e5e7eb", padding: "8px 16px", borderRadius: 8, textDecoration: "none", display: "inline-flex", alignItems: "center", transition: "all 0.2s" },
+  empty: { gridColumn: "1/-1", textAlign: "center", padding: "60px 20px", background: "#ffffff", border: "1px dashed #d1d5db", borderRadius: 16, color: "#6b7280", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.25)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 },
+  modal: { background: "#ffffff", borderRadius: 16, padding: "0 0 24px", width: "100%", maxWidth: 520, boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255,255,255,0.1)", overflow: "visible" },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px" },
+  modalTitle: { fontSize: 20, fontWeight: 700, color: "#111827", letterSpacing: "-0.5px" },
+  closeBtn: { background: "#f3f4f6", border: "none", width: 28, height: 28, borderRadius: "50%", fontSize: 14, color: "#4b5563", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },
+  modalForm: { display: "flex", flexDirection: "column", gap: 20, padding: "0 24px" },
+  modalActions: { display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8, paddingTop: 16, borderTop: "1px solid #f3f4f6" },
   field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 12, fontWeight: 600, color: "#161616" },
-  input: { padding: "10px 12px", fontSize: 14, border: "1.5px solid #d0d0d0", borderRadius: 6, fontFamily: "inherit", width: "100%" },
+  label: { fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 2 },
+  input: { padding: "10px 14px", fontSize: 14, border: "1px solid #e5e7eb", borderRadius: 8, background: "#f9fafb", color: "#111827", transition: "border 0.2s, box-shadow 0.2s", width: "100%", outline: "none" },
   errorBanner: { padding: "10px 14px", background: "#fff0f0", border: "1px solid #f5c6cb", borderRadius: 6, fontSize: 13, color: "#c62828" },
 };
