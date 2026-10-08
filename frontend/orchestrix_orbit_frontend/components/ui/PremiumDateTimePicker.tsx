@@ -190,16 +190,15 @@ export function PremiumDateTimePicker({ label, value, onChange, required = false
               showOutsideDays
               disabled={{ before: new Date() }}
               styles={{
-                caption: { color: "#0f172a", fontWeight: 700, fontSize: 14 },
-                head_cell: { color: "#64748b", fontWeight: 600, fontSize: 12 },
-                cell: { padding: 4 },
-                day: { borderRadius: 8, width: 36, height: 36, fontSize: 14, fontWeight: 500 },
-                day_selected: { background: "#0f172a", color: "#ffffff", fontWeight: 700 },
-                day_today: { color: "#2563eb", fontWeight: 700 },
+                caption_label: { color: "#0f172a", fontWeight: 700, fontSize: 14 },
+                weekday: { color: "#64748b", fontWeight: 600, fontSize: 12 },
+                day: { padding: 4 },
+                day_button: { borderRadius: 8, width: 36, height: 36, fontSize: 14, fontWeight: 500 },
+                selected: { background: "#0f172a", color: "#ffffff", fontWeight: 700 },
+                today: { color: "#2563eb", fontWeight: 700 },
               }}
               components={{
-                IconLeft: () => <ChevronLeft size={16} />,
-                IconRight: () => <ChevronRight size={16} />,
+                Chevron: ({ orientation }) => orientation === "left" ? <ChevronLeft size={16} /> : <ChevronRight size={16} />,
               }}
             />
           </div>

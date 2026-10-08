@@ -205,7 +205,7 @@ export default function ResearcherAiSummariesPage() {
       if (assigneeId) {
         const resolvedMem = teamMembers.find(m => 
           (m.userId === assigneeId || m.id === assigneeId) ||
-          (m.displayName === assigneeId || m.userDisplayName === assigneeId || m.name === assigneeId || m.email === assigneeId)
+          (m.displayName === assigneeId || m.userDisplayName === assigneeId || m.email === assigneeId)
         );
         assigneeId = resolvedMem ? (resolvedMem.userId || resolvedMem.id) : undefined;
       }

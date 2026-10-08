@@ -19,6 +19,7 @@ interface TaskItem {
   assignee: string;
   priority: Priority;
   dueDate: string;
+  isAiGenerated?: boolean;
 }
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
@@ -101,7 +102,7 @@ function CustomStatusSelect({ value, onChange }: { value: TaskStatus, onChange: 
   );
 }
 
-export function CustomToggle({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) {
+function CustomToggle({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) {
   return (
     <div 
       onClick={() => onChange(!checked)}
@@ -139,8 +140,10 @@ export default function ResearcherProjectWorkspacePage({ params }: { params: Pro
   const STAGE_LABELS: Record<TaskStatus, string> = {
     TODO: "To Do",
     IN_PROGRESS: "In Progress",
+    IN_REVIEW: "In Review",
     DONE: "Completed (Pending Review)",
     ACCEPTED: "Accepted ✓",
+    BLOCKED: "Blocked",
   };
 
 

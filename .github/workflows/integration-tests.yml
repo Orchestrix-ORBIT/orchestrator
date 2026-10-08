@@ -58,6 +58,11 @@ jobs:
         run: |
           npm ci --prefix frontend/orchestrix_orbit_frontend
           python -m pip install -r backend/context-engine/requirements-test.txt
+      - name: Type-check frontend before deployment
+        working-directory: frontend/orchestrix_orbit_frontend
+        run: |
+          ./node_modules/.bin/next typegen
+          ./node_modules/.bin/tsc --noEmit
       - name: Build services for cross-service flow
         run: |
           (cd backend/core-api && sh ./mvnw -B -q -DskipTests package)

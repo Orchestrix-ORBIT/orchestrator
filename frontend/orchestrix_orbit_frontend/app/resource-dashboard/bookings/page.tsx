@@ -293,7 +293,7 @@ export default function ResourceBookingsPage() {
               </div>
               <div style={m.field}>
                 <label style={m.label}>Purpose</label>
-                <div style={m.value} style={{ background: "#f8fafc", padding: 12, borderRadius: 8, fontSize: 13, color: "#334155", border: "1px solid #e2e8f0" }}>
+                <div style={{ ...m.value, background: "#f8fafc", padding: 12, borderRadius: 8, fontSize: 13, color: "#334155", border: "1px solid #e2e8f0" }}>
                   {selectedBooking.purpose || <span style={{fontStyle:"italic", color:"#94a3b8"}}>No purpose provided.</span>}
                 </div>
               </div>

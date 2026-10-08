@@ -664,7 +664,7 @@ function checkResourceSlotStatus(resource: any, dateStr: string, startTimeStr: s
   return { isBookable: true, label: "Available", reason: "" };
 }
 
-function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = [], allBookings: any[] = []): { status: Resource["status"], nextAvailableTime: Date | null } {
+function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = [], allBookings: any[] = []): { status: Resource["status"] | "RESERVED", nextAvailableTime: Date | null } {
   const now = new Date();
   const assetLogs = (maintenanceLogs || []).filter((m: any) => {
     const isIdMatch = m.resourceId && resource.id && String(m.resourceId) === String(resource.id);

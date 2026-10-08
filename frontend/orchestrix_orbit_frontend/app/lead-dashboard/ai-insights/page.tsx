@@ -76,8 +76,8 @@ export default function AiInsightsPage() {
     const memberByEmail = teamMembers.find(
       (mem) => (mem.email || mem.userEmail || "").toLowerCase() === raw.toLowerCase()
     );
-    if (memberByEmail && (memberByEmail.displayName || memberByEmail.userDisplayName || memberByEmail.name)) {
-      return memberByEmail.displayName || memberByEmail.userDisplayName || memberByEmail.name;
+    if (memberByEmail && (memberByEmail.displayName || memberByEmail.userDisplayName)) {
+      return memberByEmail.displayName || memberByEmail.userDisplayName;
     }
     const local = raw.split("@")[0];
     return local.split(/[._\-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -204,7 +204,7 @@ export default function AiInsightsPage() {
       if (assigneeId) {
         const resolvedMem = teamMembers.find(m => 
           (m.userId === assigneeId || m.id === assigneeId) ||
-          (m.displayName === assigneeId || m.userDisplayName === assigneeId || m.name === assigneeId || m.email === assigneeId)
+          (m.displayName === assigneeId || m.userDisplayName === assigneeId || m.email === assigneeId)
         );
         assigneeId = resolvedMem ? (resolvedMem.userId || resolvedMem.id) : undefined;
       }
@@ -768,10 +768,10 @@ export default function AiInsightsPage() {
                             const selectedId = taskAssignees[idx] || "";
                             const selectedMem = teamMembers.find(m => 
                               (m.userId === selectedId || m.id === selectedId) ||
-                              (m.displayName === selectedId || m.userDisplayName === selectedId || m.name === selectedId || m.email === selectedId)
+                              (m.displayName === selectedId || m.userDisplayName === selectedId || m.email === selectedId)
                             );
                             const selectedName = selectedMem 
-                              ? (selectedMem.userDisplayName || selectedMem.displayName || selectedMem.name || selectedMem.userEmail || selectedMem.email || selectedId) 
+                              ? (selectedMem.userDisplayName || selectedMem.displayName || selectedMem.userEmail || selectedMem.email || selectedId)
                               : (selectedId || "Unassigned");
                             const isMeDisplay = selectedName === currentDisplayName;
 
@@ -817,14 +817,14 @@ export default function AiInsightsPage() {
                                             />
                                           </div>
                                           <div style={{ maxHeight: 160, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-                                            {Array.from(new Map([{ id: "", displayName: "Unassigned" }, ...teamMembers].map(m => [(m.id || m.userId || m.displayName || m.userDisplayName || "unassigned"), m])).values())
+                                            {Array.from(new Map(([{ id: "", displayName: "Unassigned" } as TeamMember, ...teamMembers]).map(m => [(m.id || m.userId || m.displayName || m.userDisplayName || "unassigned"), m])).values())
                                               .filter(mem => {
-                                                const name = mem.displayName || mem.userDisplayName || mem.name || mem.email || "Unassigned";
+                                                const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
                                                 return name.toLowerCase().includes(assigneeSearchQuery.toLowerCase());
                                               })
                                               .map(mem => {
                                                 const id = mem.id || mem.userId || "";
-                                                const name = mem.displayName || mem.userDisplayName || mem.name || mem.email || "Unassigned";
+                                                const name = mem.displayName || mem.userDisplayName || mem.email || "Unassigned";
                                                 const isSelected = selectedId === id;
                                                 const isMe = name === currentDisplayName;
                                                 return (
