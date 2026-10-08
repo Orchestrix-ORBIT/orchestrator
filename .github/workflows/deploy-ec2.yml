@@ -141,6 +141,7 @@ jobs:
           "${compose[@]}" config --quiet
           aws ecr get-login-password --region "$AWS_REGION" |
             docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker system prune --all --force
           "${compose[@]}" pull
 
           wait_http() {
