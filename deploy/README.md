@@ -30,3 +30,4 @@
 8. Back up the existing PostgreSQL database, review pending Core API Flyway migrations, and verify both Java services can reach that host over TLS. Then set `DEPLOY_ENABLED=true`. Core API applies migrations when it starts; this workflow does not create a database backup.
 
 The workflow deploys one Realtime container because its current message broker is in memory. It does not launch the PostgreSQL service from `backend/docker-compose.yml`.
+Before pulling a release and after its health checks pass, the workflow removes Docker images that no running container uses to keep space available on the instance's small root volume.

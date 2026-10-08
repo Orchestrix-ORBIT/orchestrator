@@ -130,6 +130,9 @@ jobs:
             test -s "$file" || { echo "Missing $HOME/orchestrix/$file" >&2; exit 1; }
           done
 
+          # Keep the small root volume clear while retaining images used by running containers.
+          docker image prune --all --force
+
           printf 'ECR_REGISTRY=%s\nIMAGE_TAG=%s\n' "$ECR_REGISTRY" "$IMAGE_TAG" > .release.env.tmp
           chmod 600 .release.env.tmp
           mv .release.env.tmp .release.env
@@ -168,4 +171,5 @@ jobs:
           "${compose[@]}" up -d --no-deps caddy
           wait_http https://orchestrix.mrt.lk/
           "${compose[@]}" ps
+          docker image prune --all --force
           REMOTE
