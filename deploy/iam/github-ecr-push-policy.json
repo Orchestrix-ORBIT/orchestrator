@@ -12,6 +12,7 @@
         "ecr:BatchCheckLayerAvailability",
         "ecr:BatchGetImage",
         "ecr:CompleteLayerUpload",
+        "ecr:GetDownloadUrlForLayer",
         "ecr:InitiateLayerUpload",
         "ecr:PutImage",
         "ecr:UploadLayerPart"
@@ -22,6 +23,14 @@
         "arn:aws:ecr:ap-south-1:349476472955:repository/orchestrix-context-engine",
         "arn:aws:ecr:ap-south-1:349476472955:repository/orchestrix-frontend"
       ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress"
+      ],
+      "Resource": "arn:aws:ec2:ap-south-1:349476472955:security-group/sg-0aaa3d149ac61686a"
     }
   ]
 }
