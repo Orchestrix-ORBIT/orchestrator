@@ -17,10 +17,10 @@
         "ecr:UploadLayerPart"
       ],
       "Resource": [
-        "arn:aws:ecr:eu-north-1:349476472955:repository/orchestrix-core-api",
-        "arn:aws:ecr:eu-north-1:349476472955:repository/orchestrix-realtime",
-        "arn:aws:ecr:eu-north-1:349476472955:repository/orchestrix-context-engine",
-        "arn:aws:ecr:eu-north-1:349476472955:repository/orchestrix-frontend"
+        "arn:aws:ecr:ap-south-1:349476472955:repository/orchestrix-core-api",
+        "arn:aws:ecr:ap-south-1:349476472955:repository/orchestrix-realtime",
+        "arn:aws:ecr:ap-south-1:349476472955:repository/orchestrix-context-engine",
+        "arn:aws:ecr:ap-south-1:349476472955:repository/orchestrix-frontend"
       ]
     }
   ]
