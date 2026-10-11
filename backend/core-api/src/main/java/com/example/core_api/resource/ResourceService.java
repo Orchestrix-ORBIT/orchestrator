@@ -355,13 +355,17 @@ public class ResourceService {
             String title = "New Booking Request - Pending Approval";
             String message = "A booking request for \"" + resource.getName() + "\" was submitted by "
                     + currentUser.getEmail() + " and is awaiting your approval.";
-            List<User> leads = userRepository.findByRoleIn(java.util.List.of(
+            // Leads and Resource Managers both approve booking requests
+            List<User> approvers = userRepository.findByRoleIn(java.util.List.of(
                 com.example.core_api.auth.UserRole.LEAD,
-                com.example.core_api.auth.UserRole.ROLE_LEAD
+                com.example.core_api.auth.UserRole.ROLE_LEAD,
+                com.example.core_api.auth.UserRole.RESOURCE_MANAGER
             ));
-            log.info("[NOTIFY] Notifying {} leads about pending booking for resource={}", leads.size(), resource.getName());
-            for (User lead : leads) {
-                notificationService.notify(lead.getId(), "BOOKING", title, message);
+            log.info("[NOTIFY] Notifying {} approvers about pending booking for resource={}", approvers.size(), resource.getName());
+            for (User approver : approvers) {
+                if (!approver.getId().equals(currentUser.getId())) {
+                    notificationService.notify(approver.getId(), "BOOKING", title, message);
+                }
             }
         }
 
@@ -369,12 +373,17 @@ public class ResourceService {
     }
 
     public BookingResponse updateBookingStatus(UUID bookingId, BookingStatus newStatus, String reason) {
+        return updateBookingStatus(bookingId, newStatus, reason, null);
+    }
+
+    // actorId: who changed the status; a user cancelling their own booking is not notified.
+    public BookingResponse updateBookingStatus(UUID bookingId, BookingStatus newStatus, String reason, UUID actorId) {
         ResourceBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
         BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(newStatus);
         booking = bookingRepository.save(booking);
-        if (oldStatus != newStatus) {
+        if (oldStatus != newStatus && !booking.getUserId().equals(actorId)) {
             Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
             String resName = resource != null ? resource.getName() : "Resource";
             String title = "Booking " + newStatus;
@@ -543,13 +552,17 @@ public class ResourceService {
     }
 
     private void notifyManagers(String title, String message) {
+        // Maintenance concerns the Resource Managers (not the organization admins); skip the one who made the change.
+        Object principal = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() != null
+                ? org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal() : null;
+        UUID actorId = principal instanceof com.example.core_api.auth.User u ? u.getId() : null;
         List<com.example.core_api.auth.User> managers = userRepository.findByRoleIn(java.util.List.of(
-            com.example.core_api.auth.UserRole.ADMIN,
-            com.example.core_api.auth.UserRole.OWNER,
-            com.example.core_api.auth.UserRole.ROLE_ADMIN
+            com.example.core_api.auth.UserRole.RESOURCE_MANAGER
         ));
         for (com.example.core_api.auth.User manager : managers) {
-            notificationService.notify(manager.getId(), "Maintenance", title, message);
+            if (!manager.getId().equals(actorId)) {
+                notificationService.notify(manager.getId(), "Maintenance", title, message);
+            }
         }
     }
 }

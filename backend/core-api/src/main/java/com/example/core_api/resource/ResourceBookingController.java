@@ -53,7 +53,7 @@ public class ResourceBookingController {
         if (!ownCancellation && !isLead) {
             ResourceAccess.requireManager(currentUser);
         }
-        return resourceService.updateBookingStatus(bookingId, request.getStatus(), request.getReason());
+        return resourceService.updateBookingStatus(bookingId, request.getStatus(), request.getReason(), currentUser == null ? null : currentUser.getId());
     }
 
     @GetMapping("/bookings/me")
