@@ -29,6 +29,7 @@ class ContextEngineApiTests(unittest.TestCase):
             "summary": "The team agreed to test the prototype.",
             "key_points": ["Prototype test agreed"],
             "action_items": ["Run the test"],
+            "extracted_tasks": [{"title": "Run the test", "assignee_id": "user-b"}],
             "message_count": 2,
             "strategy": "stuff",
         }
@@ -41,8 +42,8 @@ class ContextEngineApiTests(unittest.TestCase):
 
         self.assertEqual(response.model_dump(), result)
         summarize_model.assert_called_once_with([
-            {"senderName": "A", "content": "Test it", "createdAt": "2026-01-01T10:00:00Z"},
-            {"senderName": "B", "content": "Agreed", "createdAt": ""},
+            {"senderName": "A", "senderId": "", "content": "Test it", "createdAt": "2026-01-01T10:00:00Z"},
+            {"senderName": "B", "senderId": "", "content": "Agreed", "createdAt": ""},
         ])
 
     def test_rejects_empty_and_oversized_requests_before_model_call(self):
@@ -99,6 +100,7 @@ class ContextEngineHttpTests(unittest.IsolatedAsyncioTestCase):
             "summary": "Meeting done",
             "key_points": ["Decision"],
             "action_items": ["Follow up"],
+            "extracted_tasks": [],
             "message_count": 1,
             "strategy": "stuff",
         }

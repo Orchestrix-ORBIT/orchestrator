@@ -73,7 +73,7 @@ describe("Sidebar — navigation links", () => {
     vi.mocked(usePathname).mockReturnValue("/lead-dashboard");
     render(<Sidebar />);
     const projectsLink = screen.getByRole("link", { name: /projects/i });
-    expect(projectsLink).toHaveStyle({ color: "#888888" });
+    expect(projectsLink).toHaveStyle({ color: "#94a3b8" });
   });
 });
 
@@ -103,6 +103,9 @@ describe("Sidebar — logout", () => {
     const user = userEvent.setup();
     render(<Sidebar />);
     await user.click(screen.getByRole("button", { name: /sign out/i }));
+    // Sign-out asks for confirmation first
+    expect(mockLogout).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /yes, sign out/i }));
     expect(mockLogout).toHaveBeenCalledOnce();
     expect(mockPush).toHaveBeenCalledWith("/");
   });
