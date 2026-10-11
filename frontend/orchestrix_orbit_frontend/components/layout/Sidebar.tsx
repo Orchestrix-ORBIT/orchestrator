@@ -177,7 +177,7 @@ const NAV_RESEARCHER = [
   },
 ];
 
-export function Sidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boolean; onToggle?: () => void }) {
+export function Sidebar({ isCollapsed = false, onToggle, className = "" }: { isCollapsed?: boolean; onToggle?: () => void; className?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [orgName, setOrgName] = useState<string>("");
@@ -246,8 +246,7 @@ export function Sidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boole
 
   return (
     <>
-    <aside style={{ ...s.sidebar, width: isCollapsed ? 80 : 220, minWidth: isCollapsed ? 80 : 220, transition: "width 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
-      {/* Brand Header */}
+    <aside className={className} style={{ ...s.sidebar, width: isCollapsed ? 80 : 220, minWidth: isCollapsed ? 80 : 220, transition: "width 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
       <div style={{ ...s.brand, padding: isCollapsed ? "0 0 20px" : "0 18px 20px", alignItems: isCollapsed ? "center" : "flex-start" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: isCollapsed ? "center" : "space-between", width: "100%" }}>
           {!isCollapsed && (

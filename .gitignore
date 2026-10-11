@@ -21,6 +21,7 @@ env/
 .venv/
 .pytest_cache/
 .env
+*.pem
 
 # Docker
 .docker/

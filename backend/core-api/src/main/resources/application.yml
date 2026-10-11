@@ -11,6 +11,10 @@ spring:
     hikari:
       maximum-pool-size: ${DB_POOL_MAX_SIZE:3}
       minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      # Remote pooler/network can silently drop idle connections; ping and recycle them
+      # before they are handed to a request (avoids "Connection reset" 500s).
+      keepalive-time: 30000
+      max-lifetime: 300000
       data-source-properties:
         sslmode: require
 
@@ -40,6 +44,14 @@ jwt:
 # AES-256 Encryption Configuration
 encryption:
   secret-key: ${ENCRYPTION_SECRET_KEY}
+
+# New sign-ups wait for an administrator's approval (set false in CI / disposable test orgs)
+auth:
+  require-signup-approval: ${AUTH_REQUIRE_SIGNUP_APPROVAL:true}
+
+# Organization whose admins manage all organizations (create / list / suspend)
+platform:
+  tenant-slug: ${PLATFORM_TENANT:platform}
 
 context-engine:
   url: ${CONTEXT_ENGINE_URL:http://localhost:8083}

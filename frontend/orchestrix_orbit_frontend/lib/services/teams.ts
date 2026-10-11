@@ -38,6 +38,8 @@ export interface TeamMember {
   displayName?: string;
   userEmail?: string;
   userDisplayName?: string;
+  name?: string;
+  status?: string; // ACTIVE | SUSPENDED | ...
 }
 
 export interface CreateTeamBody {
@@ -87,4 +89,8 @@ export const TeamsService = {
 
   /** DELETE /api/team/{id} — remove a member (ADMIN only) */
   removeMemberRecord: (id: string) => api.del(`/api/team/${id}`),
+  reactivateMember: (id: string) => api.patch<TeamMember>(`/api/team/${id}/reactivate`, {}),
+  /** DELETE /api/team/{id}/signup — reject (delete) a pending sign-up request (ADMIN only) */
+  rejectSignup: (id: string) => api.del(`/api/team/${id}/signup`),
+  deleteMember: (id: string) => api.del(`/api/team/${id}/permanent`),
 };

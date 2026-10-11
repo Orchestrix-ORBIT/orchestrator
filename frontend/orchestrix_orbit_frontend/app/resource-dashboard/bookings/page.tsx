@@ -82,12 +82,25 @@ export default function ResourceBookingsPage() {
     setReasonText("");
   }
 
+  // FR-RES-04: the Resource Manager approves pending requests directly (no reason needed)
+  async function handleApprove(id: string) {
+    setUpdating(id);
+    try {
+      const updated = await ResourcesService.updateBookingStatus(id, "APPROVED");
+      setBookings(prev => prev.map(b => b.id === id ? { ...b, status: updated.status } : b));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to approve booking");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
   async function handleConfirmAction() {
     if (!confirmModal) return;
     const { id, status } = confirmModal;
 
-    if (status === "CANCELLED" && !reasonText.trim()) {
-      alert("A cancellation reason is required.");
+    if ((status === "CANCELLED" || status === "REJECTED") && !reasonText.trim()) {
+      alert("A reason is required.");
       return;
     }
 
@@ -239,6 +252,18 @@ export default function ResourceBookingsPage() {
                       </td>
                       <td style={s.td} onClick={e => e.stopPropagation()}>
                         <div style={{ display: "flex", gap: 8 }}>
+                          {isPending && isFutureOrActive && (
+                            <>
+                              <button className="action-btn" disabled={updating === b.id} onClick={() => handleApprove(b.id)}
+                                style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                                {updating === b.id ? "Saving…" : "Approve"}
+                              </button>
+                              <button className="action-btn" disabled={updating === b.id} onClick={() => initiateUpdateStatus(b.id, "REJECTED")}
+                                style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #fecdd3", background: "#fff", color: "#e11d48", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                                Reject
+                              </button>
+                            </>
+                          )}
                           {canCancel && (
                             <button className="action-btn btn-cancel" disabled={updating === b.id} onClick={() => initiateUpdateStatus(b.id, "CANCELLED")}>
                               Cancel / Override
@@ -293,7 +318,7 @@ export default function ResourceBookingsPage() {
               </div>
               <div style={m.field}>
                 <label style={m.label}>Purpose</label>
-                <div style={m.value} style={{ background: "#f8fafc", padding: 12, borderRadius: 8, fontSize: 13, color: "#334155", border: "1px solid #e2e8f0" }}>
+                <div style={{ ...m.value, background: "#f8fafc", padding: 12, borderRadius: 8, fontSize: 13, color: "#334155", border: "1px solid #e2e8f0" }}>
                   {selectedBooking.purpose || <span style={{fontStyle:"italic", color:"#94a3b8"}}>No purpose provided.</span>}
                 </div>
               </div>
@@ -307,18 +332,20 @@ export default function ResourceBookingsPage() {
         <div style={m.overlay} onClick={() => setConfirmModal(null)}>
           <div style={{...m.modal, width: 440}} onClick={(e) => e.stopPropagation()}>
             <div style={m.header}>
-              <h3 style={m.modalTitle}>Cancel Booking</h3>
+              <h3 style={m.modalTitle}>{confirmModal.status === "REJECTED" ? "Reject Booking Request" : "Cancel Booking"}</h3>
               <button onClick={() => setConfirmModal(null)} style={m.closeBtn}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
             <div style={{ padding: "24px 32px 32px" }}>
               <p style={{ fontSize: 14, color: "#475569", margin: "0 0 20px 0", lineHeight: 1.5 }}>
-                You are about to cancel this booking. Please provide a brief reason so the requester knows why their session was revoked.
+                {confirmModal.status === "REJECTED"
+                  ? "You are about to reject this booking request. Please provide a brief reason so the requester knows why."
+                  : "You are about to cancel this booking. Please provide a brief reason so the requester knows why their session was revoked."}
               </p>
               
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>Cancellation Reason <span style={{color: "#e11d48"}}>*</span></label>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{confirmModal.status === "REJECTED" ? "Rejection Reason" : "Cancellation Reason"} <span style={{color: "#e11d48"}}>*</span></label>
                 <textarea 
                   autoFocus
                   placeholder="e.g. Emergency cluster maintenance required..."
@@ -347,7 +374,7 @@ export default function ResourceBookingsPage() {
                   onMouseOut={(e) => { if (reasonText.trim()) e.currentTarget.style.background = "#e11d48"; }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                  Revoke Booking
+                  {confirmModal.status === "REJECTED" ? "Reject Request" : "Revoke Booking"}
                 </button>
               </div>
             </div>

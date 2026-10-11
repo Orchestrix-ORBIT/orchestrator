@@ -24,6 +24,22 @@ export default function ResearcherResourcesPage() {
   const [error, setError]             = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedResourceDetails, setSelectedResourceDetails] = useState<Resource | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId]       = useState<string | null>(null);
+
+  async function handleCancelBooking(bookingId: string) {
+    setCancellingId(bookingId);
+    try {
+      await ResourcesService.updateBookingStatus(bookingId, "CANCELLED", "Cancelled by the researcher");
+      setMyBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: "CANCELLED" } : b));
+      setAllBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: "CANCELLED" } : b));
+      setConfirmCancelId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not cancel the booking.");
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   // Booking modal
   const [showBookingModal, setShowBookingModal]   = useState(false);
@@ -320,12 +336,35 @@ export default function ResearcherResourcesPage() {
                 </div>
                 {b.purpose && <div style={s.bookingPurpose}>{b.purpose}</div>}
               </div>
-              <span 
-                style={{ ...s.statusBadge, ...bookingStatusStyle(b.status) }}
-                title={b.status === "PENDING" ? "Awaiting Lead Approval" : b.status}
-              >
-                {b.status}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span
+                  style={{ ...s.statusBadge, ...bookingStatusStyle(b.status) }}
+                  title={b.status === "PENDING" ? "Awaiting Lead Approval" : b.status}
+                >
+                  {b.status}
+                </span>
+                {/* FR-RES-02: cancel an upcoming booking before it starts */}
+                {["PENDING", "PENDING_APPROVAL", "APPROVED"].includes(b.status) && new Date(b.startTime) > new Date() && (
+                  confirmCancelId === b.id ? (
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151" }}>
+                      Cancel this booking?
+                      <button type="button" disabled={cancellingId === b.id} onClick={() => handleCancelBooking(b.id)}
+                        style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "#dc2626", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        {cancellingId === b.id ? "Cancelling…" : "Yes"}
+                      </button>
+                      <button type="button" onClick={() => setConfirmCancelId(null)}
+                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", fontSize: 12, cursor: "pointer" }}>
+                        No
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmCancelId(b.id)} className="btn-hover-red"
+                      style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #fecaca", background: "#fff", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                  )
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -664,7 +703,7 @@ function checkResourceSlotStatus(resource: any, dateStr: string, startTimeStr: s
   return { isBookable: true, label: "Available", reason: "" };
 }
 
-function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = [], allBookings: any[] = []): { status: Resource["status"], nextAvailableTime: Date | null } {
+function getEffectiveStatus(resource: Resource, maintenanceLogs: any[] = [], allBookings: any[] = []): { status: Resource["status"] | "RESERVED", nextAvailableTime: Date | null } {
   const now = new Date();
   const assetLogs = (maintenanceLogs || []).filter((m: any) => {
     const isIdMatch = m.resourceId && resource.id && String(m.resourceId) === String(resource.id);

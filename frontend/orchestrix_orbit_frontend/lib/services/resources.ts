@@ -24,6 +24,7 @@ export interface Resource {
   status: ResourceStatus;
   location?: string;
   maxDurationHours?: number;
+  metadata?: string | null; // raw JSON (location, maxDurationHours, ...)
   ownerId: string;
   createdAt: string;
 }
@@ -83,6 +84,23 @@ export const ResourcesService = {
       }),
     };
     return api.post<Resource>("/api/resources", payload);
+  },
+
+  /** PUT /api/resources/{id} — edit catalog details; keeps any other metadata keys */
+  update: (id: string, body: CreateResourceBody, existingMetadata?: string | null) => {
+    let meta: Record<string, unknown> = {};
+    try { meta = existingMetadata ? JSON.parse(existingMetadata) : {}; } catch { meta = {}; }
+    const payload = {
+      name: body.name,
+      type: body.type,
+      description: body.description,
+      metadata: JSON.stringify({
+        ...meta,
+        location: body.location || "Core Lab Facility",
+        maxDurationHours: body.maxDurationHours || 4,
+      }),
+    };
+    return api.put<Resource>(`/api/resources/${id}`, payload);
   },
 
   /** PATCH /api/resources/{id}/status — update resource status */

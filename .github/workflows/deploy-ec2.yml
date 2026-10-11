@@ -92,8 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     env:
-      EC2_HOST: 13.50.236.34
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_SECURITY_GROUP_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
       ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
       AWS_REGION: ${{ vars.AWS_REGION }}
       EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
@@ -101,10 +103,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Authenticate to AWS with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Allow this runner to SSH to EC2
+        id: ssh_access
+        run: |
+          set -euo pipefail
+          [[ "$EC2_SECURITY_GROUP_ID" =~ ^sg-[0-9a-f]+$ ]]
+          runner_ip="$(curl --fail --silent --show-error --max-time 10 https://checkip.amazonaws.com | tr -d '\n')"
+          [[ "$runner_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          runner_cidr="$runner_ip/32"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$EC2_SECURITY_GROUP_ID" --protocol tcp --port 22 --cidr "$runner_cidr"
+          echo "RUNNER_CIDR=$runner_cidr" >> "$GITHUB_ENV"
+
       - name: Copy Compose file and deploy the release
         run: |
           set -euo pipefail
           [[ -n "$EC2_SSH_PRIVATE_KEY" && -n "$EC2_KNOWN_HOSTS" ]]
+          [[ -n "$EC2_HOST" ]]
           [[ "$AWS_REGION" =~ ^[a-z0-9-]+$ ]]
           [[ "$ECR_REGISTRY" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com$ ]]
 
@@ -130,6 +151,9 @@ jobs:
             test -s "$file" || { echo "Missing $HOME/orchestrix/$file" >&2; exit 1; }
           done
 
+          # Keep the small root volume clear while retaining images used by running containers.
+          docker image prune --all --force
+
           printf 'ECR_REGISTRY=%s\nIMAGE_TAG=%s\n' "$ECR_REGISTRY" "$IMAGE_TAG" > .release.env.tmp
           chmod 600 .release.env.tmp
           mv .release.env.tmp .release.env
@@ -142,8 +166,9 @@ jobs:
 
           wait_http() {
             local url="$1"
+            shift
             for attempt in {1..90}; do
-              if curl --fail --silent --output /dev/null --max-time 3 "$url"; then return 0; fi
+              if curl --fail --silent --output /dev/null --max-time 3 "$@" "$url"; then return 0; fi
               sleep 2
             done
             echo "Service did not become ready: $url" >&2
@@ -166,6 +191,13 @@ jobs:
           "${compose[@]}" up -d --no-deps frontend
           wait_http http://127.0.0.1:3000/
           "${compose[@]}" up -d --no-deps caddy
-          wait_http https://orchestrix.mrt.lk/
+          wait_http https://orchestrix.mrt.lk/ --resolve orchestrix.mrt.lk:443:127.0.0.1
           "${compose[@]}" ps
+          docker image prune --all --force
           REMOTE
+
+      - name: Remove this runner's SSH access
+        if: always() && steps.ssh_access.outcome == 'success'
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$EC2_SECURITY_GROUP_ID" --protocol tcp --port 22 --cidr "$RUNNER_CIDR"

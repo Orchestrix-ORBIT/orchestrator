@@ -47,9 +47,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // Invalid or expired tokens remain anonymous so the security chain denies protected routes.
         try {
             final String email = jwtService.extractEmail(token);
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (email != null && !jwtService.isRevoked(token)
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = authService.loadUserByUsername(email);
-                if (jwtService.isTokenValid(token, userDetails)) {
+                // A suspended / not-yet-approved account loses access immediately, even with an unexpired token
+                if (userDetails.isEnabled() && userDetails.isAccountNonLocked() && jwtService.isTokenValid(token, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

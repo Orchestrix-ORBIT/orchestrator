@@ -68,44 +68,56 @@ export function isLoggedIn(): boolean {
  *   ROLE_MEMBER → dashboard/researcher (regular researcher)
  *   ROLE_GUEST  → dashboard/researcher (read-only access)
  */
-export function getDashboardPath(role: string, email?: string): string {
-  const normRole = (role || "").toUpperCase();
-  const normEmail = (email || "").toLowerCase();
+export function getDashboardPath(role: string, _email?: string): string {
+  // The dashboard is decided ONLY by the role the backend issued in the JWT.
+  // (Earlier versions guessed from the email text, which let e.g. "lead.x@..." MEMBER
+  // accounts land on the Lead UI.) The email parameter is kept for call-site compatibility.
+  const r = (role || "").toUpperCase().replace(/^ROLE_/, "");
+  if (r === "ADMIN" || r === "OWNER") return "/admin-dashboard";
+  if (r === "LEAD") return "/lead-dashboard";
+  if (r === "RESOURCE_MANAGER") return "/resource-dashboard";
+  return "/dashboard/researcher"; // MEMBER, RESEARCHER, GUEST
+}
 
-  // ── Email always wins (most specific signal) ──────────────────────────────
-  if (normEmail.includes("resource.manager") || normEmail.includes("resource_manager")) {
-    return "/resource-dashboard";
-  }
-  if (normEmail.includes("researcher")) {
-    return "/dashboard/researcher";
-  }
-  if (normEmail.includes("lead")) {
-    return "/lead-dashboard";
-  }
-  if (normEmail.includes("admin")) {
-    return "/admin-dashboard";
-  }
+/**
+ * Which roles may open which dashboard. Admin may also open the Lead and Resource views;
+ * every signed-in role may open the researcher view.
+ */
+/** Slug of the platform organization (matches Core API's PLATFORM_TENANT). */
+export const PLATFORM_TENANT = (process.env.NEXT_PUBLIC_PLATFORM_TENANT ?? "platform").toLowerCase();
 
-  // ── Role-based fallback ───────────────────────────────────────────────────
-  if (normRole === "ROLE_RESOURCE_MANAGER" || normRole === "RESOURCE_MANAGER") {
-    return "/resource-dashboard";
-  }
-  if (normRole === "ROLE_ADMIN" || normRole === "ADMIN" || normRole === "ROLE_OWNER" || normRole === "OWNER") {
-    return "/admin-dashboard";
-  }
-  if (normRole === "ROLE_LEAD" || normRole === "LEAD") {
-    return "/lead-dashboard";
-  }
-  if (normRole === "ROLE_MEMBER" || normRole === "MEMBER" || normRole === "RESEARCHER") {
-    return "/dashboard/researcher";
-  }
+/** True when signed in to the platform organization (manages organizations, holds no lab data). */
+export function isPlatformSession(): boolean {
+  return (getTenantSlug() || "").toLowerCase() === PLATFORM_TENANT;
+}
 
-  // ── Default ───────────────────────────────────────────────────────────────
-  return "/dashboard/researcher";
+export function canAccessDashboard(dashboard: "admin" | "lead" | "resource" | "researcher", role: string): boolean {
+  const r = (role || "").toUpperCase().replace(/^ROLE_/, "");
+  const isAdmin = r === "ADMIN" || r === "OWNER";
+  // The platform organization has no projects, resources or research data: its admin only
+  // uses Platform Administration, never the lab dashboards.
+  if (dashboard !== "admin" && isPlatformSession()) return false;
+  switch (dashboard) {
+    case "admin": return isAdmin;
+    case "lead": return isAdmin || r === "LEAD";
+    case "resource": return isAdmin || r === "RESOURCE_MANAGER";
+    case "researcher": return r !== "";
+  }
 }
 
 /** Clear all auth data from storage (logout) */
 export function logout() {
+  // Revoke the token on the server (FR-AUTH-08) so it cannot be reused after sign-out.
+  // Fire-and-forget: local sign-out must not wait for, or fail because of, the network.
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token && typeof fetch === "function") {
+    const tenant = localStorage.getItem(TENANT_KEY) ?? "";
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/api/auth/logout`, {
+      method: "POST",
+      keepalive: true,
+      headers: { Authorization: `Bearer ${token}`, ...(tenant ? { "X-Tenant-ID": tenant } : {}) },
+    }).catch(() => {});
+  }
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
   localStorage.removeItem(EMAIL_KEY);

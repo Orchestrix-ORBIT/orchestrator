@@ -33,6 +33,17 @@ public class ResourceController {
         return resourceService.createResource(request, ownerId);
     }
 
+    // FR-RES-05: Resource Manager edits an asset's catalog details (name, type, description,
+    // location / max session hours stored in metadata). Status has its own endpoint.
+    @PutMapping("/{id}")
+    public ResourceResponse updateResource(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateResourceRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        ResourceAccess.requireManager(authentication != null && authentication.getPrincipal() instanceof User user ? user : null);
+        return resourceService.updateResource(id, request);
+    }
+
     @GetMapping
     public List<ResourceResponse> getAllResources(
             @RequestParam(required = false) ResourceType type,

@@ -19,6 +19,7 @@ interface TaskItem {
   assignee: string;
   priority: Priority;
   dueDate: string;
+  isAiGenerated?: boolean;
 }
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
@@ -139,6 +140,8 @@ export default function ResearcherProjectWorkspacePage({ params }: { params: Pro
   const STAGE_LABELS: Record<TaskStatus, string> = {
     TODO: "To Do",
     IN_PROGRESS: "In Progress",
+    IN_REVIEW: "In Review",
+    BLOCKED: "Blocked",
     DONE: "Completed (Pending Review)",
     ACCEPTED: "Accepted ✓",
   };

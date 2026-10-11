@@ -6,4 +6,5 @@ import java.util.UUID;
 
 @Repository
 public interface ResourceMaintenanceRepository extends JpaRepository<ResourceMaintenance, UUID> {
+    java.util.List<ResourceMaintenance> findAllByResourceId(UUID resourceId);
 }

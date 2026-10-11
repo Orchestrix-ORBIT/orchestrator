@@ -5,6 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.core_api.multitenancy.TenantFilter;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +20,9 @@ public class TenantService {
     // Spring injects these automatically because they are final + @RequiredArgsConstructor
     private final TenantRepository tenantRepository;
     private final TenantMigrationService tenantMigrationService;
+    private final JdbcTemplate jdbcTemplate;
+    private final TenantFilter tenantFilter;
+    private final PlatformAccess platformAccess;
 
     // -------------------------------------------------------------------------
     // CREATE — provisions a brand-new tenant with its own PostgreSQL schema
@@ -79,6 +85,23 @@ public class TenantService {
                 .toList();
     }
 
+    // Registry for the platform admin: organizations plus how many users each has.
+    // Only a count is read from each schema, never the users' details or research data.
+    public List<TenantResponse> getAllTenantsWithUserCounts() {
+        return tenantRepository.findAll().stream().map(t -> {
+            Integer count = null;
+            if (t.getSchemaName() != null && t.getSchemaName().matches("[a-z0-9_]+")) {
+                try {
+                    count = jdbcTemplate.queryForObject(
+                            "SELECT count(*) FROM \"" + t.getSchemaName() + "\".users", Integer.class);
+                } catch (Exception schemaMissing) {
+                    count = null;
+                }
+            }
+            return TenantResponse.from(t).withUserCount(count);
+        }).toList();
+    }
+
     // -------------------------------------------------------------------------
     // UPDATE STATUS — suspend or re-activate a tenant
     // -------------------------------------------------------------------------
@@ -89,11 +112,16 @@ public class TenantService {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new RuntimeException("Tenant not found: " + tenantId));
 
+        if (newStatus != TenantStatus.ACTIVE && platformAccess != null
+                && platformAccess.platformSchema().equals(tenant.getSchemaName())) {
+            throw new IllegalArgumentException("The platform organization cannot be suspended.");
+        }
         tenant.setStatus(newStatus);
         // tenantRepository.save() is not strictly needed here because @Transactional
         // means Hibernate will detect the change ("dirty checking") and flush it.
         // We call save() explicitly for clarity.
         Tenant updated = tenantRepository.save(tenant);
+        if (tenantFilter != null) tenantFilter.evict(updated.getSchemaName()); // applies immediately
         return TenantResponse.from(updated);
     }
 }

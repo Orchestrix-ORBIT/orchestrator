@@ -817,7 +817,7 @@ export default function AiInsightsPage() {
                                             />
                                           </div>
                                           <div style={{ maxHeight: 160, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-                                            {Array.from(new Map([{ id: "", displayName: "Unassigned" }, ...teamMembers].map(m => [(m.id || m.userId || m.displayName || m.userDisplayName || "unassigned"), m])).values())
+                                            {Array.from(new Map([{ id: "", displayName: "Unassigned" } as TeamMember, ...teamMembers].map(m => [(m.id || m.userId || m.displayName || m.userDisplayName || "unassigned"), m])).values())
                                               .filter(mem => {
                                                 const name = mem.displayName || mem.userDisplayName || mem.name || mem.email || "Unassigned";
                                                 return name.toLowerCase().includes(assigneeSearchQuery.toLowerCase());

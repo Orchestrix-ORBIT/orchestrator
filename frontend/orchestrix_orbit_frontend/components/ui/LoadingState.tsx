@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export type SkeletonVariant = "dashboard" | "table" | "grid" | "chat" | "roster" | "resources" | "documents" | "ai-summaries" | "notifications" | "kanban" | "researcher-home" | "researcher-projects" | "researcher-tasks" | "researcher-resources" | "researcher-chat" | "researcher-ai-summaries" | "researcher-notifications" | "manager-overview" | "manager-assets" | "manager-bookings" | "manager-maintenance" | "manager-notifications" | "admin";
+export type SkeletonVariant = "dashboard" | "table" | "grid" | "chat" | "roster" | "resources" | "documents" | "ai-summaries" | "notifications" | "kanban" | "researcher-home" | "researcher-projects" | "researcher-tasks" | "researcher-resources" | "researcher-chat" | "researcher-ai-summaries" | "researcher-notifications" | "manager-overview" | "manager-assets" | "manager-bookings" | "manager-maintenance" | "manager-notifications" | "admin" | "org-admin";
 
 interface LoadingStateProps {
   title?: string;
@@ -101,7 +101,7 @@ export default function LoadingState({
         )}
 
         {/* VARIANT: ADMIN */}
-        {variant === "admin" && (
+        {(variant === "admin" || variant === "org-admin") && (
           <>
             {/* Top Stat Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "clamp(16px, 2vw, 32px)", marginBottom: 24 }}>
@@ -114,7 +114,8 @@ export default function LoadingState({
               ))}
             </div>
 
-            {/* Middle Split Grid (Form & Registry) */}
+            {/* Middle Split Grid (Form & Registry) — platform admin only */}
+            {variant === "admin" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
               {/* Left Form Card */}
               <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "none" }}>
@@ -148,6 +149,8 @@ export default function LoadingState({
                 </div>
               </div>
             </div>
+
+            )}
 
             {/* Bottom Table Card */}
             <div className="card-depth" style={{ padding: 24, background: "#ffffff", borderRadius: 16, border: "none" }}>

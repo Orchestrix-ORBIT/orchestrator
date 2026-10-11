@@ -73,10 +73,11 @@ public class ResearchTeamService {
 
     @Transactional(readOnly = true)
     public List<ResearchTeamResponse> getUserTeams(UUID userId) {
-        List<TeamMember> memberships = memberRepository.findAllByUserId(userId);
-        return memberships.stream()
-                .map(m -> teamRepository.findById(m.getTeamId()).orElse(null))
-                .filter(t -> t != null)
+        List<UUID> teamIds = memberRepository.findAllByUserId(userId).stream()
+                .map(TeamMember::getTeamId)
+                .collect(Collectors.toList());
+        // One batch query instead of one findById per membership.
+        return teamRepository.findAllById(teamIds).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -86,9 +87,13 @@ public class ResearchTeamService {
         if (!teamRepository.existsById(teamId)) {
             throw new ResourceNotFoundException("Team not found: " + teamId);
         }
-        return memberRepository.findAllByTeamId(teamId).stream()
+        List<TeamMember> members = memberRepository.findAllByTeamId(teamId);
+        java.util.Map<UUID, User> users = userRepository.findAllById(
+                        members.stream().map(TeamMember::getUserId).collect(Collectors.toList()))
+                .stream().collect(Collectors.toMap(User::getId, u -> u));
+        return members.stream()
                 .map(member -> {
-                    User user = userRepository.findById(member.getUserId()).orElse(null);
+                    User user = users.get(member.getUserId());
                     return TeamMemberDetailResponse.builder()
                             .userId(member.getUserId())
                             .teamId(member.getTeamId())

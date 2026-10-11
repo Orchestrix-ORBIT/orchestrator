@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { ResourcesService, type Resource } from "@/lib/services/resources";
 
 interface PolicyRule {
   id: string;
@@ -56,6 +57,17 @@ const INITIAL_POLICIES: PolicyRule[] = [
 
 export default function AllocationPoliciesPage() {
   const [policies, setPolicies] = useState<PolicyRule[]>(INITIAL_POLICIES);
+  // Live, backend-enforced limits: Core API rejects bookings longer than a resource's maxDurationHours.
+  const [assets, setAssets] = useState<Resource[]>([]);
+  const [assetsError, setAssetsError] = useState<string | null>(null);
+  useEffect(() => {
+    ResourcesService.getAll()
+      .then(setAssets)
+      .catch((e) => setAssetsError(e instanceof Error ? e.message : "Could not load assets."));
+  }, []);
+  const limited = assets.filter((a) => a.maxDurationHours);
+  const longest = limited.reduce<Resource | null>((m, a) => (!m || (a.maxDurationHours ?? 0) > (m.maxDurationHours ?? 0) ? a : m), null);
+  const shortest = limited.reduce<Resource | null>((m, a) => (!m || (a.maxDurationHours ?? 0) < (m.maxDurationHours ?? 0) ? a : m), null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyRule | null>(null);
   const [maxHours, setMaxHours] = useState(4);
@@ -101,36 +113,65 @@ export default function AllocationPoliciesPage() {
         </div>
       </div>
 
-      {/* ── Metric Stat Cards ────────────────────────────────────────────────── */}
+      {/* ── Metric Stat Cards (live) ─────────────────────────────────────────── */}
       <div style={s.statGrid}>
         <div style={s.statCard}>
-          <span style={s.statLabel}>ACTIVE POLICIES</span>
-          <span style={s.statValue}>{policies.length}</span>
-          <span style={s.statSub}>Hardware rules enforced</span>
+          <span style={s.statLabel}>ASSETS WITH LIMITS</span>
+          <span style={s.statValue}>{limited.length}/{assets.length}</span>
+          <span style={s.statSub}>Max session enforced by Core API</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>MAX SINGLE SLOT</span>
-          <span style={s.statValue}>12 hrs</span>
-          <span style={s.statSub}>FEI Titan TEM Microscope</span>
+          <span style={s.statLabel}>LONGEST SESSION</span>
+          <span style={s.statValue}>{longest ? `${longest.maxDurationHours} hrs` : "—"}</span>
+          <span style={s.statSub}>{longest?.name ?? "No limits set"}</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>MANDATORY COOLDOWN</span>
-          <span style={s.statValue}>15 - 60 min</span>
-          <span style={s.statSub}>Thermal & vacuum reset</span>
+          <span style={s.statLabel}>SHORTEST SESSION</span>
+          <span style={s.statValue}>{shortest ? `${shortest.maxDurationHours} hrs` : "—"}</span>
+          <span style={s.statSub}>{shortest?.name ?? "No limits set"}</span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>OVERRIDE AUTHORITY</span>
           <span style={s.statValue}>ENABLED</span>
-          <span style={s.statSub}>Resource Manager clearance</span>
+          <span style={s.statSub}>Resource Manager approves / rejects bookings</span>
         </div>
+      </div>
+
+      {/* ── Enforced limits (live) ──────────────────────────────────────────── */}
+      <div style={{ ...s.tableCard, marginBottom: 24 }}>
+        <div style={s.tableHeaderRow}>
+          <p style={s.sectionLabel}>ENFORCED MAX SESSION LENGTH (PER ASSET)</p>
+          <span style={{ fontSize: 12, color: "#9e9e9e", marginRight: 20 }}>Live · bookings over the limit are rejected</span>
+        </div>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Asset</th>
+              <th style={s.th}>Type</th>
+              <th style={s.th}>Max session</th>
+              <th style={s.th}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {assetsError && <tr style={s.tr}><td style={s.td} colSpan={4}>Error: {assetsError}</td></tr>}
+            {assets.map((a) => (
+              <tr key={a.id} style={s.tr}>
+                <td style={s.td}><strong>{a.name}</strong></td>
+                <td style={s.td}>{a.type}</td>
+                <td style={s.td}>{a.maxDurationHours ? `${a.maxDurationHours} hrs` : "No limit"}</td>
+                <td style={s.td}>{a.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* ── Policies Table Card ─────────────────────────────────────────────── */}
       <div style={s.tableCard}>
         <div style={s.tableHeaderRow}>
-          <p style={s.sectionLabel}>ENFORCED ASSET DURATION RULES</p>
+          <p style={s.sectionLabel}>PLANNED QUOTA &amp; COOLDOWN RULES (NOT YET ENFORCED)</p>
           <span style={{ fontSize: 12, color: "#9e9e9e", marginRight: 20 }}>
-            Spring Boot Enforcement Engine
+            Draft configuration · edits are kept for this session only
           </span>
         </div>
 
