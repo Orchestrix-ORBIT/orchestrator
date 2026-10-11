@@ -44,7 +44,15 @@ public class ResourceBookingController {
             @AuthenticationPrincipal User currentUser,
             @PathVariable UUID bookingId,
             @Valid @RequestBody UpdateBookingStatusRequest request) {
-        ResourceAccess.requireManager(currentUser);
+        // FR-RES-02: users may cancel their own bookings; every other status change is for managers.
+        boolean ownCancellation = request.getStatus() == BookingStatus.CANCELLED
+                && currentUser != null && resourceService.isBookingOwner(bookingId, currentUser.getId());
+        // Research Leads also approve/reject their team's booking requests (Lead Resources page).
+        boolean isLead = currentUser != null && (currentUser.getRole() == com.example.core_api.auth.UserRole.LEAD
+                || currentUser.getRole() == com.example.core_api.auth.UserRole.ROLE_LEAD);
+        if (!ownCancellation && !isLead) {
+            ResourceAccess.requireManager(currentUser);
+        }
         return resourceService.updateBookingStatus(bookingId, request.getStatus(), request.getReason());
     }
 

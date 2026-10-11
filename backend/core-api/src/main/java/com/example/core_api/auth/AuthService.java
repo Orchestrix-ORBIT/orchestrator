@@ -15,6 +15,16 @@ import org.springframework.stereotype.Service;
 // This is called "Constructor Injection" — the recommended way in Spring.
 @Service
 public class AuthService implements UserDetailsService {
+
+    // When true, accounts registered after an organization's first user stay INACTIVE until approved.
+    @org.springframework.beans.factory.annotation.Value("${auth.require-signup-approval:true}")
+    private boolean requireSignupApproval = true;
+
+    // Organization admins are assigned by the platform admin; only the platform organization's
+    // first account bootstraps itself as admin.
+    @org.springframework.beans.factory.annotation.Value("${platform.tenant-slug:platform}")
+    private String platformSlug = "platform";
+
     // ─────────────────────────────────────────────────────────────────────────
     // Why implement UserDetailsService?
     // Spring Security needs to know HOW to load a user when verifying credentials.
@@ -49,7 +59,9 @@ public class AuthService implements UserDetailsService {
     // This is also called by JwtAuthFilter when validating tokens.
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        return userRepository.findByEmail(email)
+        // Emails are stored lowercase; accept any letter case at login.
+        String normalized = email == null ? null : email.trim().toLowerCase();
+        return userRepository.findByEmail(normalized)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "No user found with email: " + email
                 ));
@@ -66,8 +78,10 @@ public class AuthService implements UserDetailsService {
         // Step 1: Guard — check if this email is already registered.
         // We use existsByEmail() (not findByEmail) because we only need a boolean,
         // not the full User object. It generates a cheaper COUNT query.
-        if (userRepository.existsByEmail(request.email())) {
-            throw new IllegalArgumentException("Email is already registered: " + request.email());
+        // Normalise so "Lead@Org.com" and "lead@org.com" are the same account.
+        String email = request.email().trim().toLowerCase();
+        if (userRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Email is already registered: " + email);
         }
 
         // Step 2: Hash the password before ANYTHING touches the database.
@@ -78,16 +92,21 @@ public class AuthService implements UserDetailsService {
         // The original password is NEVER stored anywhere.
         String hashedPassword = passwordEncoder.encode(request.password());
 
-        UserRole role = userRepository.count() == 0 ? UserRole.ADMIN : UserRole.MEMBER;
+        // The first account of a new organization is its administrator. Everyone after that
+        // signs up as a MEMBER whose account stays INACTIVE until an admin approves it.
+        boolean platformOrg = ("org_" + platformSlug.toLowerCase().replace('-', '_'))
+                .equals(com.example.core_api.multitenancy.TenantContext.getCurrentTenant());
+        boolean firstUser = userRepository.count() == 0 && (platformOrg || !requireSignupApproval);
+        UserRole role = firstUser ? UserRole.ADMIN : UserRole.MEMBER;
 
         // Step 3: Build the User entity using the builder pattern (from Lombok @Builder).
         // Notice we store 'hashedPassword', not 'request.password()'.
         User user = User.builder()
-                .email(request.email())
+                .email(email)
                 .passwordHash(hashedPassword)
                 .displayName(request.displayName())
                 .role(role)                   // First registered user gets ADMIN, subsequent get MEMBER
-                .status(UserStatus.ACTIVE)    // Account is immediately active
+                .status(firstUser || !requireSignupApproval ? UserStatus.ACTIVE : UserStatus.INACTIVE) // pending admin approval
                 .emailVerified(false)         // Email verification can be added later
                 .build();
 
@@ -96,7 +115,8 @@ public class AuthService implements UserDetailsService {
         user = userRepository.save(user);
 
         // Step 5: Generate a JWT for the newly created user.
-        String token = jwtService.generateToken(user);
+        // Pending accounts get no token: they cannot use the API until approved.
+        String token = user.isEnabled() ? jwtService.generateToken(user) : null;
 
         return new AuthResponse(
                 token,

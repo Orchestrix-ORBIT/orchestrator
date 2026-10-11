@@ -54,6 +54,25 @@ public class TeamService {
         userRepository.save(user);
     }
 
+    // Reject a pending sign-up: the request is deleted so the person may register again later.
+    // Only accounts still waiting for approval (INACTIVE) can be rejected this way.
+    public void rejectSignup(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + id));
+        if (user.getStatus() != UserStatus.INACTIVE) {
+            throw new IllegalArgumentException("Only pending sign-up requests can be rejected.");
+        }
+        userRepository.delete(user);
+    }
+
+    // Undo removeMember: a suspended account can sign in again.
+    public TeamMemberResponse reactivateMember(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + id));
+        user.setStatus(UserStatus.ACTIVE);
+        return mapToResponse(userRepository.save(user));
+    }
+
     private TeamMemberResponse mapToResponse(User user) {
         return TeamMemberResponse.builder()
                 .id(user.getId())

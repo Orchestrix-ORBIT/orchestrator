@@ -102,7 +102,7 @@ function CustomStatusSelect({ value, onChange }: { value: TaskStatus, onChange: 
   );
 }
 
-function CustomToggle({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) {
+export function CustomToggle({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) {
   return (
     <div 
       onClick={() => onChange(!checked)}
@@ -141,9 +141,9 @@ export default function ResearcherProjectWorkspacePage({ params }: { params: Pro
     TODO: "To Do",
     IN_PROGRESS: "In Progress",
     IN_REVIEW: "In Review",
+    BLOCKED: "Blocked",
     DONE: "Completed (Pending Review)",
     ACCEPTED: "Accepted ✓",
-    BLOCKED: "Blocked",
   };
 
 

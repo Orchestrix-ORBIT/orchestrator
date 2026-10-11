@@ -263,7 +263,7 @@ export default function LeadProjectsPage() {
           <p style={s.sub}>Manage active research initiatives and team assignments.</p>
         </div>
         
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <svg style={{ position: "absolute", left: 10, color: "#9ca3af" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
@@ -835,7 +835,7 @@ export default function LeadProjectsPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(16px, 1.5vw, 24px)" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: "clamp(16px, 1.5vw, 24px)" },
   title: { fontSize: "clamp(20px, 1.8vw, 28px)", fontWeight: 700, color: "#111827", marginBottom: 4 },
   sub: { fontSize: "clamp(12px, 1vw, 15px)", color: "#6b7280" },
   searchInput: {
@@ -852,7 +852,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   btnPrimary: { padding: "9px 16px", background: "#161616", color: "#ffffff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" , boxShadow: "0 4px 6px -1px rgba(17, 24, 39, 0.15)"},
   btnSecondary: { padding: "9px 16px", background: "#ffffff", color: "#111827", border: "1px solid #d0d0d0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  filterRow: { display: "inline-flex", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 8, marginBottom: 32 },
+  filterRow: { display: "flex", flexWrap: "wrap", gap: 4, background: "#f3f4f6", padding: 4, borderRadius: 8, marginBottom: 32 },
   filterTab: { padding: "6px 14px", fontSize: 13, fontWeight: 600, color: "#6b7280", background: "none", border: "none", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" },
   filterTabActive: { background: "#ffffff", color: "#111827", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
   filterCount: { fontSize: 11, padding: "1px 6px", borderRadius: 10, transition: "background 0.2s" },

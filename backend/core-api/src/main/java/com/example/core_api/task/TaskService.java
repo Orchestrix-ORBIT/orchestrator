@@ -100,13 +100,19 @@ public class TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + taskId));
 
         if (currentUser != null) {
-            boolean isResearcher = currentUser.getRole() == UserRole.MEMBER || currentUser.getRole() == UserRole.GUEST;
+            UserRole role = currentUser.getRole();
+            boolean isResearcher = role == UserRole.MEMBER || role == UserRole.GUEST
+                    || role == UserRole.RESEARCHER || role == UserRole.ROLE_RESEARCHER;
             if (isResearcher) {
                 if (request.getStatus() == TaskStatus.ACCEPTED) {
                     throw new AccessDeniedException("Researchers are not allowed to accept tasks.");
                 }
                 if (task.getStatus() == TaskStatus.ACCEPTED) {
                     throw new AccessDeniedException("Accepted tasks cannot be modified by researchers.");
+                }
+                // Researchers may only work on tasks assigned to them (leads/admins manage the rest).
+                if (!currentUser.getId().equals(task.getAssigneeId())) {
+                    throw new AccessDeniedException("Researchers can only update tasks assigned to them.");
                 }
             }
         }

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout, getEmail, isLoggedIn } from "@/lib/auth";
+import { logout, getEmail, isLoggedIn, getRole, canAccessDashboard, getDashboardPath } from "@/lib/auth";
 import { NotificationsService } from "@/lib/services/notifications";
 
 const NAV = [
@@ -79,6 +79,8 @@ export default function ResourceDashboardLayout({
   useEffect(() => {
     if (!isLoggedIn()) {
       router.replace("/");
+    } else if (!canAccessDashboard("resource", getRole() || "")) {
+      router.replace(getDashboardPath(getRole() || "")); // wrong role: send to own dashboard
     } else {
       setMounted(true);
     }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
-import { getRole, getEmail, logout, isLoggedIn } from "@/lib/auth";
+import { getRole, getEmail, logout, isLoggedIn, getDashboardPath, canAccessDashboard } from "@/lib/auth";
 
 export default function AdminDashboardLayout({
   children,
@@ -31,16 +31,14 @@ export default function AdminDashboardLayout({
   useEffect(() => {
     if (!isLoggedIn()) { router.replace("/"); return; }
     setMounted(true);
-    const role = (getRole() || "").toUpperCase();
-    const isAdmin = role.includes("ADMIN") || role.includes("OWNER");
-    if (!isAdmin) {
-      if (role.includes("LEAD")) {
-        router.replace("/lead-dashboard");
-      } else {
-        router.replace("/dashboard/researcher");
-      }
-    } else {
+    // Only administrators (platform or organization) may open this dashboard. Use the same routing rule as login
+    // (email first, then role) so a Lead or Resource Manager account that happens to hold the
+    // ADMIN role in the database is still sent to its own dashboard.
+    const role = getRole() || "";
+    if (canAccessDashboard("admin", role)) {
       setAuthorized(true);
+    } else {
+      router.replace(getDashboardPath(role)); // non-admins go to their own dashboard
     }
   }, [router]);
 

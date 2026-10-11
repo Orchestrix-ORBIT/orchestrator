@@ -15,6 +15,7 @@ public class TenantResponse {
     private String schemaName;      // The PostgreSQL schema that holds this tenant's tables
     private TenantStatus status;    // ACTIVE | SUSPENDED | DELETED
     private OffsetDateTime createdAt;
+    private Integer userCount;      // filled for the platform admin's registry view
 
     // Private constructor — callers must use the static factory method below
     private TenantResponse() {}
@@ -40,4 +41,6 @@ public class TenantResponse {
     public String getSchemaName() { return schemaName; }
     public TenantStatus getStatus() { return status; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public Integer getUserCount() { return userCount; }
+    public TenantResponse withUserCount(Integer count) { this.userCount = count; return this; }
 }

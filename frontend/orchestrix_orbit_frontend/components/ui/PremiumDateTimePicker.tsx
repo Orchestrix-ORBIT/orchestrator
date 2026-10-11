@@ -26,6 +26,8 @@ export function PremiumDateTimePicker({ label, value, onChange, required = false
   const [ampm, setAmpm] = useState<"AM" | "PM">(initialDate ? format(initialDate, "a") as "AM" | "PM" : "AM");
 
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // The calendar panel is portaled to <body>, so it is not inside wrapperRef in the DOM.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Sync external value changes
@@ -61,7 +63,9 @@ export function PremiumDateTimePicker({ label, value, onChange, required = false
   useEffect(() => {
     // Close on click outside
     function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (panelRef.current?.contains(target)) return; // clicks inside the calendar are not "outside"
+      if (wrapperRef.current && !wrapperRef.current.contains(target)) {
         setIsOpen(false);
       }
     }
@@ -171,7 +175,7 @@ export function PremiumDateTimePicker({ label, value, onChange, required = false
             onClick={() => setIsOpen(false)}
             style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15, 23, 42, 0.3)", backdropFilter: "blur(2px)" }}
           />
-          <div style={{
+          <div ref={panelRef} style={{
             position: "relative",
             background: "#ffffff",
             border: "1px solid #e2e8f0",
@@ -190,15 +194,18 @@ export function PremiumDateTimePicker({ label, value, onChange, required = false
               showOutsideDays
               disabled={{ before: new Date() }}
               styles={{
-                caption_label: { color: "#0f172a", fontWeight: 700, fontSize: 14 },
+                month_caption: { color: "#0f172a", fontWeight: 700, fontSize: 14 },
                 weekday: { color: "#64748b", fontWeight: 600, fontSize: 12 },
                 day: { padding: 4 },
                 day_button: { borderRadius: 8, width: 36, height: 36, fontSize: 14, fontWeight: 500 },
-                selected: { background: "#0f172a", color: "#ffffff", fontWeight: 700 },
+              }}
+              modifiersStyles={{
+                selected: { background: "#0f172a", color: "#ffffff", fontWeight: 700, borderRadius: 8 },
                 today: { color: "#2563eb", fontWeight: 700 },
               }}
               components={{
-                Chevron: ({ orientation }) => orientation === "left" ? <ChevronLeft size={16} /> : <ChevronRight size={16} />,
+                Chevron: ({ orientation }) =>
+                  orientation === "left" ? <ChevronLeft size={16} /> : <ChevronRight size={16} />,
               }}
             />
           </div>

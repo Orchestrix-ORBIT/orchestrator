@@ -32,6 +32,8 @@ jobs:
       SPRING_DATASOURCE_HIKARI_DATA_SOURCE_PROPERTIES_SSLMODE: disable
       JWT_SECRET: integration-test-only-shared-jwt-secret-2026
       ENCRYPTION_SECRET_KEY: integration-test-aes-key-1234567
+      # Tests register several users in throw-away orgs and log in immediately
+      AUTH_REQUIRE_SIGNUP_APPROVAL: "false"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6

@@ -187,6 +187,24 @@ export default function ResourceAssetsPage() {
   const [newMaxHours, setNewMaxHours]   = useState<number>(4);
   const [creating, setCreating]         = useState(false);
   const [createError, setCreateError]   = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<Resource | null>(null); // null = adding a new asset
+
+  function openAddModal() {
+    setEditingAsset(null);
+    setNewName(""); setNewDesc(""); setNewType("GPU"); setNewLocation(""); setNewMaxHours(4);
+    setCreateError(null); setShowModal(true);
+  }
+
+  function openEditModal(r: Resource) {
+    setEditingAsset(r);
+    setNewName(r.name); setNewDesc(r.description || ""); setNewType(r.type);
+    setNewLocation(r.location || ""); setNewMaxHours(r.maxDurationHours ?? 4);
+    setCreateError(null); setShowModal(true);
+  }
+
+  function closeModal() {
+    setShowModal(false); setCreateError(null); setEditingAsset(null);
+  }
 
   useEffect(() => {
     Promise.all([
@@ -219,12 +237,17 @@ export default function ResourceAssetsPage() {
         location: newLocation.trim() || undefined,
         maxDurationHours: newMaxHours,
       };
-      const created = await ResourcesService.create(body);
-      setResources(prev => [created, ...prev]);
-      setShowModal(false);
+      if (editingAsset) {
+        const updated = await ResourcesService.update(editingAsset.id, body, editingAsset.metadata);
+        setResources(prev => prev.map(x => x.id === updated.id ? updated : x));
+      } else {
+        const created = await ResourcesService.create(body);
+        setResources(prev => [created, ...prev]);
+      }
+      closeModal();
       setNewName(""); setNewDesc(""); setNewLocation("");
     } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create resource");
+      setCreateError(err instanceof Error ? err.message : editingAsset ? "Failed to update resource" : "Failed to create resource");
     } finally {
       setCreating(false);
     }
@@ -244,7 +267,7 @@ export default function ResourceAssetsPage() {
             {resources.length} assets registered
           </p>
         </div>
-        <button id="btn-new-asset" style={s.btnPrimary} className="btn-shiny" onClick={() => setShowModal(true)}>
+        <button id="btn-new-asset" style={s.btnPrimary} className="btn-shiny" onClick={openAddModal}>
           + Add Asset
         </button>
       </div>
@@ -254,7 +277,7 @@ export default function ResourceAssetsPage() {
           <table style={s.table}>
             <thead>
               <tr>
-                {["Name", "Type", "Location", "Status", "Max Hours", "Created"].map(h => (
+                {["Name", "Type", "Location", "Status", "Max Hours", "Created", ""].map(h => (
                   <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
@@ -262,7 +285,7 @@ export default function ResourceAssetsPage() {
             <tbody>
               {resources.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", fontSize: 14 }}>
+                  <td colSpan={7} style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", fontSize: 14 }}>
                     No assets registered yet.
                   </td>
                 </tr>
@@ -287,6 +310,12 @@ export default function ResourceAssetsPage() {
                     </td>
                     <td style={s.td}><span style={{ color: "#4b5563" }}>{r.maxDurationHours ?? "—"}h</span></td>
                     <td style={s.td}><span style={{ color: "#4b5563" }}>{new Date(r.createdAt).toLocaleDateString()}</span></td>
+                    <td style={s.td}>
+                      <button id={`btn-edit-asset-${r.id}`} type="button" onClick={() => openEditModal(r)} title="Edit asset"
+                        style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", color: "#111827", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        Edit
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -313,8 +342,8 @@ export default function ResourceAssetsPage() {
         <div style={s.overlay}>
           <div style={s.modal}>
             <div style={s.modalHead}>
-              <span style={s.modalTitle}>Add New Asset</span>
-              <button className="modal-close-btn" style={s.closeBtn} onClick={() => { setShowModal(false); setCreateError(null); }}>×</button>
+              <span style={s.modalTitle}>{editingAsset ? "Edit Asset" : "Add New Asset"}</span>
+              <button className="modal-close-btn" style={s.closeBtn} onClick={closeModal}>×</button>
             </div>
             <form onSubmit={handleCreate} style={s.modalForm}>
               {createError && <div style={s.errorBanner}>{createError}</div>}
@@ -342,10 +371,10 @@ export default function ResourceAssetsPage() {
                   value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Specs and notes..." />
               </div>
               <div style={s.modalActions}>
-                <button type="button" className="modal-btn-secondary" onClick={() => { setShowModal(false); setCreateError(null); }}>Cancel</button>
+                <button type="button" className="modal-btn-secondary" onClick={closeModal}>Cancel</button>
                 <button id="btn-create-asset" type="submit"
                   className="modal-btn-primary" style={{ opacity: creating ? 0.6 : 1 }} disabled={creating}>
-                  {creating ? "Adding…" : "Add Asset"}
+                  {creating ? (editingAsset ? "Saving…" : "Adding…") : (editingAsset ? "Save Changes" : "Add Asset")}
                 </button>
               </div>
             </form>

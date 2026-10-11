@@ -154,6 +154,17 @@ public class ResourceService {
         return mapToResourceResponse(resource);
     }
 
+    @Transactional
+    public ResourceResponse updateResource(UUID id, CreateResourceRequest request) {
+        Resource resource = resourceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Resource not found: " + id));
+        resource.setName(request.getName());
+        resource.setType(request.getType());
+        resource.setDescription(request.getDescription());
+        resource.setMetadata(request.getMetadata());
+        return mapToResourceResponse(resourceRepository.save(resource));
+    }
+
     @Transactional(readOnly = true)
     public List<ResourceResponse> getAllResources(ResourceType type, ResourceStatus status) {
         List<Resource> resources;
@@ -214,6 +225,20 @@ public class ResourceService {
             throw new ResourceBookingConflictException(
                     "\"" + resource.getName() + "\" is currently under maintenance and cannot be booked. " +
                     "Please check back once maintenance is complete.");
+        }
+
+        // ── Guard 3b (FR-RES-08): no booking overlapping a scheduled maintenance window ──
+        java.time.Instant reqStart = request.getStartTime().toInstant();
+        java.time.Instant reqEnd = request.getEndTime().toInstant();
+        for (ResourceMaintenance m : maintenanceRepository.findAllByResourceId(resourceId)) {
+            if (!"Scheduled".equalsIgnoreCase(m.getStatus()) && !"In Progress".equalsIgnoreCase(m.getStatus())) continue;
+            java.time.Instant mStart = parseToInstant(m.getStartDate());
+            java.time.Instant mEnd = parseToInstant(m.getEndDate());
+            if (mStart != null && mEnd != null && reqStart.isBefore(mEnd) && reqEnd.isAfter(mStart)) {
+                throw new ResourceBookingConflictException(
+                        "\"" + resource.getName() + "\" has scheduled maintenance from " + m.getStartDate()
+                        + " to " + m.getEndDate() + ". Please choose a time outside the maintenance window.");
+            }
         }
 
         // ── Guard 4: Enforce maxDurationHours from resource metadata ──────────────
@@ -363,16 +388,38 @@ public class ResourceService {
     }
 
     @Transactional(readOnly = true)
+    public boolean isBookingOwner(UUID bookingId, UUID userId) {
+        return bookingRepository.findById(bookingId).map(b -> userId.equals(b.getUserId())).orElse(false);
+    }
+
+    @Transactional(readOnly = true)
     public List<BookingResponse> getUserBookings(UUID userId) {
-        return bookingRepository.findAllByUserId(userId).stream()
-                .map(this::mapToBookingResponse)
-                .collect(Collectors.toList());
+        return mapToBookingResponses(bookingRepository.findAllByUserId(userId));
     }
 
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsForResource(UUID resourceId) {
-        return bookingRepository.findAllByResourceId(resourceId).stream()
-                .map(this::mapToBookingResponse)
+        return mapToBookingResponses(bookingRepository.findAllByResourceId(resourceId));
+    }
+
+    // Batch variant of mapToBookingResponse: three lookups for the whole list instead of
+    // three per booking, which matters when every database round trip is slow.
+    private List<BookingResponse> mapToBookingResponses(List<ResourceBooking> bookings) {
+        java.util.Set<UUID> resourceIds = bookings.stream().map(ResourceBooking::getResourceId).collect(Collectors.toSet());
+        java.util.Set<UUID> userIds = bookings.stream().map(ResourceBooking::getUserId).collect(Collectors.toSet());
+        java.util.Set<UUID> projectIds = bookings.stream().map(ResourceBooking::getProjectId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        java.util.Map<UUID, String> resNames = resourceRepository.findAllById(resourceIds).stream()
+                .collect(Collectors.toMap(Resource::getId, Resource::getName));
+        java.util.Map<UUID, String> emails = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getEmail));
+        java.util.Map<UUID, String> projNames = projectIds.isEmpty() ? java.util.Map.of()
+                : projectRepository.findAllById(projectIds).stream()
+                        .collect(Collectors.toMap(Project::getId, Project::getName));
+        return bookings.stream().map(b -> buildBookingResponse(b,
+                        resNames.getOrDefault(b.getResourceId(), "Lab Asset"),
+                        emails.getOrDefault(b.getUserId(), b.getUserId().toString()),
+                        b.getProjectId() == null ? null : projNames.getOrDefault(b.getProjectId(), "Unknown Project")))
                 .collect(Collectors.toList());
     }
 
@@ -409,6 +456,10 @@ public class ResourceService {
         if (booking.getProjectId() != null) {
             projName = projectRepository.findById(booking.getProjectId()).map(Project::getName).orElse("Unknown Project");
         }
+        return buildBookingResponse(booking, resName, email, projName);
+    }
+
+    private BookingResponse buildBookingResponse(ResourceBooking booking, String resName, String email, String projName) {
         return BookingResponse.builder()
                 .id(booking.getId())
                 .resourceId(booking.getResourceId())
