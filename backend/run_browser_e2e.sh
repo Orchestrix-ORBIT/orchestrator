@@ -43,7 +43,8 @@ core_pid=$!
 (cd "$project_root/frontend/orchestrix_orbit_frontend" && exec node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3000) >"$log_dir/next.log" 2>&1 &
 next_pid=$!
 
-for url in 'http://127.0.0.1:8080/api/admin/tenants' 'http://127.0.0.1:3000/'; do
+# /health skips the organization check, so it answers before any tenant exists
+for url in 'http://127.0.0.1:8080/health' 'http://127.0.0.1:3000/'; do
   ready=0
   for attempt in {1..90}; do
     code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)"
