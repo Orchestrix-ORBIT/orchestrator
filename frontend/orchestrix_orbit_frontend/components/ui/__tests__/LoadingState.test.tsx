@@ -7,18 +7,10 @@ import React from "react";
 import LoadingState from "../LoadingState";
 
 describe("LoadingState", () => {
-  it("renders the default title when no props are provided", () => {
-    render(<LoadingState />);
-    expect(
-      screen.getByText("Loading Workspace Data…")
-    ).toBeInTheDocument();
-  });
-
-  it("renders the default subtitle when no props are provided", () => {
-    render(<LoadingState />);
-    expect(
-      screen.getByText("Fetching latest updates and workspace state")
-    ).toBeInTheDocument();
+  it("renders only skeleton placeholders (no heading) when no props are provided", () => {
+    const { container } = render(<LoadingState />);
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(container.querySelector(".skeleton-line")).toBeInTheDocument();
   });
 
   it("renders a custom title passed via the title prop", () => {

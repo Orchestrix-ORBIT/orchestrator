@@ -153,12 +153,12 @@ describe("handleResponse — error handling", () => {
     });
   });
 
-  it("throws Error with status on 500 responses (JSON body)", async () => {
+  it("throws a user-friendly Error with status on 5xx responses (server details hidden)", async () => {
     const errBody = JSON.stringify({ error: "Internal Server Error" });
     vi.mocked(fetch).mockResolvedValue(mockResponse(errBody, 500, false));
 
     await expect(api.get("/items")).rejects.toMatchObject({
-      message: "Internal Server Error",
+      message: "The service is temporarily unavailable. Please try again later.",
       status: 500,
     });
   });
@@ -166,14 +166,14 @@ describe("handleResponse — error handling", () => {
   it("throws Error with raw text when response is not JSON", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: false,
-      status: 503,
-      text: () => Promise.resolve("Service Unavailable"),
+      status: 409,
+      text: () => Promise.resolve("Slot already booked"),
       json: () => { throw new SyntaxError("not json"); },
     } as unknown as Response);
 
     await expect(api.get("/items")).rejects.toMatchObject({
-      message: "Service Unavailable",
-      status: 503,
+      message: "Slot already booked",
+      status: 409,
     });
   });
 

@@ -54,6 +54,7 @@ vi.mock("../auth", () => ({
   getTenantSlug: vi.fn(() => "test-tenant"),
   getEmail: vi.fn(() => "user@test.com"),
   getToken: vi.fn(() => "test-token"),
+  getUserId: vi.fn(() => "user-1"),
 }));
 
 import { useWebSocketChat } from "../useWebSocketChat";
