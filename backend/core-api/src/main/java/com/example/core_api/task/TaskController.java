@@ -31,7 +31,7 @@ public class TaskController {
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateTaskRequest request) {
         requireAuthenticated(currentUser);
-        return taskService.createTask(projectId, request);
+        return taskService.createTask(projectId, request, currentUser.getId());
     }
 
     @GetMapping

@@ -1,134 +1,195 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import LoadingState from "@/components/ui/LoadingState";
+import { ResourcesService, type Booking, type Resource } from "@/lib/services/resources";
+
+// Live usage analytics computed from the real resources, bookings and maintenance data.
+// "Booked hours" counts APPROVED bookings that overlap the current calendar month.
+
+const ACTIVE = new Set(["APPROVED"]);
+const PENDING = new Set(["PENDING", "PENDING_APPROVAL"]);
+
+function hoursInWindow(b: Booking, from: Date, to: Date): number {
+  const start = Math.max(new Date(b.startTime).getTime(), from.getTime());
+  const end = Math.min(new Date(b.endTime).getTime(), to.getTime());
+  return end > start ? (end - start) / 3_600_000 : 0;
+}
+
+function fmtHours(h: number): string {
+  return h >= 10 ? `${Math.round(h)} hrs` : `${h.toFixed(1)} hrs`;
+}
 
 export default function UsageAnalyticsPage() {
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [bookings, setBookings] = useState<(Booking & { projectName?: string; userEmail?: string })[]>([]);
+  const [maintenance, setMaintenance] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [res, maint] = await Promise.all([
+          ResourcesService.getAll(),
+          ResourcesService.getMaintenance().catch(() => []),
+        ]);
+        const perResource = await Promise.all(res.map((r) => ResourcesService.getBookings(r.id).catch(() => [] as Booking[])));
+        setResources(res);
+        setBookings(perResource.flat());
+        setMaintenance(maint as any[]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load analytics data.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const approved = bookings.filter((b) => ACTIVE.has(b.status));
+    const monthHours = approved.reduce((sum, b) => sum + hoursInWindow(b, monthStart, monthEnd), 0);
+    const pending = bookings.filter((b) => PENDING.has(b.status)).length;
+    const activeMaint = maintenance.filter((m) => {
+      const s = new Date(m.startTime ?? m.startDate ?? 0).getTime();
+      const e = new Date(m.endTime ?? m.endDate ?? 0).getTime();
+      return e >= now.getTime() && s <= now.getTime() + 7 * 86_400_000;
+    }).length;
+    const available = resources.filter((r) => r.status === "AVAILABLE").length;
+
+    // Booked hours per resource type, relative to monthly capacity (resources × hours in month)
+    const monthCapacityPerResource = (monthEnd.getTime() - monthStart.getTime()) / 3_600_000;
+    const typeOf = new Map(resources.map((r) => [r.id, r.type]));
+    const byType = new Map<string, { hours: number; count: number }>();
+    for (const r of resources) {
+      const cur = byType.get(r.type) ?? { hours: 0, count: 0 };
+      byType.set(r.type, { ...cur, count: cur.count + 1 });
+    }
+    for (const b of approved) {
+      const t = typeOf.get(b.resourceId);
+      if (!t) continue;
+      byType.get(t)!.hours += hoursInWindow(b, monthStart, monthEnd);
+    }
+    const categories = [...byType.entries()]
+      .map(([type, v]) => ({ type, hours: v.hours, count: v.count, pct: (v.hours / (v.count * monthCapacityPerResource)) * 100 }))
+      .sort((a, b) => b.hours - a.hours);
+
+    // Booked hours per project (all approved bookings)
+    const byProject = new Map<string, number>();
+    for (const b of approved) {
+      const key = b.projectName || "No project";
+      byProject.set(key, (byProject.get(key) ?? 0) + (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3_600_000);
+    }
+    const totalProjectHours = [...byProject.values()].reduce((a, b) => a + b, 0);
+    const projects = [...byProject.entries()].map(([name, hours]) => ({ name, hours, share: totalProjectHours ? (hours / totalProjectHours) * 100 : 0 }))
+      .sort((a, b) => b.hours - a.hours);
+
+    return { monthHours, pending, activeMaint, available, categories, projects };
+  }, [resources, bookings, maintenance]);
+
+  function exportCsv() {
+    const header = ["Resource", "Project", "User", "Start", "End", "Hours", "Status", "Purpose"];
+    const name = new Map(resources.map((r) => [r.id, r.name]));
+    const rows = bookings.map((b) => [
+      name.get(b.resourceId) ?? b.resourceName ?? "", b.projectName ?? "", b.userEmail ?? "",
+      b.startTime, b.endTime, ((new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3_600_000).toFixed(2),
+      b.status, (b as any).purpose ?? "",
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `resource-usage-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (loading) return <LoadingState title="Loading Usage Analytics..." subtitle="Aggregating bookings, assets and maintenance windows" />;
+  if (error) return <p style={{ padding: 24, color: "#c62828", fontSize: 14 }}>Error: {error}</p>;
+
   return (
     <div>
-      {/* ── Page Header ────────────────────────────────────────────────────── */}
+      {/* ── Page Header ─────────────────────────────────────────────────────── */}
       <div style={s.headerRow}>
         <div>
           <h1 style={s.pageTitle}>Usage & Capacity Analytics</h1>
           <p style={s.pageSub}>
-            Historical hardware utilization, peak booking hours, and cross-project compute quotas.
+            Live figures from {resources.length} assets and {bookings.length} booking records.
           </p>
         </div>
-
-        <button style={s.btnSecondary}>
-          📥 Export Monthly Telemetry Report
+        <button style={s.btnSecondary} onClick={exportCsv} disabled={bookings.length === 0}>
+          📥 Export Booking Report (CSV)
         </button>
       </div>
 
-      {/* ── Metric Stat Cards ────────────────────────────────────────────────── */}
+      {/* ── Metric Stat Cards ───────────────────────────────────────────────── */}
       <div style={s.statGrid}>
         <div style={s.statCard}>
-          <span style={s.statLabel}>AVG GPU UTILIZATION</span>
-          <span style={s.statValue}>84.2%</span>
-          <span style={s.statSub}>Across H100 Compute Cluster</span>
+          <span style={s.statLabel}>HOURS BOOKED</span>
+          <span style={s.statValue}>{fmtHours(stats.monthHours)}</span>
+          <span style={s.statSub}>Approved, current month</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>TOTAL HOURS BOOKED</span>
-          <span style={s.statValue}>482 hrs</span>
-          <span style={s.statSub}>Current month to date</span>
+          <span style={s.statLabel}>PENDING APPROVALS</span>
+          <span style={s.statValue}>{stats.pending}</span>
+          <span style={s.statSub}>Booking requests awaiting review</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>SCHEDULE CONFLICTS</span>
-          <span style={s.statValue}>0</span>
-          <span style={s.statSub}>100% database lock accuracy</span>
+          <span style={s.statLabel}>AVAILABLE ASSETS</span>
+          <span style={s.statValue}>{stats.available}/{resources.length}</span>
+          <span style={s.statSub}>Ready to book right now</span>
         </div>
         <div style={s.statCard}>
-          <span style={s.statLabel}>AVG QUEUE LATENCY</span>
-          <span style={s.statValue}>&lt; 320ms</span>
-          <span style={s.statSub}>Resolution speed</span>
+          <span style={s.statLabel}>MAINTENANCE WINDOWS</span>
+          <span style={s.statValue}>{stats.activeMaint}</span>
+          <span style={s.statSub}>Active or starting within 7 days</span>
         </div>
       </div>
 
-      {/* ── Visual Analytics Breakdown ───────────────────────────────────────── */}
+      {/* ── Visual Analytics Breakdown ──────────────────────────────────────── */}
       <div style={s.chartGrid}>
-        {/* Utilization by Asset Category */}
         <div style={s.chartCard}>
-          <p style={s.sectionLabel}>FLEET UTILIZATION BY CATEGORY</p>
-
+          <p style={s.sectionLabel}>UTILIZATION BY ASSET CATEGORY (THIS MONTH)</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "16px 20px" }}>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>GPU Compute Clusters (NVIDIA H100 SXM5)</strong>
-                <span style={{ fontWeight: 600 }}>88% utilized</span>
+            {stats.categories.length === 0 && <p style={{ fontSize: 13, color: "#9e9e9e" }}>No assets registered.</p>}
+            {stats.categories.map((c) => (
+              <div key={c.type}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                  <strong>{c.type} <span style={{ fontWeight: 400, color: "#9e9e9e" }}>({c.count} asset{c.count === 1 ? "" : "s"})</span></strong>
+                  <span style={{ fontWeight: 600 }}>{fmtHours(c.hours)} · {c.pct.toFixed(1)}%</span>
+                </div>
+                <div style={s.progressBarBg}>
+                  <div style={{ ...s.progressBarFill, width: `${Math.min(100, c.pct)}%`, background: "#161616" }} />
+                </div>
               </div>
-              <div style={s.progressBarBg}>
-                <div style={{ ...s.progressBarFill, width: "88%", background: "#161616" }} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>Genomic Sequencers & Electron Microscopes (TEM)</strong>
-                <span style={{ fontWeight: 600 }}>74% utilized</span>
-              </div>
-              <div style={s.progressBarBg}>
-                <div style={{ ...s.progressBarFill, width: "74%", background: "#161616" }} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>BSL-2 Cell Culture Cleanroom Facilities</strong>
-                <span style={{ fontWeight: 600 }}>52% utilized</span>
-              </div>
-              <div style={s.progressBarBg}>
-                <div style={{ ...s.progressBarFill, width: "52%", background: "#161616" }} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                <strong>Cleanroom Photolithography Bay</strong>
-                <span style={{ fontWeight: 600 }}>61% utilized</span>
-              </div>
-              <div style={s.progressBarBg}>
-                <div style={{ ...s.progressBarFill, width: "61%", background: "#161616" }} />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Project Quota Consumption */}
         <div style={s.chartCard}>
           <p style={s.sectionLabel}>HOURS BOOKED BY RESEARCH PROJECT</p>
-
           <table style={s.table}>
             <thead>
               <tr>
                 <th style={s.th}>Project Workspace</th>
                 <th style={s.th}>Hours</th>
-                <th style={s.th}>Quota Share</th>
+                <th style={s.th}>Share</th>
               </tr>
             </thead>
             <tbody>
-              <tr style={s.tr}>
-                <td style={s.td}>
-                  <strong>Genomic Sequence Alignment Research</strong>
-                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Lead Researcher (researcher@myorg.com)</span>
-                </td>
-                <td style={s.td}>214 hrs</td>
-                <td style={s.td}>44.4%</td>
-              </tr>
-              <tr style={s.tr}>
-                <td style={s.td}>
-                  <strong>Molecular Structure AI Training</strong>
-                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>Alex Morgan (researcher.alex@myorg.com)</span>
-                </td>
-                <td style={s.td}>168 hrs</td>
-                <td style={s.td}>34.8%</td>
-              </tr>
-              <tr style={s.tr}>
-                <td style={s.td}>
-                  <strong>Cryo-EM Protein Structural Analysis</strong>
-                  <span style={{ display: "block", fontSize: 11, color: "#9e9e9e" }}>David Chen (researcher.david@myorg.com)</span>
-                </td>
-                <td style={s.td}>100 hrs</td>
-                <td style={s.td}>20.8%</td>
-              </tr>
+              {stats.projects.length === 0 && (
+                <tr style={s.tr}><td style={s.td} colSpan={3}>No approved bookings yet.</td></tr>
+              )}
+              {stats.projects.map((p) => (
+                <tr key={p.name} style={s.tr}>
+                  <td style={s.td}><strong>{p.name}</strong></td>
+                  <td style={s.td}>{fmtHours(p.hours)}</td>
+                  <td style={s.td}>{p.share.toFixed(1)}%</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

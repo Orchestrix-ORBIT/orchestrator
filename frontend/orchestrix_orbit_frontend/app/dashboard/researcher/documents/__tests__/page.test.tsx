@@ -28,24 +28,27 @@ describe("researcher documents page", () => {
     render(<ResearcherDocumentsPage />);
     const user = userEvent.setup();
     await screen.findByText("Methods");
-    await user.click(screen.getByRole("button", { name: /New Document/i }));
-    await user.type(screen.getByPlaceholderText("e.g. Methodology Draft"), " Meeting notes ");
-    await user.selectOptions(document.querySelector<HTMLSelectElement>("#select-doc-category")!, "MEETING_MINUTES");
-    await user.type(screen.getByPlaceholderText("Document content"), "Minutes");
-    await user.click(screen.getByRole("button", { name: "Create Document" }));
+    await user.click(screen.getAllByRole("button", { name: /Create Document/i })[0]);
+    await user.type(screen.getByPlaceholderText("e.g. Synthesis Protocol for Next Batch"), " Meeting notes ");
+    // The category defaults to "Meeting Minutes"
+    await user.type(screen.getByPlaceholderText("Document outline, notes, or agenda..."), "Minutes");
+    const submit = screen.getAllByRole("button", { name: "Create Document" });
+    await user.click(submit[submit.length - 1]);
     await waitFor(() => expect(screen.getByText("Meeting notes")).toBeInTheDocument());
-    expect(DocumentsService.create).toHaveBeenCalledWith("p1", {
+    expect(DocumentsService.create).toHaveBeenCalledWith("p1", expect.objectContaining({
       title: "Meeting notes", contentEncrypted: "Minutes", category: "MEETING_MINUTES",
-    });
+    }));
   });
 
   it("keeps a document when delete confirmation is canceled", async () => {
-    vi.stubGlobal("confirm", vi.fn(() => false));
+    localStorage.setItem("userId", "author-123"); // only the author sees the delete button
     render(<ResearcherDocumentsPage />);
+    const user = userEvent.setup();
     await screen.findByText("Methods");
-    await userEvent.setup().click(screen.getByTitle("Delete"));
+    await user.click(screen.getByTitle("Delete document"));
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(DocumentsService.delete).not.toHaveBeenCalled();
     expect(screen.getByText("Methods")).toBeInTheDocument();
-    vi.unstubAllGlobals();
+    localStorage.removeItem("userId");
   });
 });

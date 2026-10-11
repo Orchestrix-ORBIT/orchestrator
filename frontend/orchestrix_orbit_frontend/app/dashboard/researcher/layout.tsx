@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getEmail, logout, isLoggedIn } from "@/lib/auth";
+import { getEmail, logout, isLoggedIn, getRole, canAccessDashboard, getDashboardPath } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 const BASE = "/dashboard/researcher";
@@ -20,6 +20,8 @@ export default function ResearcherLayout({ children }: { children: React.ReactNo
   useEffect(() => {
     if (!isLoggedIn()) {
       router.replace("/");
+    } else if (!canAccessDashboard("researcher", getRole() || "")) {
+      router.replace(getDashboardPath(getRole() || "")); // e.g. platform admin -> Platform Administration
     } else {
       setMounted(true);
     }

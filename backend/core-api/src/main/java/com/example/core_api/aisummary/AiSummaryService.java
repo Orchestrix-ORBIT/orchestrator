@@ -59,7 +59,9 @@ public class AiSummaryService {
         AiSummary saved = repository.save(entity);
 
         // Notify project owner
-        projectRepository.findById(req.getProjectId()).ifPresent(project -> {
+        projectRepository.findById(req.getProjectId())
+                .filter(project -> project.getOwnerId() != null && !project.getOwnerId().equals(createdBy))
+                .ifPresent(project -> {
             notificationService.notify(
                 project.getOwnerId(),
                 "AI_SUMMARY_CREATED",

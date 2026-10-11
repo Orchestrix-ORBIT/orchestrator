@@ -389,7 +389,7 @@ export default function ProjectWorkspacePage({
   }
 
   return (
-    <div suppressHydrationWarning>
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0 }} suppressHydrationWarning>
       <div style={s.topNavRow}>
         <Link href="/lead-dashboard/projects" style={s.backLink}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -399,7 +399,7 @@ export default function ProjectWorkspacePage({
 
       <div style={s.headerRow}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
             <h1 style={s.pageTitle}>Task Board</h1>
             <span style={s.projectTag}>
               {currentProject.name} <span style={{ color: "#d1d5db" }}>|</span> ID: {projectId.substring(0,8)}
@@ -1200,7 +1200,8 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     border: "1px solid rgba(0,0,0,0.08)",
     borderRadius: 8,
-    width: 220,
+    width: "100%",
+    maxWidth: 220,
     outline: "none",
     background: "#f9fafb",
     color: "#111827",
@@ -1219,10 +1220,13 @@ const s: Record<string, React.CSSProperties> = {
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255,255,255,0.1)",
   },
   kanbanGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    display: "flex",
+    flexWrap: "nowrap",
     gap: 16,
     alignItems: "flex-start",
+    overflowX: "auto",
+    paddingBottom: 16,
+    width: "100%",
   },
   completedGrid: {
     display: "flex",
@@ -1235,7 +1239,10 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
-    border: "2px solid transparent", // Keep space reserved for the border
+    border: "2px solid transparent",
+    minWidth: 280,
+    width: 280,
+    flexShrink: 0,
   },
   columnOver: {
     background: "rgba(59, 130, 246, 0.04)",
@@ -1269,7 +1276,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   completedTasksGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: 16,
   },
   taskCard: {

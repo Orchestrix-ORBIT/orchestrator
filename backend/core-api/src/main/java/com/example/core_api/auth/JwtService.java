@@ -65,7 +65,23 @@ public class JwtService {
         final String emailInToken = extractEmail(token);
         return emailInToken.equals(userDetails.getUsername())
                 && currentTenant().equals(extractClaim(token, claims -> claims.get("tenant", String.class)))
-                && !isTokenExpired(token);
+                && !isTokenExpired(token)
+                && !isRevoked(token);
+    }
+
+    // Secure logout (SRS FR-AUTH-08): a logged-out token is rejected until it would have expired.
+    // Kept in memory, so the list resets when Core API restarts.
+    private final Map<String, Long> revokedTokens = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void revoke(String token) {
+        long expiresAt = extractClaim(token, Claims::getExpiration).getTime();
+        revokedTokens.put(token, expiresAt);
+        long now = System.currentTimeMillis();
+        revokedTokens.values().removeIf(exp -> exp < now); // drop entries that expired anyway
+    }
+
+    public boolean isRevoked(String token) {
+        return revokedTokens.containsKey(token);
     }
 
 

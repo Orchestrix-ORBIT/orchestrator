@@ -45,8 +45,8 @@ describe("lead project page", () => {
       .mockResolvedValueOnce({ id: "p1", name: "New study", description: "", status: "ACTIVE", createdAt: "2026-01-01", ownerId: "u1" });
     render(<LeadProjectsPage />);
     const user = userEvent.setup();
-    await screen.findByRole("heading", { name: "Projects" });
-    await user.click(screen.getByRole("button", { name: /New Project/i }));
+    await screen.findByRole("heading", { name: "Workspace Projects" });
+    await user.click(screen.getAllByRole("button", { name: /New Project/i })[0]);
     await user.type(screen.getByPlaceholderText("e.g. Neural Interface Study"), "  New study  ");
     await user.click(screen.getByRole("button", { name: "Create Project" }));
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
@@ -67,8 +67,8 @@ describe("lead project page", () => {
     });
     render(<LeadProjectsPage />);
     const user = userEvent.setup();
-    await screen.findByRole("heading", { name: "Projects" });
-    await user.click(screen.getByRole("button", { name: /New Project/i }));
+    await screen.findByRole("heading", { name: "Workspace Projects" });
+    await user.click(screen.getAllByRole("button", { name: /New Project/i })[0]);
     await user.type(screen.getByPlaceholderText("e.g. Neural Interface Study"), "Study");
     await user.type(screen.getByPlaceholderText("Search researcher by name or email..."), "Jane");
     await user.click(screen.getByText("Researcher Jane"));

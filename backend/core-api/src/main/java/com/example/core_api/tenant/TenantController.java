@@ -27,6 +27,8 @@ import java.util.UUID;
 public class TenantController {
 
     private final TenantService tenantService;
+    private final PlatformAccess platformAccess;
+    private final OrganizationAdminService organizationAdmins;
 
     @Value("${tenant.bootstrap-key:}")
     private String bootstrapKey;
@@ -45,12 +47,12 @@ public class TenantController {
     public ResponseEntity<TenantResponse> createTenant(@Valid @RequestBody TenantProvisionRequest request,
                                                        @AuthenticationPrincipal User currentUser,
                                                        HttpServletRequest httpRequest) {
-        boolean admin = isAdmin(currentUser);
+        boolean admin = platformAccess.isPlatformAdmin(currentUser); // organization admins cannot create organizations
         String supplied = httpRequest.getHeader("X-Bootstrap-Key");
         boolean bootstrap = bootstrapKey != null && !bootstrapKey.isBlank() && supplied != null
                 && MessageDigest.isEqual(bootstrapKey.getBytes(StandardCharsets.UTF_8),
                         supplied.getBytes(StandardCharsets.UTF_8));
-        if (!admin && !bootstrap) throw new AccessDeniedException("Tenant provisioning requires an administrator.");
+        if (!admin && !bootstrap) throw new AccessDeniedException("Only the platform administrator can create organizations.");
         TenantResponse response = tenantService.provisionTenant(request);
         // Return 201 Created (not 200 OK) because we created a new resource
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -63,24 +65,35 @@ public class TenantController {
     // Response (200 OK):
     //   [ { "id": "...", "slug": "acme", ... }, { "id": "...", "slug": "research-lab", ... } ]
     // -------------------------------------------------------------------------
+    // Platform admin only: every organization with its user count.
     @GetMapping
-    public ResponseEntity<List<TenantResponse>> getAllTenants() {
-        return ResponseEntity.ok(tenantService.getAllTenants());
+    public ResponseEntity<List<TenantResponse>> getAllTenants(@AuthenticationPrincipal User currentUser) {
+        platformAccess.requirePlatformAdmin(currentUser);
+        return ResponseEntity.ok(tenantService.getAllTenantsWithUserCounts());
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/admin/tenants/{slug}
-    // Purpose: Fetch a single tenant by slug
-    // {slug} is a path variable, e.g. GET /api/admin/tenants/acme
-    //
-    // Response (200 OK):
-    //   { "id": "...", "slug": "acme", "name": "ACME Corp", ... }
-    // -------------------------------------------------------------------------
+    // Which organization is the caller administering? Lets the UI choose the platform or organization view.
+    @GetMapping("/context")
+    public ResponseEntity<java.util.Map<String, Object>> context(@AuthenticationPrincipal User currentUser) {
+        String schema = TenantContext.getCurrentTenant();
+        String slug = schema != null && schema.startsWith("org_") ? schema.substring(4) : schema;
+        TenantResponse own = tenantService.getAllTenants().stream()
+                .filter(t -> schema != null && schema.equals(t.getSchemaName())).findFirst().orElse(null);
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("platformAdmin", platformAccess.isPlatformAdmin(currentUser));
+        body.put("organizationAdmin", PlatformAccess.isAdmin(currentUser));
+        body.put("slug", own != null ? own.getSlug() : slug);
+        body.put("name", own != null ? own.getName() : slug);
+        body.put("schemaName", schema);
+        return ResponseEntity.ok(body);
+    }
+
     @GetMapping("/{slug}")
     public ResponseEntity<TenantResponse> getTenant(@PathVariable String slug,
                                                     @AuthenticationPrincipal User currentUser) {
         String requestedSchema = "org_" + slug.toLowerCase().replace('-', '_');
-        if (!isAdmin(currentUser) && !requestedSchema.equals(TenantContext.getCurrentTenant())) {
+        // Your own organization, or any organization for the platform admin
+        if (!platformAccess.isPlatformAdmin(currentUser) && !requestedSchema.equals(TenantContext.getCurrentTenant())) {
             throw new AccessDeniedException("Another tenant's details are not available.");
         }
         return ResponseEntity.ok(tenantService.getTenantBySlug(slug));
@@ -96,8 +109,35 @@ public class TenantController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<TenantResponse> updateStatus(
             @PathVariable UUID id,
-            @RequestParam TenantStatus status) {  // e.g. ?status=SUSPENDED
+            @RequestParam TenantStatus status,   // e.g. ?status=SUSPENDED
+            @AuthenticationPrincipal User currentUser) {
+        platformAccess.requirePlatformAdmin(currentUser);
         return ResponseEntity.ok(tenantService.updateStatus(id, status));
+    }
+
+    // ── Organization administrators (platform admin only) ───────────────────
+    public record AssignAdminRequest(String email, String displayName, String password) {}
+
+    @GetMapping("/{id}/admins")
+    public List<OrganizationAdminService.OrgAdmin> listAdmins(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
+        platformAccess.requirePlatformAdmin(currentUser);
+        return organizationAdmins.listAdmins(id);
+    }
+
+    @PostMapping("/{id}/admins")
+    public ResponseEntity<OrganizationAdminService.OrgAdmin> assignAdmin(@PathVariable UUID id,
+                                                                         @RequestBody AssignAdminRequest request,
+                                                                         @AuthenticationPrincipal User currentUser) {
+        platformAccess.requirePlatformAdmin(currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(organizationAdmins.assignAdmin(id, request.email(), request.displayName(), request.password()));
+    }
+
+    @DeleteMapping("/{id}/admins/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeAdmin(@PathVariable UUID id, @PathVariable UUID userId, @AuthenticationPrincipal User currentUser) {
+        platformAccess.requirePlatformAdmin(currentUser);
+        organizationAdmins.removeAdmin(id, userId);
     }
 
     private boolean isAdmin(User user) {

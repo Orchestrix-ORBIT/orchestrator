@@ -270,8 +270,8 @@ class ResourceServiceTest {
         ResourceBooking b = ResourceBooking.builder().id(bookingId).resourceId(resourceId)
                 .userId(userId).startTime(s).endTime(e).status(BookingStatus.PENDING_APPROVAL).build();
         when(bookingRepository.findAllByUserId(userId)).thenReturn(List.of(b));
-        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(sampleResource));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(sampleUser));
+        when(resourceRepository.findAllById(any())).thenReturn(List.of(sampleResource));
+        when(userRepository.findAllById(any())).thenReturn(List.of(sampleUser));
         List<BookingResponse> results = resourceService.getUserBookings(userId);
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getUserEmail()).isEqualTo("researcher@lab.com");
@@ -283,8 +283,8 @@ class ResourceServiceTest {
         ResourceBooking b = ResourceBooking.builder().id(bookingId).resourceId(resourceId)
                 .userId(userId).startTime(s).endTime(e).status(BookingStatus.APPROVED).build();
         when(bookingRepository.findAllByResourceId(resourceId)).thenReturn(List.of(b));
-        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(sampleResource));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(sampleUser));
+        when(resourceRepository.findAllById(any())).thenReturn(List.of(sampleResource));
+        when(userRepository.findAllById(any())).thenReturn(List.of(sampleUser));
         List<BookingResponse> results = resourceService.getBookingsForResource(resourceId);
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getResourceName()).isEqualTo("Electron Microscope A");

@@ -174,7 +174,12 @@ export default function LeadDashboardPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, marginBottom: 32 },
+  statsRow: { 
+    display: "grid", 
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", 
+    gap: 24, 
+    marginBottom: 32 
+  },
   statCard: { 
     padding: 24, 
     display: "flex", 
@@ -195,7 +200,14 @@ const s: Record<string, React.CSSProperties> = {
     boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
     overflow: "hidden",
   },
-  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "24px 24px 20px" },
+  cardHead: { 
+    display: "flex", 
+    justifyContent: "space-between", 
+    alignItems: "flex-start", 
+    flexWrap: "wrap",
+    gap: 16,
+    padding: "24px 24px 20px" 
+  },
   cardTitle: { fontSize: 18, fontWeight: 600, color: "#111827", margin: 0, letterSpacing: "-0.01em" },
   cardLink: {
     fontSize: 13,

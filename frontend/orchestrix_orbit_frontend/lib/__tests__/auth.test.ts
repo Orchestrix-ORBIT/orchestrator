@@ -125,16 +125,12 @@ describe("getDashboardPath", () => {
     expect(getDashboardPath("ROLE_RESOURCE_MANAGER")).toBe("/resource-dashboard");
   });
 
-  it("routes by email containing resource.manager regardless of role", () => {
-    expect(getDashboardPath("ROLE_MEMBER", "resource.manager@lab.com")).toBe(
-      "/resource-dashboard"
-    );
-  });
-
-  it("routes by email containing resource_manager", () => {
-    expect(getDashboardPath("ROLE_LEAD", "the_resource_manager@lab.com")).toBe(
-      "/resource-dashboard"
-    );
+  it("routes by role only — the email text is ignored", () => {
+    expect(getDashboardPath("ROLE_MEMBER", "resource.manager@lab.com")).toBe("/dashboard/researcher");
+    expect(getDashboardPath("ROLE_MEMBER", "lead.someone@lab.com")).toBe("/dashboard/researcher");
+    expect(getDashboardPath("ROLE_LEAD", "the_resource_manager@lab.com")).toBe("/lead-dashboard");
+    expect(getDashboardPath("ROLE_RESOURCE_MANAGER", "researcher@lab.com")).toBe("/resource-dashboard");
+    expect(getDashboardPath("ROLE_ADMIN", "lead@lab.com")).toBe("/admin-dashboard");
   });
 
   it("defaults to /dashboard/researcher for unknown role", () => {

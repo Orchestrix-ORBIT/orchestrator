@@ -20,6 +20,16 @@ import { saveAuthData, getDashboardPath } from "@/lib/auth";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+function parseErrorText(text: string, defaultMsg: string): string {
+  if (!text) return defaultMsg;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed.message || parsed.error || text;
+  } catch {
+    return text;
+  }
+}
+
 type Tab = "signin" | "signup";
 
 export default function Home() {
@@ -40,12 +50,14 @@ export default function Home() {
   // Shared UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null); // green success message (e.g. after sign-up)
 
   const router = useRouter();
 
   function changeTab(nextTab: Tab) {
     setTab(nextTab);
     setError(null);
+    setNotice(null);
   }
 
   /* ── Sign In ──────────────────────────────────────────────────────────── */
@@ -76,8 +88,8 @@ export default function Home() {
         if (res.status >= 500) {
           throw new Error("The service is temporarily unavailable. Please try again later.");
         }
-        const msg = await res.text();
-        throw new Error(msg || "Invalid credentials");
+        const text = await res.text();
+        throw new Error(parseErrorText(text, "Invalid credentials"));
       }
 
       /*
@@ -142,12 +154,19 @@ export default function Home() {
         if (res.status >= 500) {
           throw new Error("The service is temporarily unavailable. Please try again later.");
         }
-        const msg = await res.text();
-        throw new Error(msg || "Registration failed");
+        const text = await res.text();
+        throw new Error(parseErrorText(text, "Registration failed"));
       }
 
-      // Registration succeeded — redirect to sign-in so user can log in
+      // Registration succeeded. New accounts in an existing organization need admin approval
+      // (the API returns no token for them); the first account of a new org is its admin.
+      const created = await res.json().catch(() => null);
       changeTab("signin");
+      setSiTenant(suTenant.trim());
+      setSiEmail(suEmail.trim());
+      setNotice(created?.token
+        ? "Account created. You can sign in now."
+        : "Account created. An administrator must approve it before you can sign in.");
     } catch (err: unknown) {
       let errorMessage = err instanceof Error ? err.message : "Registration failed";
       if (errorMessage === "Failed to fetch") {
@@ -225,6 +244,11 @@ export default function Home() {
                 <p style={s.sub}>Sign in to continue to your workspace</p>
               </div>
 
+              {notice && (
+                <div id="signin-notice" role="status" style={s.successBanner}>
+                  {notice}
+                </div>
+              )}
               {error && (
                 <div id="signin-error" style={s.errorBanner}>
                   {error}
@@ -419,6 +443,10 @@ const s: Record<string, React.CSSProperties> = {
     padding: "48px 40px",
     boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)",
     border: "1px solid #f3f4f6",
+  },
+  successBanner: {
+    background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857",
+    borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 500, marginBottom: 16,
   },
   errorBanner: {
     padding: "10px 14px",

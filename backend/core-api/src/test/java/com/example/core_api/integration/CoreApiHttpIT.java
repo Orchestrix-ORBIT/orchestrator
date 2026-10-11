@@ -203,7 +203,9 @@ class CoreApiHttpIT {
             HttpResponse<String> read = send("GET", "/api/admin/tenants/" + slug, slug, null, adminToken);
             assertThat(read.statusCode()).as(read.body()).isEqualTo(200);
             assertThat(json.readTree(read.body()).get("id").asText()).isEqualTo(body.get("id").asText());
-            assertThat(send("GET", "/api/admin/tenants", slug, null, adminToken).statusCode()).isEqualTo(200);
+            // An organization's own admin may read its own record but not list every organization:
+            // only the platform administrator (admin of platform.tenant-slug) manages organizations.
+            assertThat(send("GET", "/api/admin/tenants", slug, null, adminToken).statusCode()).isEqualTo(403);
             HttpResponse<String> member = send("POST", "/api/auth/register", slug,
                     "{\"email\":\"member@example.test\",\"password\":\"IntegrationPass123!\"}", null);
             String memberToken = json.readTree(member.body()).get("token").asText();

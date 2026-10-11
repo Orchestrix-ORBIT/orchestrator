@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { getRole, getEmail, logout, isLoggedIn } from "@/lib/auth";
+import { getRole, getEmail, logout, isLoggedIn, canAccessDashboard, getDashboardPath } from "@/lib/auth";
 
 export default function LeadDashboardLayout({
   children,
@@ -13,6 +13,7 @@ export default function LeadDashboardLayout({
   const [mounted, setMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -20,6 +21,8 @@ export default function LeadDashboardLayout({
   useEffect(() => {
     if (!isLoggedIn()) {
       router.replace("/");
+    } else if (!canAccessDashboard("lead", getRole() || "")) {
+      router.replace(getDashboardPath(getRole() || "")); // wrong role: send to own dashboard
     } else {
       setMounted(true);
     }
@@ -48,13 +51,32 @@ export default function LeadDashboardLayout({
 
   return (
     <div style={s.root} suppressHydrationWarning>
+      {/* ── Mobile Overlay ─────────────────────────────────────────────────── */}
+      <div 
+        className={`mobile-overlay ${mobileSidebarOpen ? "open" : ""}`} 
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+
       {/* ── Fixed Sidebar ────────────────────────────────────────────────── */}
-      <Sidebar isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
+      <Sidebar 
+        isCollapsed={isSidebarCollapsed} 
+        onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
+        className={`dashboard-sidebar ${mobileSidebarOpen ? "mobile-open" : ""}`}
+      />
 
       {/* ── Main Area ────────────────────────────────────────────────────── */}
-      <div style={{ ...s.main, marginLeft: isSidebarCollapsed ? 104 : 244 }}>
+      <div style={{ ...s.main, marginLeft: isSidebarCollapsed ? 104 : 244 }} className="dashboard-main">
         {/* Topbar matching Researcher Dashboard */}
         <header style={s.topbar}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <button className="mobile-hamburger" onClick={() => setMobileSidebarOpen(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+          </div>
           <div style={s.topbarRight}>
             <div style={s.profileContainer} ref={dropdownRef}>
               <button 
@@ -147,6 +169,7 @@ const s: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     background: "#f2f2f2",
     position: "relative",
+    minWidth: 0,
   },
   topbar: {
     height: 48,
@@ -155,7 +178,7 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid rgba(0,0,0,0.07)",
     display: "flex",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     padding: "0 32px",
     flexShrink: 0,
     zIndex: 10,
@@ -230,5 +253,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     overflowY: "auto",
+    overflowX: "hidden",
+    minWidth: 0,
   },
 };

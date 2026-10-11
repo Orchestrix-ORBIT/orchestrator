@@ -33,6 +33,11 @@ public class TaskService {
     }
 
     public TaskResponse createTask(UUID projectId, CreateTaskRequest request) {
+        return createTask(projectId, request, null);
+    }
+
+    // actorId: the user creating the task; nobody is notified about their own action.
+    public TaskResponse createTask(UUID projectId, CreateTaskRequest request, UUID actorId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + projectId));
 
@@ -55,7 +60,7 @@ public class TaskService {
 
         task = taskRepository.save(task);
 
-        if (task.getAssigneeId() != null) {
+        if (task.getAssigneeId() != null && !task.getAssigneeId().equals(actorId)) {
             notificationService.notify(
                 task.getAssigneeId(), 
                 "TASK_ASSIGNED", 
@@ -100,13 +105,19 @@ public class TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + taskId));
 
         if (currentUser != null) {
-            boolean isResearcher = currentUser.getRole() == UserRole.MEMBER || currentUser.getRole() == UserRole.GUEST;
+            UserRole role = currentUser.getRole();
+            boolean isResearcher = role == UserRole.MEMBER || role == UserRole.GUEST
+                    || role == UserRole.RESEARCHER || role == UserRole.ROLE_RESEARCHER;
             if (isResearcher) {
                 if (request.getStatus() == TaskStatus.ACCEPTED) {
                     throw new AccessDeniedException("Researchers are not allowed to accept tasks.");
                 }
                 if (task.getStatus() == TaskStatus.ACCEPTED) {
                     throw new AccessDeniedException("Accepted tasks cannot be modified by researchers.");
+                }
+                // Researchers may only work on tasks assigned to them (leads/admins manage the rest).
+                if (!currentUser.getId().equals(task.getAssigneeId())) {
+                    throw new AccessDeniedException("Researchers can only update tasks assigned to them.");
                 }
             }
         }
@@ -145,20 +156,36 @@ public class TaskService {
 
         task = taskRepository.save(task);
 
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
         if (task.getAssigneeId() != null && !task.getAssigneeId().equals(oldAssigneeId)) {
-            notificationService.notify(
-                task.getAssigneeId(), 
-                "TASK_REASSIGNED", 
-                "Task Reassigned", 
-                "You have been assigned to an existing task: " + task.getTitle()
-            );
+            if (!task.getAssigneeId().equals(actorId)) {
+                notificationService.notify(
+                    task.getAssigneeId(),
+                    "TASK_REASSIGNED",
+                    "Task Reassigned",
+                    "You have been assigned to an existing task: " + task.getTitle()
+                );
+            }
         } else if (task.getAssigneeId() != null && oldStatus != task.getStatus()) {
-            notificationService.notify(
-                task.getAssigneeId(), 
-                "TASK_STATUS_UPDATED", 
-                "Task Status Updated", 
-                "The task '" + task.getTitle() + "' is now " + task.getStatus()
-            );
+            if (task.getAssigneeId().equals(actorId)) {
+                // The assignee moved their own task: tell the project lead, not themselves.
+                final Task t = task;
+                projectRepository.findById(task.getProjectId())
+                        .filter(p -> p.getOwnerId() != null && !p.getOwnerId().equals(actorId))
+                        .ifPresent(p -> notificationService.notify(
+                            p.getOwnerId(),
+                            "TASK_STATUS_UPDATED",
+                            "Task Status Updated",
+                            "'" + t.getTitle() + "' in " + p.getName() + " is now " + t.getStatus()
+                        ));
+            } else {
+                notificationService.notify(
+                    task.getAssigneeId(),
+                    "TASK_STATUS_UPDATED",
+                    "Task Status Updated",
+                    "The task '" + task.getTitle() + "' is now " + task.getStatus()
+                );
+            }
         }
 
         return mapToResponse(task);

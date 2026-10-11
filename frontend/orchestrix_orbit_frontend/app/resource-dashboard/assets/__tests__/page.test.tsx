@@ -25,7 +25,10 @@ describe("resource asset page", () => {
     expect(await screen.findByText("No assets registered yet.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Add Asset/i }));
     await user.type(screen.getByPlaceholderText("e.g. High-Resolution TEM Microscope"), " Lab GPU ");
-    await user.type(screen.getByPlaceholderText("e.g. Server Room B, Rack 04"), "Room B");
+    // Location is a searchable dropdown: open it, type a new location, then add it
+    await user.click(screen.getByText("Select or type location..."));
+    await user.type(screen.getByPlaceholderText("Search or type new location..."), "Room B");
+    await user.click(screen.getByText('Add "Room B" as custom location'));
     await user.click(screen.getByRole("button", { name: "Add Asset" }));
     await waitFor(() => expect(screen.getByText("Lab GPU")).toBeInTheDocument());
     expect(ResourcesService.create).toHaveBeenCalledWith(expect.objectContaining({

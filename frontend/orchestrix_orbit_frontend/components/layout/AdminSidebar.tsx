@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, isPlatformSession } from "@/lib/auth";
 
 const ADMIN_NAV = [
   {
@@ -30,6 +30,10 @@ const ADMIN_NAV = [
 ];
 
 export function AdminSidebar({ isCollapsed = false, onToggle }: { isCollapsed?: boolean; onToggle?: () => void }) {
+  // Platform admin has no lab data, so the Research Lead view is hidden; labels follow the admin level (read after mount: localStorage)
+  const [platform, setPlatform] = useState(false);
+  useEffect(() => { setPlatform(isPlatformSession()); }, []);
+
   const pathname = usePathname();
   const router = useRouter();
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -52,7 +56,7 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: { isCollapsed?: 
           {!isCollapsed && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <span style={s.brandName}>Orchestrix</span>
-              <span style={s.brandSub}>System Administrator</span>
+              <span style={s.brandSub} data-testid="admin-role-label">{platform ? "Platform Administrator" : "Organization Administrator"}</span>
             </div>
           )}
           {isCollapsed && <span style={{ ...s.brandName, fontSize: 18 }}>O</span>}
@@ -85,7 +89,7 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: { isCollapsed?: 
 
       {/* Navigation */}
       <nav style={s.nav}>
-        {ADMIN_NAV.map((item) => {
+        {ADMIN_NAV.filter((item) => !(platform && item.href === "/lead-dashboard")).map((item) => {
           const active =
             item.href === "/admin-dashboard"
               ? pathname === "/admin-dashboard"
@@ -96,7 +100,7 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: { isCollapsed?: 
               key={item.href}
               href={item.href}
               className={!active ? "nav-item-dark-hover" : ""}
-              title={isCollapsed ? item.label : undefined}
+              title={isCollapsed ? (item.href === "/admin-dashboard" ? (platform ? "Platform Overview" : "Organization Overview") : item.label) : undefined}
               style={{
                 ...s.navItem,
                 ...(active ? s.navItemActive : {}),
@@ -107,7 +111,7 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: { isCollapsed?: 
               <span style={{ ...s.icon, ...(active ? s.iconActive : {}) }}>
                 {item.icon}
               </span>
-              {!isCollapsed && <span>{item.label}</span>}
+              {!isCollapsed && <span>{item.href === "/admin-dashboard" ? (platform ? "Platform Overview" : "Organization Overview") : item.label}</span>}
             </Link>
           );
         })}

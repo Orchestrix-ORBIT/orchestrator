@@ -101,7 +101,7 @@ class ResearchTeamServiceTest {
     void getUserTeams_returnsMappedTeamsForUser() {
         TeamMember membership = TeamMember.builder().teamId(teamId).userId(leaderId).roleInTeam(TeamRole.LEADER).build();
         when(memberRepository.findAllByUserId(leaderId)).thenReturn(List.of(membership));
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(sampleTeam));
+        when(teamRepository.findAllById(List.of(teamId))).thenReturn(List.of(sampleTeam));
         List<ResearchTeamResponse> results = researchTeamService.getUserTeams(leaderId);
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getName()).isEqualTo("Quantum Computing Team");
@@ -119,7 +119,7 @@ class ResearchTeamServiceTest {
         UUID ghostId = UUID.randomUUID();
         TeamMember orphan = TeamMember.builder().teamId(ghostId).userId(leaderId).roleInTeam(TeamRole.MEMBER).build();
         when(memberRepository.findAllByUserId(leaderId)).thenReturn(List.of(orphan));
-        when(teamRepository.findById(ghostId)).thenReturn(Optional.empty());
+        when(teamRepository.findAllById(List.of(ghostId))).thenReturn(List.of());
         assertThat(researchTeamService.getUserTeams(leaderId)).isEmpty();
     }
 }

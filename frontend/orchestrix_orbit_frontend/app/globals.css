@@ -355,3 +355,47 @@ button:not(:disabled):hover {
   }
 }
 
+
+/* -- Responsive Dashboard Utilities -------------------------------------- */
+@media (max-width: 768px) {
+  .dashboard-sidebar {
+    transform: translateX(-150%) !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    z-index: 50 !important;
+  }
+  .dashboard-sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+  .dashboard-main {
+    margin-left: 0 !important;
+  }
+  .mobile-hamburger {
+    display: flex !important;
+  }
+}
+.mobile-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #111827;
+  cursor: pointer;
+  padding: 8px;
+  margin-right: 12px;
+}
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.mobile-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+

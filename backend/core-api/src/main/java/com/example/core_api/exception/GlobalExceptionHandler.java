@@ -34,6 +34,39 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.UNAUTHORIZED, "Invalid credentials");
     }
 
+    // Unknown URL: 404, not a generic 500.
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoRoute(Exception ex) {
+        return error(HttpStatus.NOT_FOUND, "Endpoint not found");
+    }
+
+    // Missing or invalid query parameter (e.g. ?status=) is a client error, not a server error.
+    @ExceptionHandler({org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, Object>> handleBadParameter(Exception ex) {
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    // Correct password but the account is not active (pending approval or suspended).
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    public ResponseEntity<Map<String, Object>> handleDisabled(AuthenticationException ex) {
+        return error(HttpStatus.FORBIDDEN, "This account is not active yet. Ask an administrator to approve or reactivate it.");
+    }
+
+    // Brute-force lock (FR-AUTH-10): tell the user how long to wait.
+    @ExceptionHandler(org.springframework.security.authentication.LockedException.class)
+    public ResponseEntity<Map<String, Object>> handleLocked(AuthenticationException ex) {
+        return error(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    // Failed login: keep the message generic unless it is our "attempts left" warning.
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleBadCredentials(AuthenticationException ex) {
+        String msg = ex.getMessage() != null && ex.getMessage().startsWith("Invalid email or password")
+                ? ex.getMessage() : "Invalid credentials";
+        return error(HttpStatus.UNAUTHORIZED, msg);
+    }
+
     private ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
         Map<String, Object> details = new HashMap<>();
         details.put("timestamp", LocalDateTime.now());
